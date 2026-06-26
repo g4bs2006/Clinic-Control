@@ -207,8 +207,7 @@ export function HelenaIntegrationFields({
       {/* Create-mode note */}
       {!clinicId && selectedPanelId && (
         <p className="text-xs text-muted-foreground">
-          A integração será salva ao criar a clínica. Caso prefira, salve a clínica primeiro e edite
-          para vincular o painel.
+          Salve a clínica primeiro e depois edite-a para vincular o painel da Helena.
         </p>
       )}
     </div>
