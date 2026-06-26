@@ -3,7 +3,7 @@ import { ClinicForm } from "@/components/clinics/clinic-form";
 import { createClinic } from "@/lib/clinics/actions";
 import type { ClinicInput } from "@/lib/clinics/schema";
 
-export default function NovaClinicaPage() {
+export default async function NovaClinicaPage() {
   async function handleCreate(
     input: ClinicInput
   ): Promise<{ ok: true; id?: string } | { ok: false; error: string }> {
