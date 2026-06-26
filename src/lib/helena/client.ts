@@ -1,6 +1,7 @@
 import type { HelenaPanel, HelenaStep, HelenaCard } from "./types";
 
 const DEFAULT_BASE = "https://api.wts.chat";
+const MAX_PAGES = 500;
 
 type Opts = { fetchImpl?: typeof fetch; baseUrl?: string };
 
@@ -46,6 +47,7 @@ export async function listCards(
     }
     if (!data.hasMorePages) break;
     page += 1;
+    if (page > MAX_PAGES) throw new Error("Helena API: paginação excedeu o limite de páginas");
   }
   return out;
 }

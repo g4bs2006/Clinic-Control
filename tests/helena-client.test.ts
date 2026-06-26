@@ -15,6 +15,11 @@ describe("listPanels", () => {
     expect(String(url)).toContain("/crm/v1/panel");
     expect((init as RequestInit).headers).toMatchObject({ Authorization: "Bearer tok" });
   });
+
+  it("propaga erro HTTP", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) } as unknown as Response) as unknown as typeof fetch;
+    await expect(listPanels("tok", { fetchImpl })).rejects.toThrow();
+  });
 });
 
 describe("getPanelWithSteps", () => {
@@ -41,8 +46,8 @@ describe("listCards", () => {
     expect(cards.map((c) => c.id)).toEqual(["c1", "c2"]);
   });
 
-  it("propaga erro HTTP", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) } as unknown as Response) as unknown as typeof fetch;
-    await expect(listPanels("tok", { fetchImpl })).rejects.toThrow();
+  it("lança erro ao exceder MAX_PAGES quando API sempre retorna hasMorePages=true", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: "c", stepId: "s", title: "t", monetaryAmount: null, createdAt: "2026-06-01T00:00:00Z" }], hasMorePages: true }) }) as unknown as typeof fetch;
+    await expect(listCards("tok", "p1", {}, { fetchImpl })).rejects.toThrow();
   });
 });
