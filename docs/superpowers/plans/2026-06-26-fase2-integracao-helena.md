@@ -13,9 +13,10 @@
 - **Tema escuro prioritário; interface em pt-BR.**
 - **Credenciais só no servidor.** Token Helena e a chave de cifragem NUNCA chegam ao browser nem a variáveis `NEXT_PUBLIC_`.
 - Nova variável de ambiente **`HELENA_TOKEN_ENC_KEY`**: chave de 32 bytes em base64, usada para AES-256-GCM. Definir em `.env.local` e no Vercel. Adicionar a `.env.example` (vazia).
+- Nova variável **`SUPABASE_SERVICE_ROLE_KEY`** (server-only, SEM `NEXT_PUBLIC_`): a tabela `clinic_integrations` guarda credenciais e é travada em service_role (RLS nega anon/authenticated, conforme `0003`). Todo acesso a ela acontece via um client service_role no servidor. Definir em `.env.local` e no Vercel; adicionar a `.env.example` (vazia). **Nunca** expor ao browser.
 - **Base URL Helena:** `https://api.wts.chat`. Auth por header `Authorization: Bearer <token>`.
 - Painel padrão "Controle de Leads" tem 9 etapas (Leads, Agendados, Não Agendados, Reagendados, Cancelados, Faltosos, Orçamento em Aberto, Compareceram e Não Fecharam, Compareceram e Fecharam). O mapeamento para o funil canônico é por **título** da etapa.
-- Toda nova tabela recebe **RLS** (authenticated full access, anon revogado), seguindo o padrão da Fase 1 (`0002_rls.sql`).
+- Tabelas comuns recebem **RLS** (authenticated full access, anon revogado), seguindo o padrão da Fase 1 (`0002_rls.sql`). **Exceção:** `clinic_integrations` (credenciais) é travada em service_role — RLS nega anon E authenticated; acesso só no servidor via service client.
 - TDD para lógica pura (client com fetch mockado, cifragem, mapeamento de funil). Commits frequentes.
 
 ## File Structure (Fase 2)
@@ -307,10 +308,12 @@ create table clinic_integrations (
 create trigger clinic_integrations_updated_at before update on clinic_integrations
   for each row execute function set_updated_at();
 
+-- Tabela de CREDENCIAIS: travada em service_role. RLS ligado e SEM policy para
+-- anon/authenticated => esses papéis são negados. O service_role ignora RLS e é
+-- usado apenas no servidor (Server Actions).
 alter table clinic_integrations enable row level security;
 revoke all on clinic_integrations from anon;
-create policy clinic_integrations_authenticated_all on clinic_integrations
-  for all to authenticated using (true) with check (true);
+revoke all on clinic_integrations from authenticated;
 ```
 
 - [ ] **Step 2: Aplicar a migração**
@@ -426,22 +429,42 @@ git commit -m "feat: mapeamento do funil ao vivo (Helena -> canônico)"
 ### Task 5: Server Actions de integração
 
 **Files:**
+- Create: `src/lib/supabase/service.ts` (client service_role, server-only)
 - Create: `src/lib/clinics/integration-actions.ts`
 
 **Interfaces:**
-- Consumes: `listPanels`/`getPanelWithSteps`/`listCards` (Task 1), `encryptToken`/`decryptToken` (Task 2), `buildLiveFunnel` (Task 4), `createClient` (Supabase server).
+- Consumes: `listPanels`/`getPanelWithSteps`/`listCards` (Task 1), `encryptToken`/`decryptToken` (Task 2), `buildLiveFunnel` (Task 4), `createServiceClient` (Supabase service_role).
+- A tabela `clinic_integrations` está travada em service_role (migração `0003`), então estas actions acessam-na via `createServiceClient()`, **nunca** pelo client autenticado. O service client usa `SUPABASE_SERVICE_ROLE_KEY` e só roda no servidor.
 - Produces (Server Actions, `"use server"`):
   - `listPanelsForToken(token: string): Promise<{ ok: true; panels: { id: string; title: string; key: string; companyId: string }[] } | { ok: false; error: string }>` — chama a Helena e devolve os painéis para o dropdown.
   - `saveIntegration(clinicId: string, token: string, panelId: string): Promise<{ ok: true } | { ok: false; error: string }>` — busca o painel (para obter `companyId` + validar o token), cifra o token, faz upsert em `clinic_integrations`.
   - `getLiveFunnel(clinicId: string): Promise<{ ok: true; funnel: ReturnType<typeof buildLiveFunnel> } | { ok: false; error: string }>` — lê a integração, decifra o token, busca etapas + cards do mês corrente (UTC), aplica `buildLiveFunnel`.
 
-- [ ] **Step 1: Implementar as actions**
+- [ ] **Step 1: Criar o client service_role**
+
+`src/lib/supabase/service.ts`:
+```typescript
+import { createClient } from "@supabase/supabase-js";
+
+// Client de service_role — IGNORA RLS. Server-only. Usar apenas em Server Actions
+// para acessar tabelas de credenciais (clinic_integrations). Nunca importar no client.
+export function createServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+}
+```
+Adicionar `SUPABASE_SERVICE_ROLE_KEY=` ao `.env.example`.
+
+- [ ] **Step 2: Implementar as actions**
 
 `src/lib/clinics/integration-actions.ts`:
 ```typescript
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { encryptToken, decryptToken } from "@/lib/crypto/token";
 import { listPanels, getPanelWithSteps, listCards } from "@/lib/helena/client";
 import { buildLiveFunnel } from "@/lib/helena/funnel";
@@ -458,7 +481,7 @@ export async function listPanelsForToken(token: string) {
 export async function saveIntegration(clinicId: string, token: string, panelId: string) {
   try {
     const { panel } = await getPanelWithSteps(token, panelId); // valida token + obtém companyId
-    const supabase = await createClient();
+    const supabase = createServiceClient();
     const { error } = await supabase.from("clinic_integrations").upsert({
       clinic_id: clinicId,
       helena_token_encrypted: encryptToken(token),
@@ -481,7 +504,7 @@ function monthRangeUtc(now = new Date()) {
 
 export async function getLiveFunnel(clinicId: string) {
   try {
-    const supabase = await createClient();
+    const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
       .select("helena_token_encrypted, panel_id")
@@ -500,16 +523,16 @@ export async function getLiveFunnel(clinicId: string) {
 }
 ```
 
-- [ ] **Step 2: Verificar build**
+- [ ] **Step 3: Verificar build**
 
 Run: `npm run build`
 Expected: type-check OK.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add src/lib/clinics/integration-actions.ts
-git commit -m "feat: server actions de integração Helena (listar/salvar/funil ao vivo)"
+git add src/lib/supabase/service.ts src/lib/clinics/integration-actions.ts .env.example
+git commit -m "feat: server actions de integração Helena (service_role, listar/salvar/funil)"
 ```
 
 ---
