@@ -27,8 +27,24 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // Refreshes the session — do NOT add auth redirect logic here (Task 10).
-  await supabase.auth.getUser();
+  // Refreshes the session and checks authentication.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+
+  if (!user && !pathname.startsWith("/login")) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    const redirectResponse = NextResponse.redirect(loginUrl);
+    // Preserve cookies so session refresh is not lost on the redirect.
+    supabaseResponse.cookies.getAll().forEach(({ name, value }) => {
+      redirectResponse.cookies.set(name, value);
+    });
+    return redirectResponse;
+  }
 
   return supabaseResponse;
 }
