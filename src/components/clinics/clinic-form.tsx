@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -15,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Clinic, ClinicInput } from "@/lib/clinics/schema";
+import { HelenaIntegrationFields } from "@/components/clinics/helena-integration-fields";
 
 type ContractStatus = "active" | "suspended" | "archived";
 type Mode = "manual" | "auto";
@@ -136,20 +136,18 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
         </div>
 
         {mode === "auto" && (
-          <Card className="border-dashed border-muted-foreground/40">
-            <CardHeader>
-              <CardTitle className="text-sm">Integração Helena</CardTitle>
-              <CardDescription>
-                Configuração da integração Helena chega na Fase 2
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Em breve você poderá conectar esta clínica à plataforma Helena para sincronização
-                automática de dados e métricas.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="rounded-lg border border-dashed border-muted-foreground/40 p-4 space-y-3">
+            <p className="text-sm font-medium">Integração Helena</p>
+            <HelenaIntegrationFields
+              clinicId={defaultValues?.id}
+              onPanelSelected={(_token, _panelId) => {
+                // token/panelId tracked inside sub-component;
+                // edit mode: use "Salvar integração" inside the sub-component.
+                // create mode: redirect happens server-side, so integration is
+                // saved via edit after the clinic is created (see note in fields).
+              }}
+            />
+          </div>
         )}
       </div>
 
