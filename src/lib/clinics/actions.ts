@@ -19,16 +19,21 @@ async function geoFields(input: ClinicInput) {
 
 export async function listClinics(): Promise<Clinic[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("clinics").select("*")
     .neq("contract_status", "archived")
     .order("name");
+  if (error) throw new Error(error.message);
   return (data ?? []) as Clinic[];
 }
 
 export async function getClinic(id: string): Promise<Clinic | null> {
   const supabase = await createClient();
-  const { data } = await supabase.from("clinics").select("*").eq("id", id).single();
+  const { data, error } = await supabase.from("clinics").select("*").eq("id", id).single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(error.message);
+  }
   return (data as Clinic) ?? null;
 }
 
