@@ -1,0 +1,31 @@
+import { describe, it, expect } from "vitest";
+import { resolveStatus, type StatusRule } from "@/lib/snapshots/status";
+
+const rules: StatusRule[] = [
+  { label: "Risco Churn", rate_min: 0.0, rate_max: 0.05, color: "#9ca3af" },
+  { label: "Preocupante", rate_min: 0.05, rate_max: 0.09, color: "#f97316" },
+  { label: "Ok/Atenção", rate_min: 0.09, rate_max: 0.11, color: "#eab308" },
+  { label: "Bom", rate_min: 0.11, rate_max: 0.13, color: "#3b82f6" },
+  { label: "Ótimo", rate_min: 0.13, rate_max: 1.01, color: "#22c55e" },
+];
+
+describe("resolveStatus", () => {
+  it("classifica pela faixa de taxa", () => {
+    expect(resolveStatus({ rate: 0.02, rules })).toEqual({ label: "Risco Churn", color: "#9ca3af" });
+    expect(resolveStatus({ rate: 0.12, rules })).toEqual({ label: "Bom", color: "#3b82f6" });
+    expect(resolveStatus({ rate: 0.30, rules })).toEqual({ label: "Ótimo", color: "#22c55e" });
+  });
+  it("limite inferior inclusivo, superior exclusivo", () => {
+    expect(resolveStatus({ rate: 0.05, rules })?.label).toBe("Preocupante");
+    expect(resolveStatus({ rate: 0.09, rules })?.label).toBe("Ok/Atenção");
+  });
+  it("override tem precedência e herda a cor da regra de mesmo nome", () => {
+    expect(resolveStatus({ rate: 0.30, override: "Risco Churn", rules })).toEqual({ label: "Risco Churn", color: "#9ca3af" });
+  });
+  it("override sem regra correspondente usa cor neutra", () => {
+    expect(resolveStatus({ rate: 0.30, override: "Suspenso", rules })).toEqual({ label: "Suspenso", color: "#9ca3af" });
+  });
+  it("retorna null quando nenhuma faixa casa e não há override", () => {
+    expect(resolveStatus({ rate: 5, rules })).toBeNull();
+  });
+});
