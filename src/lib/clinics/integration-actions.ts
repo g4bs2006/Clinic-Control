@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { encryptToken, decryptToken } from "@/lib/crypto/token";
 import { listPanels, getPanelWithSteps, listCards } from "@/lib/helena/client";
 import { buildLiveFunnel } from "@/lib/helena/funnel";
+import { monthKey, monthRangeUtc } from "@/lib/snapshots/month";
 
 // Auth design note: these actions gate on "is there an authenticated user?" only.
 // They do NOT check per-clinic membership/ownership because the app model treats every
@@ -45,17 +46,12 @@ export async function saveIntegration(clinicId: string, token: string, panelId: 
   }
 }
 
-function monthRangeUtc(now = new Date()) {
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
-  return { after: start, before: end };
-}
-
-export async function getLiveFunnel(clinicId: string) {
+export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
   try {
     const auth = await createClient();
     const { data: { user } } = await auth.auth.getUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
+
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
@@ -63,13 +59,17 @@ export async function getLiveFunnel(clinicId: string) {
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+
     const token = decryptToken(data.helena_token_encrypted as string);
     const panelId = data.panel_id as string;
     const { steps } = await getPanelWithSteps(token, panelId);
-    const range = monthRangeUtc();
-    const cards = await listCards(token, panelId, range);
+    const cards = await listCards(token, panelId, monthRangeUtc(yearMonth));
     return { ok: true as const, funnel: buildLiveFunnel(steps, cards) };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao ler o funil" };
   }
+}
+
+export async function getLiveFunnel(clinicId: string) {
+  return getFunnelForMonth(clinicId, monthKey(new Date()));
 }
