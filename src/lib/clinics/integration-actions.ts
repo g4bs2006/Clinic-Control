@@ -1,12 +1,22 @@
 "use server";
 
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { encryptToken, decryptToken } from "@/lib/crypto/token";
 import { listPanels, getPanelWithSteps, listCards } from "@/lib/helena/client";
 import { buildLiveFunnel } from "@/lib/helena/funnel";
 
+// Auth design note: these actions gate on "is there an authenticated user?" only.
+// They do NOT check per-clinic membership/ownership because the app model treats every
+// authenticated user as trusted internal staff with full access to all clinics — the same
+// policy used by Phase 1 RLS (authenticated role = full access). A per-clinic gate here
+// would be inconsistent with that model and is intentionally omitted.
+
 export async function listPanelsForToken(token: string) {
   try {
+    const auth = await createClient();
+    const { data: { user } } = await auth.auth.getUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
     const panels = await listPanels(token);
     return { ok: true as const, panels };
   } catch (e) {
@@ -16,6 +26,9 @@ export async function listPanelsForToken(token: string) {
 
 export async function saveIntegration(clinicId: string, token: string, panelId: string) {
   try {
+    const auth = await createClient();
+    const { data: { user } } = await auth.auth.getUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
     const { panel } = await getPanelWithSteps(token, panelId); // valida token + obtém companyId
     const supabase = createServiceClient();
     const { error } = await supabase.from("clinic_integrations").upsert({
@@ -40,6 +53,9 @@ function monthRangeUtc(now = new Date()) {
 
 export async function getLiveFunnel(clinicId: string) {
   try {
+    const auth = await createClient();
+    const { data: { user } } = await auth.auth.getUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
