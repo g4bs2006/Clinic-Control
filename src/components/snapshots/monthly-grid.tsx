@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Table,
@@ -98,37 +98,42 @@ function StatusBadge({
 // Editable row cell pair
 // ---------------------------------------------------------------------------
 
+function parseSafeInt(raw: string): number | null {
+  if (raw === "") return null;
+  const n = Math.floor(Number(raw));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 function EditableRow({
   row,
   month,
   rules,
-  isPending,
-  onSaveStart,
-  onSaveDone,
 }: {
   row: GridRow;
   month: string;
   rules: StatusRule[];
-  isPending: boolean;
-  onSaveStart: () => void;
-  onSaveDone: () => void;
 }) {
+  const router = useRouter();
   const [leads, setLeads] = useState<number | null>(row.leads);
   const [scheduled, setScheduled] = useState<number | null>(row.scheduled);
+  const [saving, setSaving] = useState(false);
 
   const localRate =
     leads === null || scheduled === null ? null : leads === 0 ? 0 : scheduled / leads;
 
   async function handleSave() {
-    const l = leads ?? 0;
-    const s = scheduled ?? 0;
-    onSaveStart();
-    const result = await upsertManualSnapshot(row.clinicId, month, l, s);
-    onSaveDone();
-    if (!result.ok) {
-      toast.error(`Erro ao salvar ${row.name}: ${result.error}`);
-    } else {
-      toast.success(`${row.name} salvo`);
+    if (leads === null || scheduled === null) return;
+    setSaving(true);
+    try {
+      const result = await upsertManualSnapshot(row.clinicId, month, leads, scheduled);
+      if (!result.ok) {
+        toast.error(`Erro ao salvar ${row.name}: ${result.error}`);
+      } else {
+        toast.success(`${row.name} salvo`);
+        router.refresh();
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -145,8 +150,8 @@ function EditableRow({
           type="number"
           min={0}
           value={leads ?? ""}
-          disabled={isPending}
-          onChange={(e) => setLeads(e.target.value === "" ? null : Number(e.target.value))}
+          disabled={saving}
+          onChange={(e) => setLeads(parseSafeInt(e.target.value))}
           onBlur={handleSave}
           onKeyDown={handleKeyDown}
           className="w-20 rounded border border-border bg-input px-2 py-1 text-sm text-foreground
@@ -159,8 +164,8 @@ function EditableRow({
           type="number"
           min={0}
           value={scheduled ?? ""}
-          disabled={isPending}
-          onChange={(e) => setScheduled(e.target.value === "" ? null : Number(e.target.value))}
+          disabled={saving}
+          onChange={(e) => setScheduled(parseSafeInt(e.target.value))}
           onBlur={handleSave}
           onKeyDown={handleKeyDown}
           className="w-20 rounded border border-border bg-input px-2 py-1 text-sm text-foreground
@@ -182,9 +187,7 @@ function EditableRow({
 
 export function MonthlyGrid({ month, rows, rules }: Props) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
 
-  // Per-row pending state (simple: just use global isPending for now)
   const handleMonthChange = useCallback(
     (value: string) => {
       if (!value) return;
@@ -228,9 +231,6 @@ export function MonthlyGrid({ month, rows, rules }: Props) {
         >
           ›
         </button>
-        {isPending && (
-          <span className="text-xs text-muted-foreground animate-pulse">Salvando…</span>
-        )}
       </div>
 
       {/* Grid */}
@@ -264,9 +264,6 @@ export function MonthlyGrid({ month, rows, rules }: Props) {
                       row={row}
                       month={month}
                       rules={rules}
-                      isPending={isPending}
-                      onSaveStart={() => startTransition(() => {})}
-                      onSaveDone={() => {}}
                     />
                   </TableRow>
                 );

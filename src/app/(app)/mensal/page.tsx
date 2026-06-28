@@ -17,7 +17,8 @@ export default async function MensalPage({
 }) {
   const params = await searchParams;
   const now = new Date();
-  const month: string = params.month ?? monthKey(now);
+  const rawMonth = params.month ?? "";
+  const month: string = /^\d{4}-\d{2}$/.test(rawMonth) ? rawMonth : monthKey(now);
   const isCurrentMonth = month === monthKey(now);
 
   // Load clinics, snapshots, and status rules in parallel
