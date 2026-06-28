@@ -166,14 +166,19 @@ export async function ensureFrozen(
     const now = new Date();
     const currentKey = monthKey(now);
 
+    // Always bulk-freeze any past unfrozen rows, regardless of mode.
+    // This handles the manual→auto transition: rows inserted while the clinic
+    // was in manual mode (source='manual', frozen=false) are frozen here so
+    // the auto backfill loop's "frozen → break" boundary works correctly.
+    await supabase
+      .from("monthly_snapshots")
+      .update({ frozen: true })
+      .eq("clinic_id", clinicId)
+      .lt("year_month", currentKey)
+      .eq("frozen", false);
+
     if (mode === "manual") {
-      // Bulk-freeze all past unfrozen rows for this clinic
-      await supabase
-        .from("monthly_snapshots")
-        .update({ frozen: true })
-        .eq("clinic_id", clinicId)
-        .lt("year_month", currentKey)
-        .eq("frozen", false);
+      // Bulk freeze above already handled everything for manual mode.
       return;
     }
 
