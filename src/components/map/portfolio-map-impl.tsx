@@ -12,6 +12,8 @@ export interface MapPoint {
   status: string | null
   statusColor: string | null
   leads: number
+  scheduled: number
+  mode: "auto" | "manual"
   lat: number
   lng: number
 }
@@ -70,21 +72,19 @@ export default function PortfolioMapImpl({ points }: PortfolioMapImplProps) {
             }}
           >
             <Popup>
-              <div style={{ minWidth: "9rem", lineHeight: 1.4 }}>
+              <div style={{ minWidth: "11rem", lineHeight: 1.45 }}>
                 <div style={{ fontWeight: 700, marginBottom: 2 }}>{p.name}</div>
-                {(p.city || p.state) && (
-                  <div style={{ fontSize: "0.75rem", color: "#475569" }}>
-                    {[p.city, p.state].filter(Boolean).join("/")}
-                  </div>
-                )}
-                <div style={{ fontSize: "0.8rem", marginTop: 4 }}>
-                  Taxa: <strong>{fmtPct(p.rate)}</strong>
+                <div style={{ fontSize: "0.72rem", color: "#475569" }}>
+                  {[p.city, p.state].filter(Boolean).join("/") || "Sem localização"}
+                  {" · "}
+                  {p.mode === "auto" ? "Automática" : "Manual"}
                 </div>
+
                 {p.status && (
                   <div
                     style={{
                       display: "inline-block",
-                      marginTop: 4,
+                      margin: "6px 0 4px",
                       padding: "1px 8px",
                       borderRadius: 9999,
                       fontSize: "0.7rem",
@@ -96,6 +96,44 @@ export default function PortfolioMapImpl({ points }: PortfolioMapImplProps) {
                     {p.status}
                   </div>
                 )}
+
+                {/* Métricas */}
+                <table style={{ width: "100%", fontSize: "0.75rem", marginTop: 2 }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ color: "#64748b" }}>Leads</td>
+                      <td style={{ textAlign: "right", fontWeight: 600 }}>
+                        {p.leads.toLocaleString("pt-BR")}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ color: "#64748b" }}>Agendados</td>
+                      <td style={{ textAlign: "right", fontWeight: 600 }}>
+                        {p.scheduled.toLocaleString("pt-BR")}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ color: "#64748b" }}>Taxa</td>
+                      <td style={{ textAlign: "right", fontWeight: 700 }}>
+                        {fmtPct(p.rate)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <a
+                  href={`/clinicas/${p.clinicId}`}
+                  style={{
+                    display: "inline-block",
+                    marginTop: 6,
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#2563eb",
+                    textDecoration: "none",
+                  }}
+                >
+                  Ver detalhe →
+                </a>
               </div>
             </Popup>
           </CircleMarker>
