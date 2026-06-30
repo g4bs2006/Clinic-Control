@@ -3,9 +3,10 @@
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Upload, Download, FileText, FolderUp } from "lucide-react"
+import { Upload, Download, FileText, FolderUp, Trash2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { importParsedAgents } from "@/lib/agents/actions"
+import { deleteClinicFile } from "@/lib/clinics/files-actions"
 import { CLINIC_FILES_BUCKET, type StoredFile } from "@/lib/storage/clinic-files"
 import { Button } from "@/components/ui/button"
 import type { InputFile } from "@/lib/agents/parser"
@@ -30,6 +31,20 @@ export function ClinicFiles({
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  async function handleDelete(path: string) {
+    if (!confirm(`Excluir "${path}"? Essa ação não pode ser desfeita.`)) return
+    setDeleting(path)
+    const res = await deleteClinicFile(clinicId, path)
+    setDeleting(null)
+    if (res.ok) {
+      toast.success("Arquivo excluído")
+      router.refresh()
+    } else {
+      toast.error(res.error)
+    }
+  }
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const list = e.target.files
@@ -126,7 +141,7 @@ export function ClinicFiles({
           {files.map((f) => (
             <li
               key={f.fullPath}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent/50"
+              className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent/50"
             >
               <FileText className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="flex-1 truncate text-foreground/90" title={f.path}>
@@ -135,6 +150,16 @@ export function ClinicFiles({
               <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                 {fmtBytes(f.size)}
               </span>
+              <button
+                type="button"
+                onClick={() => handleDelete(f.path)}
+                disabled={deleting === f.path}
+                aria-label={`Excluir ${f.path}`}
+                title="Excluir"
+                className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
             </li>
           ))}
         </ul>
