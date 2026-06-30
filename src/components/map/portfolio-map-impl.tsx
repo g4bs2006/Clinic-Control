@@ -95,8 +95,8 @@ export default function PortfolioMapImpl({ points }: PortfolioMapImplProps) {
             </Tooltip>
             <Popup>
               <div style={{ minWidth: "11rem", lineHeight: 1.45 }}>
-                <div style={{ fontWeight: 700, marginBottom: 2 }}>{p.name}</div>
-                <div style={{ fontSize: "0.72rem", color: "#475569" }}>
+                <div style={{ fontWeight: 700, marginBottom: 2, color: "var(--foreground)" }}>{p.name}</div>
+                <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
                   {[p.city, p.state].filter(Boolean).join("/") || "Sem localização"}
                   {" · "}
                   {p.mode === "auto" ? "Automática" : "Manual"}
@@ -123,19 +123,19 @@ export default function PortfolioMapImpl({ points }: PortfolioMapImplProps) {
                 <table style={{ width: "100%", fontSize: "0.75rem", marginTop: 2 }}>
                   <tbody>
                     <tr>
-                      <td style={{ color: "#64748b" }}>Leads</td>
+                      <td style={{ color: "var(--muted-foreground)" }}>Leads</td>
                       <td style={{ textAlign: "right", fontWeight: 600 }}>
                         {p.leads.toLocaleString("pt-BR")}
                       </td>
                     </tr>
                     <tr>
-                      <td style={{ color: "#64748b" }}>Agendados</td>
+                      <td style={{ color: "var(--muted-foreground)" }}>Agendados</td>
                       <td style={{ textAlign: "right", fontWeight: 600 }}>
                         {p.scheduled.toLocaleString("pt-BR")}
                       </td>
                     </tr>
                     <tr>
-                      <td style={{ color: "#64748b" }}>Taxa</td>
+                      <td style={{ color: "var(--muted-foreground)" }}>Taxa</td>
                       <td style={{ textAlign: "right", fontWeight: 700 }}>
                         {fmtPct(p.rate)}
                       </td>
@@ -150,7 +150,7 @@ export default function PortfolioMapImpl({ points }: PortfolioMapImplProps) {
                     marginTop: 6,
                     fontSize: "0.75rem",
                     fontWeight: 600,
-                    color: "#2563eb",
+                    color: "var(--primary)",
                     textDecoration: "none",
                   }}
                 >
