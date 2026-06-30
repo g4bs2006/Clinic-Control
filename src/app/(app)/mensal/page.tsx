@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { listClinics } from "@/lib/clinics/actions";
-import { listSnapshotsForMonth, ensureFrozen } from "@/lib/snapshots/actions";
+import { listSnapshotsForMonth, ensureFrozen, freezeAllPastMonths } from "@/lib/snapshots/actions";
 import { getLiveFunnel } from "@/lib/clinics/integration-actions";
 import { monthKey } from "@/lib/snapshots/month";
 import { MonthlyGrid, type GridRow } from "@/components/snapshots/monthly-grid";
@@ -36,8 +36,11 @@ export default async function MensalPage({
 
   const rules: StatusRule[] = (rulesData ?? []) as StatusRule[];
 
-  // Fire ensureFrozen for every clinic (lazy freeze past months on access)
-  await Promise.all(clinics.map((c) => ensureFrozen(c.id, c.mode)));
+  // Freeze past months in one query; só clínicas auto precisam do backfill por clínica.
+  await freezeAllPastMonths();
+  await Promise.allSettled(
+    clinics.filter((c) => c.mode === "auto").map((c) => ensureFrozen(c.id, c.mode)),
+  );
 
   // For AUTO clinics in the current month, fetch live funnel data
   const liveFunnelMap = new Map<
@@ -114,9 +117,8 @@ export default async function MensalPage({
         };
       }
     } else {
-      // Manual mode: editable if current month OR snapshot not yet frozen
-      const frozen = snap?.frozen ?? false;
-      const editable = isCurrentMonth || !frozen;
+      // Manual mode: the team owns this data, so it's always editable —
+      // inclusive de meses passados, para entrar/corrigir métricas históricas.
       return {
         clinicId: clinic.id,
         name: clinic.name,
@@ -127,8 +129,8 @@ export default async function MensalPage({
         scheduled: snap?.scheduled ?? null,
         rate: snap?.rate ?? null,
         statusOverride: snap?.statusOverride ?? null,
-        frozen,
-        editable,
+        frozen: snap?.frozen ?? false,
+        editable: true,
       };
     }
   });

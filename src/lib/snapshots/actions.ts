@@ -46,9 +46,8 @@ export async function upsertManualSnapshot(
       .eq("year_month", yearMonth)
       .maybeSingle();
 
-    if (existing?.frozen === true) {
-      return { ok: false, error: "Mês já fechado" };
-    }
+    // Dados manuais são a fonte de verdade da equipe e podem ser corrigidos a
+    // qualquer momento, mesmo em meses já congelados (não bloqueamos por frozen).
 
     // Build upsert payload — do NOT overwrite existing status_override
     const payload: Record<string, unknown> = {
