@@ -29,7 +29,7 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.5rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -40,41 +40,44 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* Dark mode — navy/teal palette (forced via .dark on <html>) */
+/* Dark mode — neutral near-black + violet accent (Vercel-leaning, forced via .dark on <html>) */
 .dark {
-  /* Core navy/teal brand tokens (Task 2) */
-  --background: oklch(0.22 0.04 240);
-  --foreground: oklch(0.97 0.005 210);
-  --primary: oklch(0.72 0.12 183);
-  --primary-foreground: oklch(0.15 0.03 240);
-  --muted: oklch(0.28 0.04 230);
-  --muted-foreground: oklch(0.65 0.02 215);
-  --border: oklch(0.35 0.04 225);
-  --input: oklch(0.35 0.04 225);
-  --ring: oklch(0.72 0.12 183);
+  /* Surfaces: near-black neutral with a whisper of cool hue for depth */
+  --background: oklch(0.145 0 0);          /* ~#0a0a0a */
+  --foreground: oklch(0.96 0 0);           /* ~#ededed */
+  --muted: oklch(0.225 0 0);
+  --muted-foreground: oklch(0.64 0 0);     /* ~#8f8f94 */
+  --border: oklch(0.27 0.006 286);         /* hairline, cool-neutral */
+  --input: oklch(0.27 0.006 286);
+  /* Brand accent: violet */
+  --primary: oklch(0.62 0.20 292);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.62 0.20 292);
   /* shadcn structural tokens */
-  --card: oklch(0.26 0.04 235);
-  --card-foreground: oklch(0.97 0.005 210);
-  --popover: oklch(0.26 0.04 235);
-  --popover-foreground: oklch(0.97 0.005 210);
-  --secondary: oklch(0.28 0.04 230);
-  --secondary-foreground: oklch(0.97 0.005 210);
-  --accent: oklch(0.28 0.04 230);
-  --accent-foreground: oklch(0.97 0.005 210);
-  --destructive: oklch(0.704 0.191 22.216);
-  --chart-1: oklch(0.72 0.12 183);
-  --chart-2: oklch(0.60 0.10 200);
-  --chart-3: oklch(0.50 0.08 215);
-  --chart-4: oklch(0.40 0.06 225);
-  --chart-5: oklch(0.30 0.04 230);
-  --sidebar: oklch(0.20 0.04 242);
-  --sidebar-foreground: oklch(0.97 0.005 210);
-  --sidebar-primary: oklch(0.72 0.12 183);
-  --sidebar-primary-foreground: oklch(0.15 0.03 240);
-  --sidebar-accent: oklch(0.28 0.04 230);
-  --sidebar-accent-foreground: oklch(0.97 0.005 210);
-  --sidebar-border: oklch(0.35 0.04 225);
-  --sidebar-ring: oklch(0.72 0.12 183);
+  --card: oklch(0.178 0 0);                /* panel ~#141416 */
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.195 0.004 286);
+  --popover-foreground: oklch(0.96 0 0);
+  --secondary: oklch(0.235 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --accent: oklch(0.24 0.006 286);
+  --accent-foreground: oklch(0.97 0 0);
+  --destructive: oklch(0.62 0.21 25);
+  /* Chart sequence — distinct hues legible on near-black, led by the violet accent */
+  --chart-1: oklch(0.62 0.20 292);         /* violet */
+  --chart-2: oklch(0.70 0.15 230);         /* blue */
+  --chart-3: oklch(0.74 0.15 165);         /* teal-green */
+  --chart-4: oklch(0.80 0.16 75);          /* amber */
+  --chart-5: oklch(0.68 0.19 350);         /* pink */
+  /* Sidebar: a touch darker than the page for separation */
+  --sidebar: oklch(0.125 0 0);
+  --sidebar-foreground: oklch(0.96 0 0);
+  --sidebar-primary: oklch(0.62 0.20 292);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.22 0.006 286);
+  --sidebar-accent-foreground: oklch(0.97 0 0);
+  --sidebar-border: oklch(0.24 0.006 286);
+  --sidebar-ring: oklch(0.62 0.20 292);
 }
 
 @theme inline {
@@ -134,5 +137,28 @@ body {
   }
   html {
     @apply font-sans;
+    /* Subtle font smoothing for the crisp Vercel-style type */
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Snappy hover/active feedback on interactive elements */
+  a,
+  button {
+    @apply transition-colors duration-150;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 35%, transparent);
+  }
+}
+
+@layer utilities {
+  /* Respect reduced-motion across all transitions/animations */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

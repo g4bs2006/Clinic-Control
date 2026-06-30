@@ -14,9 +14,9 @@ const PortfolioMapImpl = dynamic(() => import("./portfolio-map-impl"), {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "oklch(0.65 0.02 215)",
+        color: "oklch(0.64 0 0)",
         fontSize: "0.8rem",
-        background: "oklch(0.18 0.03 240)",
+        background: "oklch(0.145 0 0)",
         borderRadius: "0.5rem",
       }}
     >

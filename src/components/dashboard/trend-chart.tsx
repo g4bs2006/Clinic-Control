@@ -53,8 +53,8 @@ function CustomTooltip({
   return (
     <div
       style={{
-        background: "oklch(0.26 0.04 235)",
-        border: "1px solid oklch(0.35 0.04 225)",
+        background: "oklch(0.195 0.004 286)",
+        border: "1px solid oklch(0.27 0.006 286)",
         borderRadius: "0.5rem",
         padding: "0.5rem 0.75rem",
         boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
@@ -64,7 +64,7 @@ function CustomTooltip({
       <div
         style={{
           fontSize: "0.7rem",
-          color: "oklch(0.65 0.02 215)",
+          color: "oklch(0.64 0 0)",
           fontWeight: 600,
           letterSpacing: "0.04em",
           marginBottom: "0.375rem",
@@ -96,7 +96,7 @@ function CustomTooltip({
           <span
             style={{
               fontSize: "0.75rem",
-              color: "oklch(0.97 0.005 210)",
+              color: "oklch(0.96 0 0)",
               flex: 1,
             }}
           >
@@ -105,7 +105,7 @@ function CustomTooltip({
           <span
             style={{
               fontSize: "0.75rem",
-              color: "oklch(0.97 0.005 210)",
+              color: "oklch(0.96 0 0)",
               fontWeight: 600,
               fontVariantNumeric: "tabular-nums",
             }}
@@ -140,7 +140,7 @@ export function TrendChart({ data, series }: TrendChartProps) {
           alignItems: "center",
           justifyContent: "center",
           height: "260px",
-          color: "oklch(0.65 0.02 215)",
+          color: "oklch(0.64 0 0)",
           gap: "0.5rem",
         }}
       >
@@ -156,18 +156,18 @@ export function TrendChart({ data, series }: TrendChartProps) {
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -8 }}>
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="oklch(0.32 0.03 230)"
+            stroke="oklch(0.27 0.006 286)"
             vertical={false}
           />
           <XAxis
             dataKey="month"
-            tick={{ fill: "oklch(0.65 0.02 215)", fontSize: 11 }}
+            tick={{ fill: "oklch(0.64 0 0)", fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: "oklch(0.32 0.03 230)" }}
+            axisLine={{ stroke: "oklch(0.27 0.006 286)" }}
           />
           <YAxis
             tickFormatter={(v: number) => `${v}%`}
-            tick={{ fill: "oklch(0.65 0.02 215)", fontSize: 11 }}
+            tick={{ fill: "oklch(0.64 0 0)", fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={44}
@@ -232,7 +232,7 @@ export function TrendChart({ data, series }: TrendChartProps) {
               <span
                 style={{
                   fontSize: "0.72rem",
-                  color: "oklch(0.85 0.01 215)",
+                  color: "oklch(0.80 0 0)",
                   fontWeight: 500,
                   textDecoration: off ? "line-through" : "none",
                 }}

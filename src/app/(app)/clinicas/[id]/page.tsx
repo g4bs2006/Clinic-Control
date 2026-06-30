@@ -18,7 +18,7 @@ import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart
 
 export const dynamic = "force-dynamic"
 
-const CLINIC_COLOR = "#2dd4bf"
+const CLINIC_COLOR = "#a78bfa" // violet accent
 
 function fmtPct(rate: number): string {
   return (
@@ -194,7 +194,7 @@ export default async function ClinicDetailPage({
                   : "Funil completo só para clínicas automáticas"}
               </span>
               {!isAuto && (
-                <Link href="/mensal" className="text-xs text-[oklch(0.72_0.12_183)] hover:underline">
+                <Link href="/mensal" className="text-xs text-[oklch(0.62_0.20_292)] hover:underline">
                   Editar dados na grade mensal →
                 </Link>
               )}
@@ -233,9 +233,9 @@ export default async function ClinicDetailPage({
                           fontWeight: 600,
                           letterSpacing: "0.12em",
                           textTransform: "uppercase",
-                          color: "oklch(0.65 0.02 215)",
+                          color: "oklch(0.64 0 0)",
                           textAlign: i === 2 ? "right" : "left",
-                          borderBottom: "1px solid oklch(0.35 0.04 225)",
+                          borderBottom: "1px solid oklch(0.27 0.006 286)",
                           whiteSpace: "nowrap",
                         }}
                       >
@@ -251,8 +251,8 @@ export default async function ClinicDetailPage({
                         style={{
                           padding: "0.5rem 0.75rem",
                           fontSize: "0.8rem",
-                          color: "oklch(0.97 0.005 210)",
-                          borderBottom: "1px solid oklch(0.30 0.03 230)",
+                          color: "oklch(0.96 0 0)",
+                          borderBottom: "1px solid oklch(0.235 0 0)",
                         }}
                       >
                         {lead.name || "—"}
@@ -261,8 +261,8 @@ export default async function ClinicDetailPage({
                         style={{
                           padding: "0.5rem 0.75rem",
                           fontSize: "0.8rem",
-                          color: "oklch(0.85 0.01 215)",
-                          borderBottom: "1px solid oklch(0.30 0.03 230)",
+                          color: "oklch(0.80 0 0)",
+                          borderBottom: "1px solid oklch(0.235 0 0)",
                         }}
                       >
                         {lead.step}
@@ -273,8 +273,8 @@ export default async function ClinicDetailPage({
                           fontSize: "0.8rem",
                           textAlign: "right",
                           fontVariantNumeric: "tabular-nums",
-                          color: "oklch(0.65 0.02 215)",
-                          borderBottom: "1px solid oklch(0.30 0.03 230)",
+                          color: "oklch(0.64 0 0)",
+                          borderBottom: "1px solid oklch(0.235 0 0)",
                         }}
                       >
                         {leadDateLabel(lead.date)}

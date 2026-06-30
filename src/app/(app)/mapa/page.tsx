@@ -154,7 +154,7 @@ export default async function MapaPage({
                         ({r.count})
                       </span>
                     </span>
-                    <span className="font-semibold tabular-nums text-[oklch(0.72_0.12_183)]">
+                    <span className="font-semibold tabular-nums text-[oklch(0.62_0.20_292)]">
                       {fmtPct(r.avgRate)}
                     </span>
                   </li>

@@ -23,9 +23,9 @@ interface KpiCardProps {
 }
 
 const accentStyle: Record<AccentColor, React.CSSProperties> = {
-  teal: { color: "var(--primary)" },
-  purple: { color: "oklch(0.65 0.18 290)" },
-  rose: { color: "oklch(0.70 0.18 20)" },
+  teal: { color: "var(--primary)" }, // violet brand accent
+  purple: { color: "oklch(0.70 0.15 230)" }, // blue
+  rose: { color: "oklch(0.74 0.15 165)" }, // emerald
 }
 
 /**

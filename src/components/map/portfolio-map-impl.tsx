@@ -48,7 +48,7 @@ export default function PortfolioMapImpl({ points }: PortfolioMapImplProps) {
       center={BRAZIL_CENTER}
       zoom={DEFAULT_ZOOM}
       scrollWheelZoom
-      style={{ height: "520px", width: "100%", background: "oklch(0.18 0.03 240)" }}
+      style={{ height: "520px", width: "100%", background: "oklch(0.145 0 0)" }}
     >
       <TileLayer
         // CARTO dark_matter — tiles dark gratuitos, sem chave de API

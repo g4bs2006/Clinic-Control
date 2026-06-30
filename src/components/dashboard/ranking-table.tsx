@@ -41,7 +41,7 @@ function SortIcon({ active, asc }: { active: boolean; asc: boolean }) {
         marginLeft: "0.25rem",
         fontSize: "0.65rem",
         opacity: active ? 1 : 0.3,
-        color: "oklch(0.72 0.12 183)",
+        color: "oklch(0.62 0.20 292)",
       }}
     >
       {active ? (asc ? "▲" : "▼") : "▼"}
@@ -77,7 +77,7 @@ export function RankingTable({ rows }: RankingTableProps) {
           alignItems: "center",
           justifyContent: "center",
           padding: "3rem 1rem",
-          color: "oklch(0.65 0.02 215)",
+          color: "oklch(0.64 0 0)",
           gap: "0.5rem",
         }}
       >
@@ -96,9 +96,9 @@ export function RankingTable({ rows }: RankingTableProps) {
     fontWeight: 600,
     letterSpacing: "0.12em",
     textTransform: "uppercase",
-    color: "oklch(0.65 0.02 215)",
+    color: "oklch(0.64 0 0)",
     textAlign: "left",
-    borderBottom: "1px solid oklch(0.35 0.04 225)",
+    borderBottom: "1px solid oklch(0.27 0.006 286)",
     whiteSpace: "nowrap",
     userSelect: "none",
   }
@@ -111,14 +111,14 @@ export function RankingTable({ rows }: RankingTableProps) {
   const tdStyle: React.CSSProperties = {
     padding: "0.625rem 0.75rem",
     fontSize: "0.8rem",
-    color: "oklch(0.97 0.005 210)",
-    borderBottom: "1px solid oklch(0.30 0.03 230)",
+    color: "oklch(0.96 0 0)",
+    borderBottom: "1px solid oklch(0.235 0 0)",
     verticalAlign: "middle",
   }
 
   const tdMutedStyle: React.CSSProperties = {
     ...tdStyle,
-    color: "oklch(0.65 0.02 215)",
+    color: "oklch(0.64 0 0)",
     fontVariantNumeric: "tabular-nums",
   }
 
@@ -177,18 +177,18 @@ export function RankingTable({ rows }: RankingTableProps) {
                   background:
                     i % 2 === 0
                       ? "transparent"
-                      : "oklch(0.245 0.035 238 / 0.5)",
+                      : "oklch(0.178 0 0 / 0.6)",
                   transition: "background 0.12s ease",
                 }}
                 onMouseEnter={(e) => {
                   ;(e.currentTarget as HTMLTableRowElement).style.background =
-                    "oklch(0.28 0.04 230 / 0.8)"
+                    "oklch(0.24 0.006 286 / 0.9)"
                 }}
                 onMouseLeave={(e) => {
                   ;(e.currentTarget as HTMLTableRowElement).style.background =
                     i % 2 === 0
                       ? "transparent"
-                      : "oklch(0.245 0.035 238 / 0.5)"
+                      : "oklch(0.178 0 0 / 0.6)"
                 }}
               >
                 {/* Clinic name — links to detail */}
@@ -196,7 +196,7 @@ export function RankingTable({ rows }: RankingTableProps) {
                   <Link
                     href={`/clinicas/${row.clinicId}`}
                     style={{
-                      color: "oklch(0.72 0.12 183)",
+                      color: "oklch(0.62 0.20 292)",
                       textDecoration: "none",
                       fontWeight: 500,
                     }}
@@ -250,7 +250,7 @@ export function RankingTable({ rows }: RankingTableProps) {
                       {row.status}
                     </span>
                   ) : (
-                    <span style={{ color: "oklch(0.65 0.02 215)", fontSize: "0.75rem" }}>
+                    <span style={{ color: "oklch(0.64 0 0)", fontSize: "0.75rem" }}>
                       {EM_DASH}
                     </span>
                   )}

@@ -4,26 +4,11 @@ import { monthKey, prevMonth } from "@/lib/snapshots/month"
 import { Panel } from "@/components/dashboard/panel"
 import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart"
 import { ComparisonFilters } from "@/components/dashboard/comparison-filters"
+import { SERIES_PALETTE } from "@/lib/ui/chart-theme"
 
 export const dynamic = "force-dynamic"
 
 type SearchParams = Promise<{ range?: string }>
-
-// Distinct, dark-background-friendly line colors. Cycles if clinics > palette.
-const PALETTE = [
-  "#2dd4bf", // teal
-  "#a78bfa", // purple
-  "#fb7185", // rose
-  "#fbbf24", // amber
-  "#38bdf8", // sky
-  "#4ade80", // green
-  "#f472b6", // pink
-  "#facc15", // yellow
-  "#818cf8", // indigo
-  "#fb923c", // orange
-  "#22d3ee", // cyan
-  "#c084fc", // violet
-]
 
 // Short pt-BR month label, e.g. "abr/25"
 function shortMonthLabel(key: string): string {
@@ -80,7 +65,7 @@ export default async function ComparativoPage({
   // Assign a stable color per clinic (by index in withData)
   const colorByClinic = new Map<string, string>()
   withData.forEach((row, i) => {
-    colorByClinic.set(row.clinicId, PALETTE[i % PALETTE.length])
+    colorByClinic.set(row.clinicId, SERIES_PALETTE[i % SERIES_PALETTE.length])
   })
 
   // Chart series + data (rates already converted to %)
@@ -144,9 +129,9 @@ export default async function ComparativoPage({
                       fontWeight: 600,
                       letterSpacing: "0.12em",
                       textTransform: "uppercase",
-                      color: "oklch(0.65 0.02 215)",
+                      color: "oklch(0.64 0 0)",
                       textAlign: "left",
-                      borderBottom: "1px solid oklch(0.35 0.04 225)",
+                      borderBottom: "1px solid oklch(0.27 0.006 286)",
                       whiteSpace: "nowrap",
                       position: "sticky",
                       left: 0,
@@ -164,9 +149,9 @@ export default async function ComparativoPage({
                         fontWeight: 600,
                         letterSpacing: "0.08em",
                         textTransform: "capitalize",
-                        color: "oklch(0.65 0.02 215)",
+                        color: "oklch(0.64 0 0)",
                         textAlign: "right",
-                        borderBottom: "1px solid oklch(0.35 0.04 225)",
+                        borderBottom: "1px solid oklch(0.27 0.006 286)",
                         whiteSpace: "nowrap",
                       }}
                     >
@@ -182,7 +167,7 @@ export default async function ComparativoPage({
                       style={{
                         padding: "0.5rem 0.75rem",
                         fontSize: "0.8rem",
-                        borderBottom: "1px solid oklch(0.30 0.03 230)",
+                        borderBottom: "1px solid oklch(0.235 0 0)",
                         whiteSpace: "nowrap",
                         position: "sticky",
                         left: 0,
@@ -203,7 +188,7 @@ export default async function ComparativoPage({
                       <Link
                         href={`/clinicas/${row.clinicId}`}
                         style={{
-                          color: "oklch(0.72 0.12 183)",
+                          color: "oklch(0.62 0.20 292)",
                           textDecoration: "none",
                           fontWeight: 500,
                         }}
@@ -221,10 +206,10 @@ export default async function ComparativoPage({
                             fontSize: "0.8rem",
                             textAlign: "right",
                             fontVariantNumeric: "tabular-nums",
-                            borderBottom: "1px solid oklch(0.30 0.03 230)",
+                            borderBottom: "1px solid oklch(0.235 0 0)",
                             color: cell
-                              ? "oklch(0.97 0.005 210)"
-                              : "oklch(0.55 0.02 215)",
+                              ? "oklch(0.96 0 0)"
+                              : "oklch(0.5 0 0)",
                             background:
                               cell && cell.color ? `${cell.color}26` : "transparent",
                             fontWeight: cell ? 600 : 400,

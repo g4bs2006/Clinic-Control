@@ -24,23 +24,22 @@ export function FunnelView({ steps }: FunnelViewProps) {
     <div className="flex flex-col gap-2.5">
       {steps.map((step, i) => {
         const pct = (step.count / max) * 100
-        // Subtle hue shift down the funnel: teal at top → purple at bottom
+        // Violet monochrome, fading slightly lighter down the funnel
         const t = steps.length > 1 ? i / (steps.length - 1) : 0
-        const hue = 183 + t * 107 // 183 (teal) → 290 (purple)
-        const fill = `oklch(0.70 0.15 ${hue.toFixed(0)})`
+        const light = 0.66 - t * 0.1 // 0.66 → 0.56
+        const fill = `oklch(${light.toFixed(2)} 0.19 292)`
 
         return (
           <div key={step.title} className="flex items-center gap-3">
             <span className="w-44 shrink-0 truncate text-xs text-muted-foreground" title={step.title}>
               {step.title}
             </span>
-            <div className="relative h-7 flex-1 overflow-hidden rounded-md bg-[oklch(0.24_0.03_238)]">
+            <div className="relative h-7 flex-1 overflow-hidden rounded-md bg-[oklch(0.225_0_0)]">
               <div
                 className="absolute inset-y-0 left-0 rounded-md"
                 style={{
                   width: `${Math.max(pct, step.count > 0 ? 4 : 0)}%`,
-                  background: `linear-gradient(90deg, ${fill} 0%, oklch(0.62 0.16 ${(hue + 8).toFixed(0)}) 100%)`,
-                  boxShadow: `0 0 12px -2px ${fill}`,
+                  background: fill,
                   transition: "width 0.3s ease",
                 }}
               />

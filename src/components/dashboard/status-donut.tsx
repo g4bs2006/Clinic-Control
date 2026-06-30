@@ -43,7 +43,7 @@ function CenterLabel({
         style={{
           fontSize: "2rem",
           fontWeight: 600,
-          fill: "oklch(0.97 0.005 210)",
+          fill: "oklch(0.96 0 0)",
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -57,7 +57,7 @@ function CenterLabel({
         style={{
           fontSize: "0.65rem",
           fontWeight: 500,
-          fill: "oklch(0.65 0.02 215)",
+          fill: "oklch(0.64 0 0)",
           letterSpacing: "0.12em",
           textTransform: "uppercase",
         }}
@@ -81,8 +81,8 @@ function CustomTooltip({
   return (
     <div
       style={{
-        background: "oklch(0.26 0.04 235)",
-        border: "1px solid oklch(0.35 0.04 225)",
+        background: "oklch(0.195 0.004 286)",
+        border: "1px solid oklch(0.27 0.006 286)",
         borderRadius: "0.5rem",
         padding: "0.5rem 0.75rem",
         boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
@@ -101,7 +101,7 @@ function CustomTooltip({
         <span
           style={{
             fontSize: "0.75rem",
-            color: "oklch(0.97 0.005 210)",
+            color: "oklch(0.96 0 0)",
             fontWeight: 500,
           }}
         >
@@ -110,7 +110,7 @@ function CustomTooltip({
         <span
           style={{
             fontSize: "0.75rem",
-            color: "oklch(0.65 0.02 215)",
+            color: "oklch(0.64 0 0)",
             marginLeft: "0.25rem",
           }}
         >
@@ -155,7 +155,7 @@ function CustomLegend({ data }: { data: StatusEntry[] }) {
           <span
             style={{
               fontSize: "0.7rem",
-              color: "oklch(0.65 0.02 215)",
+              color: "oklch(0.64 0 0)",
               fontWeight: 500,
               letterSpacing: "0.02em",
             }}
@@ -165,7 +165,7 @@ function CustomLegend({ data }: { data: StatusEntry[] }) {
           <span
             style={{
               fontSize: "0.7rem",
-              color: "oklch(0.72 0.12 183)",
+              color: "oklch(0.62 0.20 292)",
               fontWeight: 600,
               fontVariantNumeric: "tabular-nums",
             }}
@@ -188,7 +188,7 @@ export function StatusDonut({ data, totalClinics }: StatusDonutProps) {
           alignItems: "center",
           justifyContent: "center",
           height: "180px",
-          color: "oklch(0.65 0.02 215)",
+          color: "oklch(0.64 0 0)",
           fontSize: "0.8rem",
         }}
       >
