@@ -11,10 +11,14 @@ import { derivedMetrics } from "@/lib/portfolio/metrics"
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status"
 import { createClient } from "@/lib/supabase/server"
 import { monthKey, DATA_START_MONTH } from "@/lib/snapshots/month"
+import { listClinicAgents } from "@/lib/agents/actions"
+import { listClinicFiles } from "@/lib/clinics/files-actions"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { FunnelView } from "@/components/dashboard/funnel-view"
 import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart"
+import { ClinicAgents } from "@/components/clinics/clinic-agents"
+import { ClinicFiles } from "@/components/clinics/clinic-files"
 
 export const dynamic = "force-dynamic"
 
@@ -83,6 +87,11 @@ export default async function ClinicDetailPage({
     loadStatusRules(),
     isAuto ? getLiveFunnel(id) : Promise.resolve(null),
     isAuto ? listClinicLeads(id) : Promise.resolve(null),
+  ])
+
+  const [agents, files] = await Promise.all([
+    listClinicAgents(id),
+    listClinicFiles(id),
   ])
 
   const liveFunnel = funnelRes && funnelRes.ok ? funnelRes.funnel : null
@@ -290,6 +299,22 @@ export default async function ClinicDetailPage({
           )}
         </Panel>
       )}
+
+      {/* ── Agentes de IA ──────────────────────────────────────── */}
+      <Panel
+        title="Agentes de IA"
+        subtitle="persona e estágios · editáveis (importados da pasta da clínica)"
+      >
+        <ClinicAgents agents={agents} />
+      </Panel>
+
+      {/* ── Arquivos da clínica ────────────────────────────────── */}
+      <Panel
+        title="Arquivos da clínica"
+        subtitle="suba a pasta · qualquer pessoa da equipe pode baixar"
+      >
+        <ClinicFiles clinicId={id} files={files} />
+      </Panel>
     </main>
   )
 }
