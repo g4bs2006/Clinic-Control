@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { Upload, Download, FileText, FolderUp, Trash2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { importParsedAgents } from "@/lib/agents/actions"
-import { deleteClinicFile } from "@/lib/clinics/files-actions"
+import { deleteClinicFile, deleteAllClinicFiles } from "@/lib/clinics/files-actions"
 import { CLINIC_FILES_BUCKET, type StoredFile } from "@/lib/storage/clinic-files"
 import { Button } from "@/components/ui/button"
 import type { InputFile } from "@/lib/agents/parser"
@@ -40,6 +40,24 @@ export function ClinicFiles({
     setDeleting(null)
     if (res.ok) {
       toast.success("Arquivo excluído")
+      router.refresh()
+    } else {
+      toast.error(res.error)
+    }
+  }
+
+  async function handleDeleteAll() {
+    if (
+      !confirm(
+        `Excluir TODOS os ${files.length} arquivo(s) desta clínica? Essa ação não pode ser desfeita.`,
+      )
+    )
+      return
+    setBusy(true)
+    const res = await deleteAllClinicFiles(clinicId)
+    setBusy(false)
+    if (res.ok) {
+      toast.success(`${res.deleted} arquivo(s) excluído(s)`)
       router.refresh()
     } else {
       toast.error(res.error)
@@ -124,6 +142,18 @@ export function ClinicFiles({
             <Download className="size-3.5" />
             Baixar tudo (.zip)
           </a>
+        )}
+
+        {files.length > 0 && (
+          <button
+            type="button"
+            onClick={handleDeleteAll}
+            disabled={busy}
+            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2.5 text-[0.8rem] font-medium text-destructive hover:bg-destructive/15 disabled:opacity-50"
+          >
+            <Trash2 className="size-3.5" />
+            Excluir tudo
+          </button>
         )}
       </div>
 

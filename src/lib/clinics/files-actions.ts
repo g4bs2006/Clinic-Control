@@ -39,3 +39,23 @@ export async function deleteClinicFile(
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
+
+// Exclui TODOS os arquivos do repositório da clínica.
+export async function deleteAllClinicFiles(
+  clinicId: string,
+): Promise<{ ok: true; deleted: number } | { ok: false; error: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: "Não autenticado" }
+
+  const files = await listAllFiles(supabase, clinicId)
+  if (files.length === 0) return { ok: true, deleted: 0 }
+
+  const { error } = await supabase.storage
+    .from(CLINIC_FILES_BUCKET)
+    .remove(files.map((f) => f.fullPath))
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, deleted: files.length }
+}
