@@ -8,6 +8,7 @@ const navItems = [
   { href: "/clinicas", label: "Clínicas" },
   { href: "/mensal", label: "Mensal" },
   { href: "/comparativo", label: "Comparativo" },
+  { href: "/mapa", label: "Mapa" },
 ];
 
 export function AppNav() {

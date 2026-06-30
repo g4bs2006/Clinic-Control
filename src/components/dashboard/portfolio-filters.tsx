@@ -15,6 +15,8 @@ interface PortfolioFiltersProps {
   regions: string[]
   /** All YYYY-MM keys to offer in the month selector (last 12 months) */
   monthOptions: { key: string; label: string }[]
+  /** Route the filters navigate to (so the same control works on / and /mapa) */
+  basePath?: string
 }
 
 export function PortfolioFilters({
@@ -22,6 +24,7 @@ export function PortfolioFilters({
   region,
   regions,
   monthOptions,
+  basePath = "/",
 }: PortfolioFiltersProps) {
   const router = useRouter()
 
@@ -31,7 +34,7 @@ export function PortfolioFilters({
     if (newRegion && newRegion !== "__all__") {
       params.set("region", newRegion)
     }
-    router.push(`/?${params.toString()}`)
+    router.push(`${basePath}?${params.toString()}`)
   }
 
   return (
