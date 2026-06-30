@@ -257,7 +257,7 @@ export function MonthlyGrid({ month, rows, rules }: Props) {
             {rows.map((row) => {
               if (row.editable) {
                 return (
-                  <TableRow key={row.clinicId}>
+                  <TableRow key={`${month}:${row.clinicId}`}>
                     <TableCell className="pl-4 font-medium">{row.name}</TableCell>
                     <TableCell className="text-muted-foreground">{row.cityUf || "—"}</TableCell>
                     <EditableRow
@@ -271,7 +271,7 @@ export function MonthlyGrid({ month, rows, rules }: Props) {
 
               // Read-only row (auto / frozen)
               return (
-                <TableRow key={row.clinicId} className="opacity-80">
+                <TableRow key={`${month}:${row.clinicId}`} className="opacity-80">
                   <TableCell className="pl-4 font-medium">{row.name}</TableCell>
                   <TableCell className="text-muted-foreground">{row.cityUf || "—"}</TableCell>
                   <TableCell className="text-sm">{fmtNum(row.leads)}</TableCell>
