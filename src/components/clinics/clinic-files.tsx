@@ -3,11 +3,17 @@
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Upload, Download, FileText, FolderUp, Trash2 } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import { Upload, Download, FileText, FolderUp, Trash2, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { importParsedAgents } from "@/lib/agents/actions"
 import { deleteClinicFile, deleteAllClinicFiles } from "@/lib/clinics/files-actions"
-import { CLINIC_FILES_BUCKET, type StoredFile } from "@/lib/storage/clinic-files"
+import {
+  CLINIC_FILES_BUCKET,
+  toStorageKey,
+  type StoredFile,
+} from "@/lib/storage/clinic-files"
 import { Button } from "@/components/ui/button"
 import type { InputFile } from "@/lib/agents/parser"
 
@@ -17,8 +23,36 @@ function fmtBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-// todo .md alimenta o parser (ele decide o que é estágio/persona e ignora o resto)
 const isAgentMd = (rel: string) => /\.md$/i.test(rel)
+const TEXT_EXTS = ["md", "txt", "csv", "json", "js", "ts", "py", "yml", "yaml", "html", "xml", "log", "env"]
+const ext = (p: string) => p.split(".").pop()?.toLowerCase() ?? ""
+
+// CSV simples com suporte a aspas; detecta ; ou , pelo cabeçalho.
+function parseCsv(text: string): string[][] {
+  const firstLine = text.split(/\r?\n/)[0] ?? ""
+  const delim = firstLine.split(";").length > firstLine.split(",").length ? ";" : ","
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ""
+  let inQ = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inQ) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ } else inQ = false
+      } else field += c
+    } else if (c === '"') inQ = true
+    else if (c === delim) { row.push(field); field = "" }
+    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = "" }
+    else if (c !== "\r") field += c
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row) }
+  return rows.filter((r) => r.some((x) => x.trim() !== ""))
+}
+
+type ViewState =
+  | { path: string; kind: "md" | "csv" | "text"; text: string }
+  | { path: string; kind: "binary"; url: string }
 
 export function ClinicFiles({
   clinicId,
@@ -32,6 +66,35 @@ export function ClinicFiles({
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [view, setView] = useState<ViewState | null>(null)
+  const [viewLoading, setViewLoading] = useState<string | null>(null)
+
+  async function openFile(f: StoredFile) {
+    setViewLoading(f.fullPath)
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.storage
+        .from(CLINIC_FILES_BUCKET)
+        .download(f.fullPath)
+      if (error || !data) throw new Error(error?.message ?? "Falha ao abrir")
+      const e = ext(f.path)
+      if (TEXT_EXTS.includes(e)) {
+        const text = await data.text()
+        setView({ path: f.path, kind: e === "md" ? "md" : e === "csv" ? "csv" : "text", text })
+      } else {
+        setView({ path: f.path, kind: "binary", url: URL.createObjectURL(data) })
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao abrir arquivo")
+    } finally {
+      setViewLoading(null)
+    }
+  }
+
+  function closeView() {
+    if (view?.kind === "binary") URL.revokeObjectURL(view.url)
+    setView(null)
+  }
 
   async function handleDelete(path: string) {
     if (!confirm(`Excluir "${path}"? Essa ação não pode ser desfeita.`)) return
@@ -41,17 +104,11 @@ export function ClinicFiles({
     if (res.ok) {
       toast.success("Arquivo excluído")
       router.refresh()
-    } else {
-      toast.error(res.error)
-    }
+    } else toast.error(res.error)
   }
 
   async function handleDeleteAll() {
-    if (
-      !confirm(
-        `Excluir TODOS os ${files.length} arquivo(s) desta clínica? Essa ação não pode ser desfeita.`,
-      )
-    )
+    if (!confirm(`Excluir TODOS os ${files.length} arquivo(s) desta clínica? Essa ação não pode ser desfeita.`))
       return
     setBusy(true)
     const res = await deleteAllClinicFiles(clinicId)
@@ -59,9 +116,7 @@ export function ClinicFiles({
     if (res.ok) {
       toast.success(`${res.deleted} arquivo(s) excluído(s)`)
       router.refresh()
-    } else {
-      toast.error(res.error)
-    }
+    } else toast.error(res.error)
   }
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -72,39 +127,37 @@ export function ClinicFiles({
     setProgress({ done: 0, total: arr.length })
     const supabase = createClient()
 
-    try {
-      const promptFiles: InputFile[] = []
-      for (let i = 0; i < arr.length; i++) {
-        const file = arr[i]
-        const rel =
-          (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
-          file.name
-        const { error } = await supabase.storage
-          .from(CLINIC_FILES_BUCKET)
-          .upload(`${clinicId}/${rel}`, file, { upsert: true })
-        if (error) throw new Error(`${rel}: ${error.message}`)
-        if (isAgentMd(rel)) {
-          promptFiles.push({ path: rel, content: await file.text() })
-        }
-        setProgress({ done: i + 1, total: arr.length })
+    const promptFiles: InputFile[] = []
+    let failed = 0
+    for (let i = 0; i < arr.length; i++) {
+      const file = arr[i]
+      const rel =
+        (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+      const key = toStorageKey(rel) // remove acentos/caracteres inválidos
+      const { error } = await supabase.storage
+        .from(CLINIC_FILES_BUCKET)
+        .upload(`${clinicId}/${key}`, file, { upsert: true })
+      if (error) {
+        failed++ // não aborta o lote: segue para os demais
+      } else if (isAgentMd(key)) {
+        promptFiles.push({ path: key, content: await file.text() })
       }
-
-      const res = await importParsedAgents(clinicId, promptFiles)
-      if (res.ok) {
-        toast.success(
-          `Pasta enviada · ${res.agents} agente(s) e ${res.stages} estágio(s) importados`,
-        )
-      } else {
-        toast.error(`Arquivos enviados, mas a importação falhou: ${res.error}`)
-      }
-      router.refresh()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha no upload")
-    } finally {
-      setBusy(false)
-      setProgress(null)
-      if (inputRef.current) inputRef.current.value = ""
+      setProgress({ done: i + 1, total: arr.length })
     }
+
+    // Importação de agentes é best-effort — não bloqueia o upload.
+    let importMsg = ""
+    if (promptFiles.length) {
+      const res = await importParsedAgents(clinicId, promptFiles)
+      if (res.ok) importMsg = ` · ${res.agents} agente(s), ${res.stages} estágio(s)`
+    }
+    if (failed === 0) toast.success(`Pasta enviada${importMsg}`)
+    else toast.warning(`Enviado com ${failed} falha(s)${importMsg}`)
+
+    router.refresh()
+    setBusy(false)
+    setProgress(null)
+    if (inputRef.current) inputRef.current.value = ""
   }
 
   return (
@@ -117,21 +170,11 @@ export function ClinicFiles({
           multiple
           hidden
           onChange={handlePick}
-          // seleciona uma pasta inteira (atributos não-padrão do Chromium)
           {...{ webkitdirectory: "", directory: "" }}
         />
-        <Button
-          type="button"
-          size="sm"
-          disabled={busy}
-          onClick={() => inputRef.current?.click()}
-        >
+        <Button type="button" size="sm" disabled={busy} onClick={() => inputRef.current?.click()}>
           <FolderUp className="size-4" />
-          {busy
-            ? progress
-              ? `Enviando ${progress.done}/${progress.total}…`
-              : "Enviando…"
-            : "Subir pasta"}
+          {busy ? (progress ? `Enviando ${progress.done}/${progress.total}…` : "Enviando…") : "Subir pasta"}
         </Button>
 
         {files.length > 0 && (
@@ -143,7 +186,6 @@ export function ClinicFiles({
             Baixar tudo (.zip)
           </a>
         )}
-
         {files.length > 0 && (
           <button
             type="button"
@@ -163,7 +205,7 @@ export function ClinicFiles({
           <Upload className="size-6 opacity-40" />
           <span className="text-sm">Nenhum arquivo ainda</span>
           <span className="text-xs opacity-70">
-            Suba a pasta da clínica — os agentes/estágios são importados automaticamente.
+            Suba a pasta da clínica — clique num arquivo para visualizar.
           </span>
         </div>
       ) : (
@@ -174,9 +216,15 @@ export function ClinicFiles({
               className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent/50"
             >
               <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="flex-1 truncate text-foreground/90" title={f.path}>
+              <button
+                type="button"
+                onClick={() => openFile(f)}
+                disabled={viewLoading === f.fullPath}
+                className="flex-1 truncate text-left text-foreground/90 hover:text-primary hover:underline disabled:opacity-50"
+                title={`Abrir ${f.path}`}
+              >
                 {f.path}
-              </span>
+              </button>
               <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                 {fmtBytes(f.size)}
               </span>
@@ -193,6 +241,85 @@ export function ClinicFiles({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Visualizador */}
+      {view && (
+        <div
+          className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/60 p-4"
+          onClick={closeView}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+              <FileText className="size-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1 truncate text-sm font-medium text-foreground" title={view.path}>
+                {view.path}
+              </span>
+              <button
+                type="button"
+                onClick={closeView}
+                aria-label="Fechar"
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="overflow-auto p-4">
+              {view.kind === "md" && (
+                <div className="md-prose">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{view.text}</ReactMarkdown>
+                </div>
+              )}
+              {view.kind === "csv" && (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-xs">
+                    <tbody>
+                      {parseCsv(view.text).map((r, ri) => (
+                        <tr key={ri}>
+                          {r.map((cell, ci) => {
+                            const Tag = ri === 0 ? "th" : "td"
+                            return (
+                              <Tag
+                                key={ci}
+                                className={`border border-border px-2 py-1 text-left align-top ${
+                                  ri === 0
+                                    ? "bg-muted font-semibold text-foreground"
+                                    : "text-foreground/90"
+                                }`}
+                              >
+                                {cell}
+                              </Tag>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {view.kind === "text" && (
+                <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/90">
+                  {view.text}
+                </pre>
+              )}
+              {view.kind === "binary" && (
+                <div className="flex flex-col items-center gap-3 py-8 text-muted-foreground">
+                  <span className="text-sm">Pré-visualização não disponível para este tipo.</span>
+                  <a
+                    href={view.url}
+                    download={view.path.split("/").pop()}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium text-foreground hover:bg-accent"
+                  >
+                    <Download className="size-4" /> Baixar arquivo
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -2,6 +2,27 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 export const CLINIC_FILES_BUCKET = "clinic-files"
 
+// Chaves do Supabase Storage não aceitam acentos/caracteres especiais
+// (ex.: "Consultório" → "Invalid key"). Normaliza cada segmento: remove
+// diacríticos e troca o que não for [A-Za-z0-9 ._-] por "_". Preserva as "/".
+const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g")
+
+export function toStorageKey(relativePath: string): string {
+  return relativePath
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean)
+    .map((seg) =>
+      seg
+        .normalize("NFD")
+        .replace(DIACRITICS, "")
+        .replace(/[^A-Za-z0-9 ._-]/g, "_")
+        .replace(/_{2,}/g, "_")
+        .trim(),
+    )
+    .join("/")
+}
+
 export type StoredFile = {
   /** Caminho completo no bucket: "<clinicId>/<relativo>" */
   fullPath: string
