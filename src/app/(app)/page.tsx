@@ -6,6 +6,10 @@ import { Panel } from "@/components/dashboard/panel"
 import { StatusDonut } from "@/components/dashboard/status-donut"
 import { RankingTable } from "@/components/dashboard/ranking-table"
 import { PortfolioFilters } from "@/components/dashboard/portfolio-filters"
+import { listCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-actions"
+import { listClinics } from "@/lib/clinics/actions"
+import { ExportButton } from "@/components/dashboard/export-button"
+import { CheckCircle2 } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -48,8 +52,20 @@ export default async function HomePage({
   // Region filter (raw string; will be validated against distinct regions from rows)
   const rawRegion = params.region ?? ""
 
-  // Fetch portfolio data
-  const { rows: allRows, summary } = await getPortfolioForMonth(month)
+  // Fetch portfolio data, check items, all checks, and raw clinics
+  const [portfolioData, checkItems, allChecksMap, rawClinics] = await Promise.all([
+    getPortfolioForMonth(month),
+    listCheckItems(),
+    listAllClinicChecks(),
+    listClinics(),
+  ])
+  const { rows: allRows, summary } = portfolioData
+
+  // Convert Map<string, Map<string, boolean>> to Record<string, Record<string, boolean>>
+  const allChecks: Record<string, Record<string, boolean>> = {}
+  for (const [clinicId, checksMap] of allChecksMap) {
+    allChecks[clinicId] = Object.fromEntries(checksMap)
+  }
 
   // Derive distinct, sorted regions from all rows (non-null only)
   const regions = Array.from(
@@ -88,11 +104,80 @@ export default async function HomePage({
 
   // KPI formatting helpers (pt-BR)
   const fmtNumber = (n: number) => n.toLocaleString("pt-BR")
-  // avgRate is a fraction 0..1; display as a percentage (e.g. 0.125 → "12,5%")
   const fmtRate = (r: number) =>
     (r * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%"
 
   const displayMonthLabel = monthLabel(month)
+
+  // ── Calculate Onboarding Checklist Metrics ─────────────────
+  const totalClinics = allRows.length
+  const totalCheckItemsCount = checkItems.length
+  let clinicsOnboarded = 0
+  let totalCheckedChecks = 0
+  const clinicPendingCounts: { name: string; pending: number; id: string }[] = []
+
+  for (const row of allRows) {
+    const checks = allChecks[row.clinicId] ?? {}
+    const checkedCount = checkItems.filter((ci) => checks[ci.id] === true).length
+    totalCheckedChecks += checkedCount
+    const pending = totalCheckItemsCount - checkedCount
+    if (pending === 0 && totalCheckItemsCount > 0) {
+      clinicsOnboarded++
+    }
+    if (pending > 0) {
+      clinicPendingCounts.push({ name: row.name, pending, id: row.clinicId })
+    }
+  }
+
+  const topPendingClinics = clinicPendingCounts
+    .sort((a, b) => b.pending - a.pending)
+    .slice(0, 5)
+
+  const overallOnboardingProgress = totalClinics * totalCheckItemsCount > 0
+    ? (totalCheckedChecks / (totalClinics * totalCheckItemsCount)) * 100
+    : 0
+
+  // ── Calculate Churn Risk Alerts ─────────────────────────────
+  const riskRows = allRows
+    .filter((r) => r.status === "Risco Churn" || r.status === "Preocupante")
+    .map((r) => {
+      const checks = allChecks[r.clinicId] ?? {}
+      const checkedCount = checkItems.filter((ci) => checks[ci.id] === true).length
+      return {
+        ...r,
+        checkedCount,
+        totalChecks: totalCheckItemsCount,
+      }
+    })
+    .sort((a, b) => a.rate - b.rate)
+
+  // ── Prepare CSV Export Data ─────────────────────────────────
+  const exportData = filteredRows.map((row) => {
+    const checks = allChecks[row.clinicId] ?? {}
+    const checkedCount = checkItems.filter((ci) => checks[ci.id] === true).length
+    const rawClinic = rawClinics.find((c) => c.id === row.clinicId)
+    const contractStatus = rawClinic
+      ? rawClinic.contract_status === "active"
+        ? "Ativo"
+        : rawClinic.contract_status === "suspended"
+        ? "Suspenso"
+        : "Arquivado"
+      : "—"
+
+    return {
+      name: row.name,
+      location: [row.city, row.state].filter(Boolean).join("/") || "—",
+      region: row.region ?? "—",
+      mode: row.mode === "auto" ? "Automática" : "Manual",
+      contractStatus,
+      leads: row.leads,
+      scheduled: row.scheduled,
+      rate: fmtRate(row.rate),
+      status: row.status ?? "—",
+      revenue: row.revenue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
+      checklist: `${checkedCount}/${totalCheckItemsCount}`,
+    }
+  })
 
   return (
     <main className="p-6 space-y-6 max-w-screen-2xl mx-auto">
@@ -111,13 +196,16 @@ export default async function HomePage({
           </p>
         </div>
 
-        {/* Filters (client component) */}
-        <PortfolioFilters
-          month={month}
-          region={region}
-          regions={regions}
-          monthOptions={monthOptions}
-        />
+        {/* Action buttons and Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          <ExportButton data={exportData} filename={`relatorio-performance-${month}`} />
+          <PortfolioFilters
+            month={month}
+            region={region}
+            regions={regions}
+            monthOptions={monthOptions}
+          />
+        </div>
       </div>
 
       {/* ── KPI strip ──────────────────────────────────────────── */}
@@ -147,13 +235,96 @@ export default async function HomePage({
       {/* ── Main grid: donut + ranking ─────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,340px)_1fr]">
 
-        {/* Status Donut + Performance por região */}
+        {/* Status Donut + Onboarding + Churn + Performance por região */}
         <div className="flex flex-col gap-4">
           <Panel title="Status da carteira" subtitle="distribuição por faixa">
             <StatusDonut
               data={summary.statusDistribution}
               totalClinics={summary.clinicCount}
             />
+          </Panel>
+
+          {/* ── Onboarding / Implementation Status ───────────────── */}
+          <Panel title="Status de implantação" subtitle="progresso geral do onboarding">
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-muted-foreground">Progresso da carteira</span>
+                  <span className="font-semibold text-foreground tabular-nums">{overallOnboardingProgress.toFixed(1)}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                    style={{ width: `${overallOnboardingProgress}%` }}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between border-t border-border/40 pt-3 text-xs">
+                <span className="text-muted-foreground">Clínicas prontas (100%):</span>
+                <span className="font-semibold text-foreground tabular-nums">{clinicsOnboarded} / {totalClinics}</span>
+              </div>
+              {topPendingClinics.length > 0 && (
+                <div className="border-t border-border/40 pt-3">
+                  <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Maiores pendências
+                  </div>
+                  <ul className="space-y-1.5">
+                    {topPendingClinics.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between text-xs">
+                        <Link href={`/clinicas/${p.id}`} className="text-primary hover:underline truncate max-w-[170px]">
+                          {p.name}
+                        </Link>
+                        <span className="text-[0.68rem] text-muted-foreground tabular-nums shrink-0">
+                          {p.pending} {p.pending === 1 ? "pendência" : "pendências"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </Panel>
+
+          {/* ── Churn Risk Alerts ────────────────────────────────── */}
+          <Panel title="Alertas de risco" subtitle="desempenho crítico ou preocupante">
+            {riskRows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <CheckCircle2 className="size-8 text-emerald-500/80 mb-2" />
+                <p className="text-xs text-muted-foreground">Tudo sob controle! Nenhuma clínica em risco este mês.</p>
+              </div>
+            ) : (
+              <ul className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                {riskRows.map((r) => (
+                  <li
+                    key={r.clinicId}
+                    className="flex flex-col gap-1.5 rounded-md border border-border/50 bg-accent/30 p-2.5 hover:bg-accent/60 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <Link href={`/clinicas/${r.clinicId}`} className="text-xs font-semibold text-foreground hover:underline truncate">
+                        {r.name}
+                      </Link>
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide shrink-0"
+                        style={{
+                          color: "#0f172a",
+                          background: r.statusColor ?? "#f97316",
+                        }}
+                      >
+                        {r.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[0.7rem] text-muted-foreground">
+                      <span>
+                        Taxa: <strong className="text-foreground tabular-nums">{fmtRate(r.rate)}</strong>
+                      </span>
+                      <span className="tabular-nums">
+                        Checklist: {r.checkedCount}/{r.totalChecks}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Panel>
 
           <Panel title="Performance por região" subtitle="taxa média · clique para filtrar">
@@ -245,3 +416,4 @@ export default async function HomePage({
     </main>
   )
 }
+
