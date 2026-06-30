@@ -137,7 +137,7 @@ export default async function HomePage({
     ? (totalCheckedChecks / (totalClinics * totalCheckItemsCount)) * 100
     : 0
 
-  // ── Calculate Churn Risk Alerts (Bottom 5 active clinics by scheduling rate) ──
+  // ── Calculate Churn Risk Alerts (Bottom 4 active clinics by scheduling rate) ──
   const riskRows = allRows
     .filter((r) => r.source !== "none") // only active clinics with data in this period
     .map((r) => {
@@ -150,7 +150,7 @@ export default async function HomePage({
       }
     })
     .sort((a, b) => a.rate - b.rate)
-    .slice(0, 5)
+    .slice(0, 4)
 
   // ── Prepare CSV Export Data ─────────────────────────────────
   const exportData = filteredRows.map((row) => {
@@ -287,7 +287,7 @@ export default async function HomePage({
           </Panel>
 
           {/* ── Churn Risk Alerts ────────────────────────────────── */}
-          <Panel title="Alertas de risco" subtitle="as 5 menores taxas de agendamento">
+          <Panel title="Alertas de risco" subtitle="as 4 menores taxas de agendamento">
             {riskRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-6 text-center">
                 <CheckCircle2 className="size-8 text-emerald-500/80 mb-2" />
