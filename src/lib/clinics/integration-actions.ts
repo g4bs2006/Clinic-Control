@@ -73,3 +73,44 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
 export async function getLiveFunnel(clinicId: string) {
   return getFunnelForMonth(clinicId, monthKey(new Date()));
 }
+
+export type ClinicLead = { name: string; step: string; date: string };
+
+// Lista os leads (cards) do mês corrente de uma clínica auto, mapeando cada
+// card para a etapa atual. Reusa o gate de auth + service client das demais
+// actions de integração. Tolera clínica sem integração (retorna ok:false).
+export async function listClinicLeads(
+  clinicId: string,
+): Promise<{ ok: true; leads: ClinicLead[] } | { ok: false; error: string }> {
+  try {
+    const auth = await createClient();
+    const { data: { user } } = await auth.auth.getUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("clinic_integrations")
+      .select("helena_token_encrypted, panel_id")
+      .eq("clinic_id", clinicId)
+      .single();
+    if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+
+    const token = decryptToken(data.helena_token_encrypted as string);
+    const panelId = data.panel_id as string;
+    const { steps } = await getPanelWithSteps(token, panelId);
+    const titleByStepId = new Map(steps.map((s) => [s.id, s.title]));
+    const cards = await listCards(token, panelId, monthRangeUtc(monthKey(new Date())));
+
+    const leads: ClinicLead[] = cards
+      .map((c) => ({
+        name: c.title,
+        step: titleByStepId.get(c.stepId) ?? "—",
+        date: c.createdAt,
+      }))
+      .sort((a, b) => (a.date < b.date ? 1 : -1)); // mais recentes primeiro
+
+    return { ok: true as const, leads };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao listar leads" };
+  }
+}
