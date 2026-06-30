@@ -77,7 +77,8 @@ export function AppNav() {
       {/* The visible panel — overlays content when peeking, so nothing reflows. */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-screen flex-col border-r border-sidebar-border bg-sidebar",
+          // z acima do Leaflet (panes/controles vão até ~1000), senão a sidebar fica sob o mapa
+          "fixed inset-y-0 left-0 z-[1200] flex h-screen flex-col border-r border-sidebar-border bg-sidebar",
           "transition-[width] duration-200 ease-out",
           open ? FULL : RAIL,
           peek && !pinned && "shadow-2xl shadow-black/60",
