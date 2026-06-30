@@ -119,13 +119,14 @@ export async function importParsedAgents(
   let stageCount = 0
 
   for (const pa of parsed) {
-    // Busca agente existente por (clinic_id, name)
-    const { data: existing } = await supabase
+    // Busca agente existente por (clinic_id, name, unit)
+    let q = supabase
       .from("clinic_agents")
       .select("id, source")
       .eq("clinic_id", clinicId)
       .eq("name", pa.name)
-      .maybeSingle()
+    q = pa.unit === null ? q.is("unit", null) : q.eq("unit", pa.unit)
+    const { data: existing } = await q.maybeSingle()
 
     let agentId: string
     if (!existing) {

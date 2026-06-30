@@ -16,8 +16,8 @@ function fmtBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-// arquivo dentro de uma pasta "Prompts <Nome>/..." e .md → alimenta o parser
-const isPromptMd = (rel: string) => /(^|\/)Prompts\s+[^/]+\/.+\.md$/i.test(rel)
+// todo .md alimenta o parser (ele decide o que é estágio/persona e ignora o resto)
+const isAgentMd = (rel: string) => /\.md$/i.test(rel)
 
 export function ClinicFiles({
   clinicId,
@@ -50,7 +50,7 @@ export function ClinicFiles({
           .from(CLINIC_FILES_BUCKET)
           .upload(`${clinicId}/${rel}`, file, { upsert: true })
         if (error) throw new Error(`${rel}: ${error.message}`)
-        if (isPromptMd(rel)) {
+        if (isAgentMd(rel)) {
           promptFiles.push({ path: rel, content: await file.text() })
         }
         setProgress({ done: i + 1, total: arr.length })
