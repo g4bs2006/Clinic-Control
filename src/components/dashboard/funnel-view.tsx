@@ -1,3 +1,5 @@
+import { ArrowDown, Users, Calendar, Eye, CheckCircle2 } from "lucide-react"
+
 interface FunnelStep {
   title: string
   count: number
@@ -9,16 +11,8 @@ interface FunnelViewProps {
 
 const fmt = (n: number) => n.toLocaleString("pt-BR")
 const pct = (n: number, d: number) =>
-  d > 0 ? ((n / d) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%" : "—"
+  d > 0 ? ((n / d) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%" : "0%"
 
-/**
- * FunnelView — funil de conversão real (níveis monotônicos, cada um ⊆ o
- * anterior): Leads → Agendados → Compareceram → Fecharam, com a taxa de
- * conversão entre níveis. As demais etapas (desfechos) aparecem num
- * detalhamento à parte, sem distorcer a silhueta do funil.
- *
- * Server-compatible — puro, sem hooks.
- */
 export function FunnelView({ steps }: FunnelViewProps) {
   const by = new Map(steps.map((s) => [s.title, s.count]))
   const g = (t: string) => by.get(t) ?? 0
@@ -28,17 +22,17 @@ export function FunnelView({ steps }: FunnelViewProps) {
   const compareceram = g("Compareceram e Não Fecharam") + g("Compareceram e Fecharam")
   const fecharam = g("Compareceram e Fecharam")
 
-  // Níveis do funil (já monotônicos). pctPrev = conversão a partir do nível acima.
+  // Monotonic levels of the funnel with corresponding icons
   const levels = [
-    { name: "Leads", count: leads, prev: null as number | null },
-    { name: "Agendados", count: agendados, prev: leads },
-    { name: "Compareceram", count: compareceram, prev: agendados },
-    { name: "Fecharam", count: fecharam, prev: compareceram },
+    { name: "Leads", count: leads, prev: null as number | null, icon: Users, color: "from-blue-500 to-cyan-400" },
+    { name: "Agendados", count: agendados, prev: leads, icon: Calendar, color: "from-indigo-500 to-blue-500" },
+    { name: "Compareceram", count: compareceram, prev: agendados, icon: Eye, color: "from-purple-500 to-indigo-500" },
+    { name: "Fecharam", count: fecharam, prev: compareceram, icon: CheckCircle2, color: "from-emerald-500 to-teal-400" },
   ]
-  const top = Math.max(1, leads)
-  const widthOf = (c: number) => Math.max(0.1, c / top) // 0..1, com piso
 
-  // Demais etapas (desfechos) — fora do núcleo do funil.
+  const top = Math.max(1, leads)
+
+  // Other outcomes (non-core funnel stages)
   const CORE = new Set([
     "Leads",
     "Agendados",
@@ -48,61 +42,96 @@ export function FunnelView({ steps }: FunnelViewProps) {
   const outcomes = steps.filter((s) => !CORE.has(s.title) && s.count > 0)
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Funil de conversão — barras centralizadas empilhadas */}
-      <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-6">
+      {/* ── Premium Connected Vertical Timeline Funnel ── */}
+      <div className="relative flex flex-col gap-4 pl-4 sm:pl-6">
+        
+        {/* Continuous Connecting line in the background */}
+        <div className="absolute bottom-6 left-9 top-6 w-0.5 bg-gradient-to-b from-blue-500/40 via-indigo-500/25 to-emerald-500/10" />
+
         {levels.map((lvl, i) => {
-          const w = widthOf(lvl.count) * 100
-          const light = 0.66 - i * 0.07 // escurece conforme afunila
-          const fill = `oklch(${light.toFixed(2)} 0.17 255)`
+          const Icon = lvl.icon
+          // Percentage relative to first step (Leads)
+          const pctOfTotal = (lvl.count / top) * 100
+          // Percentage relative to previous step
+          const convRate = lvl.prev !== null ? pct(lvl.count, lvl.prev) : null
+
           return (
-            <div key={lvl.name} className="flex items-center gap-3">
-              {/* área da barra (centralizada) */}
-              <div className="flex flex-1 justify-center">
-                <div
-                  className="flex h-14 flex-col items-center justify-center rounded-lg leading-tight text-white"
-                  style={{ width: `${w}%`, minWidth: "5rem", background: fill, textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-                >
-                  <span className="text-[0.7rem] font-medium uppercase tracking-wide opacity-90">
-                    {lvl.name}
-                  </span>
-                  <span className="text-base font-semibold tabular-nums">{fmt(lvl.count)}</span>
-                </div>
+            <div key={lvl.name} className="relative flex flex-col gap-2">
+              {/* Timeline dot / Icon */}
+              <div className="absolute -left-[27px] sm:-left-[35px] top-3 z-10 flex size-9 items-center justify-center rounded-full border border-border bg-background shadow-md">
+                <Icon className="size-4 text-primary" />
               </div>
-              {/* Conversão a partir do nível anterior */}
-              <div className="flex w-28 shrink-0 flex-col justify-center text-xs">
-                {lvl.prev === null ? (
-                  <span className="text-muted-foreground">topo</span>
-                ) : (
-                  <>
-                    <span className="font-semibold text-primary tabular-nums">
-                      {pct(lvl.count, lvl.prev)}
+
+              {/* Step Card */}
+              <div className="flex flex-col gap-3 rounded-xl border border-border/50 bg-accent/20 p-4 transition-all duration-200 hover:border-border hover:bg-accent/40">
+                
+                {/* Header: Name, Count and Conversion Badge */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col">
+                    <span className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">
+                      {lvl.name}
                     </span>
-                    <span className="text-muted-foreground">do nível acima</span>
-                  </>
-                )}
+                    <span className="text-xl font-bold tabular-nums text-foreground mt-0.5">
+                      {fmt(lvl.count)}
+                    </span>
+                  </div>
+
+                  {/* Conversion pill */}
+                  <div className="text-right">
+                    {convRate === null ? (
+                      <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[0.65rem] font-semibold text-blue-400 border border-blue-500/15">
+                        Base
+                      </span>
+                    ) : (
+                      <div className="flex flex-col items-end">
+                        <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[0.68rem] font-bold text-emerald-400 border border-emerald-500/15 tabular-nums">
+                          {convRate}
+                        </span>
+                        <span className="text-[0.55rem] text-muted-foreground mt-0.5">
+                          do nível anterior
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress bar relative to Leads */}
+                <div className="space-y-1">
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r ${lvl.color} transition-all duration-500`}
+                      style={{ width: `${pctOfTotal}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[0.6rem] text-muted-foreground">
+                    <span>Participação da base</span>
+                    <span className="tabular-nums">{pctOfTotal.toFixed(1)}%</span>
+                  </div>
+                </div>
+
               </div>
             </div>
           )
         })}
       </div>
 
-      {/* Demais etapas / desfechos */}
+      {/* ── Outcomes / Detalhamento ── */}
       {outcomes.length > 0 && (
-        <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        <div className="border-t border-border/40 pt-4 mt-2">
+          <h4 className="mb-3 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Para onde foram os leads
           </h4>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {outcomes.map((o) => (
               <div
                 key={o.title}
-                className="flex items-center justify-between gap-2 rounded-md border border-border bg-[oklch(0.16_0_0)] px-2.5 py-1.5"
+                className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-accent/20 px-3 py-2 hover:bg-accent/40 transition-colors"
               >
                 <span className="truncate text-xs text-muted-foreground" title={o.title}>
                   {o.title}
                 </span>
-                <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground">
                   {fmt(o.count)}
                 </span>
               </div>
