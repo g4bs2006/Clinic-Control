@@ -9,6 +9,7 @@ const navItems = [
   { href: "/mensal", label: "Mensal" },
   { href: "/comparativo", label: "Comparativo" },
   { href: "/mapa", label: "Mapa" },
+  { href: "/configuracoes", label: "Configurações" },
 ];
 
 export function AppNav() {
