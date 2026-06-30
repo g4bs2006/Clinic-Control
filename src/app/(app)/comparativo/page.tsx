@@ -111,7 +111,7 @@ export default async function ComparativoPage({
       {/* ── Month-by-month table ───────────────────────────────── */}
       <Panel
         title="Taxa por mês"
-        subtitle="células coloridas pelo status do mês"
+        subtitle="cor = status do mês · seta = variação vs. mês anterior (pontos percentuais)"
       >
         {withData.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
@@ -197,8 +197,27 @@ export default async function ComparativoPage({
                         {row.name}
                       </Link>
                     </td>
-                    {months.map((m) => {
+                    {months.map((m, mi) => {
                       const cell = row.byMonth[m]
+                      const prevCell = mi > 0 ? row.byMonth[months[mi - 1]] : null
+                      // Variação vs. mês anterior, em pontos percentuais
+                      const deltaPP =
+                        cell && prevCell ? (cell.rate - prevCell.rate) * 100 : null
+                      const dir =
+                        deltaPP === null
+                          ? null
+                          : Math.abs(deltaPP) < 0.05
+                            ? "flat"
+                            : deltaPP > 0
+                              ? "up"
+                              : "down"
+                      const deltaColor =
+                        dir === "up"
+                          ? "oklch(0.74 0.16 152)"
+                          : dir === "down"
+                            ? "oklch(0.65 0.20 25)"
+                            : "oklch(0.55 0 0)"
+                      const arrow = dir === "up" ? "▲" : dir === "down" ? "▼" : "→"
                       return (
                         <td
                           key={m}
@@ -217,7 +236,33 @@ export default async function ComparativoPage({
                           }}
                           title={cell?.status ?? undefined}
                         >
-                          {cell ? fmtPct(cell.rate) : EM_DASH}
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "flex-end",
+                              gap: "0.1rem",
+                            }}
+                          >
+                            <span>{cell ? fmtPct(cell.rate) : EM_DASH}</span>
+                            {deltaPP !== null && dir && (
+                              <span
+                                style={{
+                                  fontSize: "0.62rem",
+                                  fontWeight: 600,
+                                  color: deltaColor,
+                                  letterSpacing: "0.02em",
+                                }}
+                                title={`Variação vs. ${shortMonthLabel(months[mi - 1])} (pontos percentuais)`}
+                              >
+                                {arrow}{" "}
+                                {Math.abs(deltaPP).toLocaleString("pt-BR", {
+                                  minimumFractionDigits: 1,
+                                  maximumFractionDigits: 1,
+                                })}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       )
                     })}
