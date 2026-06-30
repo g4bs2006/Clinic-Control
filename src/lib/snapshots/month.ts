@@ -1,3 +1,7 @@
+// Primeiro mês com métricas na carteira. Gráficos e seletores de mês não
+// devem ir antes disto (evita meses vazios pré-maio/2026).
+export const DATA_START_MONTH = "2026-05";
+
 export function monthKey(date: Date): string {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");

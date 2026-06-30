@@ -1,5 +1,5 @@
 import { getPortfolioForMonth } from "@/lib/portfolio/data"
-import { monthKey, prevMonth } from "@/lib/snapshots/month"
+import { monthKey, prevMonth, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { Panel } from "@/components/dashboard/panel"
 import { StatusDonut } from "@/components/dashboard/status-donut"
@@ -61,11 +61,13 @@ export default async function HomePage({
   // Apply region filter to rows for ranking table (summary uses all rows)
   const filteredRows = region ? allRows.filter((r) => r.region === region) : allRows
 
-  // Month selector options — last 12 months
-  const monthOptions = lastNMonths(currentMonth, 12).map((k) => ({
-    key: k,
-    label: monthLabel(k),
-  }))
+  // Month selector options — desde maio/2026 (primeiro mês com dados) até o atual
+  const monthOptions = lastNMonths(currentMonth, 12)
+    .filter((k) => k >= DATA_START_MONTH)
+    .map((k) => ({
+      key: k,
+      label: monthLabel(k),
+    }))
 
   // KPI formatting helpers (pt-BR)
   const fmtNumber = (n: number) => n.toLocaleString("pt-BR")

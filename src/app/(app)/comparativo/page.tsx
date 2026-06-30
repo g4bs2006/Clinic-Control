@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { getComparison } from "@/lib/portfolio/data"
-import { monthKey, prevMonth } from "@/lib/snapshots/month"
+import { monthKey, prevMonth, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { Panel } from "@/components/dashboard/panel"
 import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart"
 import { ComparisonFilters } from "@/components/dashboard/comparison-filters"
@@ -53,7 +53,8 @@ export default async function ComparativoPage({
   const range = ALLOWED_RANGES.includes(parsedRange) ? parsedRange : 6
 
   const currentMonth = monthKey(new Date())
-  const months = lastNMonths(currentMonth, range)
+  // Nunca antes do primeiro mês com dados (maio/2026)
+  const months = lastNMonths(currentMonth, range).filter((m) => m >= DATA_START_MONTH)
 
   const comparison = await getComparison(months)
 

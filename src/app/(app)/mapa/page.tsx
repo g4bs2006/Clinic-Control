@@ -1,5 +1,5 @@
 import { getPortfolioForMonth } from "@/lib/portfolio/data"
-import { monthKey, prevMonth } from "@/lib/snapshots/month"
+import { monthKey, prevMonth, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { Panel } from "@/components/dashboard/panel"
 import { PortfolioFilters } from "@/components/dashboard/portfolio-filters"
 import { PortfolioMap, type MapPoint } from "@/components/map/portfolio-map"
@@ -90,10 +90,12 @@ export default async function MapaPage({
     .map(([name, { sum, count }]) => ({ name, avgRate: sum / count, count }))
     .sort((a, b) => b.avgRate - a.avgRate)
 
-  const monthOptions = lastNMonths(currentMonth, 12).map((k) => ({
-    key: k,
-    label: monthLabel(k),
-  }))
+  const monthOptions = lastNMonths(currentMonth, 12)
+    .filter((k) => k >= DATA_START_MONTH)
+    .map((k) => ({
+      key: k,
+      label: monthLabel(k),
+    }))
 
   return (
     <main className="p-6 space-y-6 max-w-screen-2xl mx-auto">

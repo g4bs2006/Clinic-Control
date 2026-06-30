@@ -10,7 +10,7 @@ import {
 import { derivedMetrics } from "@/lib/portfolio/metrics"
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status"
 import { createClient } from "@/lib/supabase/server"
-import { monthKey } from "@/lib/snapshots/month"
+import { monthKey, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { FunnelView } from "@/components/dashboard/funnel-view"
@@ -102,9 +102,12 @@ export default async function ClinicDetailPage({
   }
   const derived = liveFunnel ? derivedMetrics(stepCounts) : null
 
-  // Trend chart: patch current month with live rate for auto clinics
+  // Trend chart: começa em maio/2026 (primeiro mês com dados); patch do mês
+  // corrente com a taxa ao vivo nas clínicas auto.
   const series: TrendSeries[] = [{ key: clinic.name, color: CLINIC_COLOR }]
-  const chartData = history.map((h) => {
+  const chartData = history
+    .filter((h) => h.month >= DATA_START_MONTH)
+    .map((h) => {
     const r = h.month === currentMonth && liveFunnel ? liveFunnel.rate : h.rate
     return {
       month: shortMonthLabel(h.month),
