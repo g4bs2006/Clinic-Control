@@ -2,11 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getClinic } from "@/lib/clinics/actions"
 import { getClinicHistory } from "@/lib/portfolio/data"
-import {
-  getLiveFunnel,
-  listClinicLeads,
-  type ClinicLead,
-} from "@/lib/clinics/integration-actions"
+import { getLiveFunnel } from "@/lib/clinics/integration-actions"
 import { derivedMetrics } from "@/lib/portfolio/metrics"
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status"
 import { createClient } from "@/lib/supabase/server"
@@ -46,11 +42,6 @@ function shortMonthLabel(key: string): string {
   return `${month.replace(".", "")}/${String(y).slice(2)}`
 }
 
-function leadDateLabel(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" })
-}
-
 async function loadStatusRules(): Promise<StatusRule[]> {
   try {
     const supabase = await createClient()
@@ -82,11 +73,10 @@ export default async function ClinicDetailPage({
   const isAuto = clinic.mode === "auto"
   const currentMonth = monthKey(new Date())
 
-  const [history, rules, funnelRes, leadsRes] = await Promise.all([
+  const [history, rules, funnelRes] = await Promise.all([
     getClinicHistory(id, 6),
     loadStatusRules(),
     isAuto ? getLiveFunnel(id) : Promise.resolve(null),
-    isAuto ? listClinicLeads(id) : Promise.resolve(null),
   ])
 
   const [agents, files] = await Promise.all([
@@ -95,7 +85,6 @@ export default async function ClinicDetailPage({
   ])
 
   const liveFunnel = funnelRes && funnelRes.ok ? funnelRes.funnel : null
-  const leads: ClinicLead[] = leadsRes && leadsRes.ok ? leadsRes.leads : []
 
   // Current-month figures: live funnel (auto) takes precedence over the snapshot
   const currentSnap = history.find((h) => h.month === currentMonth)
@@ -218,87 +207,6 @@ export default async function ClinicDetailPage({
           <TrendChart data={chartData} series={series} />
         </Panel>
       </div>
-
-      {/* ── Leads list (auto) ──────────────────────────────────── */}
-      {isAuto && (
-        <Panel
-          title="Leads do mês"
-          subtitle={`${leads.length} lead${leads.length !== 1 ? "s" : ""} · etapa atual`}
-        >
-          {leads.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {leadsRes && !leadsRes.ok
-                ? `Leads indisponíveis (${leadsRes.error}).`
-                : "Nenhum lead neste mês."}
-            </p>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {["Lead", "Etapa atual", "Entrada"].map((h, i) => (
-                      <th
-                        key={h}
-                        style={{
-                          padding: "0.5rem 0.75rem",
-                          fontSize: "0.65rem",
-                          fontWeight: 600,
-                          letterSpacing: "0.12em",
-                          textTransform: "uppercase",
-                          color: "oklch(0.64 0 0)",
-                          textAlign: i === 2 ? "right" : "left",
-                          borderBottom: "1px solid oklch(0.27 0.006 286)",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {leads.map((lead, i) => (
-                    <tr key={`${lead.name}-${i}`}>
-                      <td
-                        style={{
-                          padding: "0.5rem 0.75rem",
-                          fontSize: "0.8rem",
-                          color: "oklch(0.96 0 0)",
-                          borderBottom: "1px solid oklch(0.235 0 0)",
-                        }}
-                      >
-                        {lead.name || "—"}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.5rem 0.75rem",
-                          fontSize: "0.8rem",
-                          color: "oklch(0.80 0 0)",
-                          borderBottom: "1px solid oklch(0.235 0 0)",
-                        }}
-                      >
-                        {lead.step}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.5rem 0.75rem",
-                          fontSize: "0.8rem",
-                          textAlign: "right",
-                          fontVariantNumeric: "tabular-nums",
-                          color: "oklch(0.64 0 0)",
-                          borderBottom: "1px solid oklch(0.235 0 0)",
-                        }}
-                      >
-                        {leadDateLabel(lead.date)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Panel>
-      )}
 
       {/* ── Agentes de IA ──────────────────────────────────────── */}
       <Panel
