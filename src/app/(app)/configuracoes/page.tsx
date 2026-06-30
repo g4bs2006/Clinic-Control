@@ -1,18 +1,24 @@
 import { listStatusRules, listFunnelSteps } from "@/lib/snapshots/rules-actions"
+import { listCheckItems } from "@/lib/clinics/check-items-actions"
 import { Panel } from "@/components/dashboard/panel"
 import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
+import { CheckItemsEditor } from "@/components/settings/check-items-editor"
 
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps] = await Promise.all([listStatusRules(), listFunnelSteps()])
+  const [rules, steps, checkItems] = await Promise.all([
+    listStatusRules(),
+    listFunnelSteps(),
+    listCheckItems(),
+  ])
 
   return (
     <main className="p-6 space-y-6 max-w-screen-lg mx-auto">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Configurações</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Faixas de status e definição do funil
+          Faixas de status, definição do funil e checklist de clínicas
         </p>
       </div>
 
@@ -55,6 +61,14 @@ export default async function ConfiguracoesPage() {
         <p className="text-xs text-muted-foreground">
           As etapas são fixas nesta versão (espelham o funil padrão da Helena).
         </p>
+      </Panel>
+
+      {/* ── Checklist items ────────────────────────────────────── */}
+      <Panel
+        title="Checklist de clínicas"
+        subtitle="itens que aparecem como checkboxes em cada clínica"
+      >
+        <CheckItemsEditor initialItems={checkItems} />
       </Panel>
     </main>
   )

@@ -9,12 +9,14 @@ import { createClient } from "@/lib/supabase/server"
 import { monthKey, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { listClinicAgents } from "@/lib/agents/actions"
 import { listClinicFiles } from "@/lib/clinics/files-actions"
+import { listClinicChecks } from "@/lib/clinics/check-items-actions"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { FunnelView } from "@/components/dashboard/funnel-view"
 import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart"
 import { ClinicAgents } from "@/components/clinics/clinic-agents"
 import { ClinicFiles } from "@/components/clinics/clinic-files"
+import { ClinicChecks } from "@/components/clinics/clinic-checks"
 
 export const dynamic = "force-dynamic"
 
@@ -79,9 +81,10 @@ export default async function ClinicDetailPage({
     isAuto ? getLiveFunnel(id) : Promise.resolve(null),
   ])
 
-  const [agents, files] = await Promise.all([
+  const [agents, files, clinicChecks] = await Promise.all([
     listClinicAgents(id),
     listClinicFiles(id),
+    listClinicChecks(id),
   ])
 
   const liveFunnel = funnelRes && funnelRes.ok ? funnelRes.funnel : null
@@ -207,6 +210,14 @@ export default async function ClinicDetailPage({
           <TrendChart data={chartData} series={series} />
         </Panel>
       </div>
+
+      {/* ── Checklist ──────────────────────────────────────────── */}
+      <Panel
+        title="Checklist"
+        subtitle="itens configuráveis · clique para marcar"
+      >
+        <ClinicChecks clinicId={id} checks={clinicChecks} />
+      </Panel>
 
       {/* ── Agentes de IA ──────────────────────────────────────── */}
       <Panel

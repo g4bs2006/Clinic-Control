@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { archiveClinic } from "@/lib/clinics/actions";
 import type { Clinic } from "@/lib/clinics/schema";
+import type { CheckItemRow } from "@/lib/clinics/check-items-actions";
 import {
   Table,
   TableBody,
@@ -35,9 +36,12 @@ const statusColors: Record<Clinic["contract_status"], string> = {
 
 interface ClinicTableProps {
   clinics: Clinic[];
+  checkItems: CheckItemRow[];
+  /** Map<clinicId, Map<checkItemId, checked>> */
+  allChecks: Record<string, Record<string, boolean>>;
 }
 
-export function ClinicTable({ clinics }: ClinicTableProps) {
+export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps) {
   if (clinics.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
@@ -49,6 +53,8 @@ export function ClinicTable({ clinics }: ClinicTableProps) {
     );
   }
 
+  const hasCheckItems = checkItems.length > 0;
+
   return (
     <Table>
       <TableHeader>
@@ -58,69 +64,105 @@ export function ClinicTable({ clinics }: ClinicTableProps) {
           <TableHead>Região</TableHead>
           <TableHead>Modo</TableHead>
           <TableHead>Status do contrato</TableHead>
+          {hasCheckItems && <TableHead>Checklist</TableHead>}
           <TableHead className="text-right">Ações</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {clinics.map((clinic) => (
-          <TableRow key={clinic.id}>
-            <TableCell className="font-medium">
-              <Link
-                href={`/clinicas/${clinic.id}`}
-                className="text-primary hover:underline"
-              >
-                {clinic.name}
-              </Link>
-            </TableCell>
-            <TableCell>
-              {clinic.city && clinic.state
-                ? `${clinic.city}/${clinic.state}`
-                : clinic.city ?? clinic.state ?? "—"}
-            </TableCell>
-            <TableCell>{clinic.region ?? "—"}</TableCell>
-            <TableCell>
-              <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${modeColors[clinic.mode]}`}
-              >
-                {modeLabels[clinic.mode]}
-              </span>
-            </TableCell>
-            <TableCell>
-              <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[clinic.contract_status]}`}
-              >
-                {statusLabels[clinic.contract_status]}
-              </span>
-            </TableCell>
-            <TableCell className="text-right">
-              <div className="flex items-center justify-end gap-2">
+        {clinics.map((clinic) => {
+          const clinicChecks = allChecks[clinic.id] ?? {};
+          const checkedCount = checkItems.filter(
+            (ci) => clinicChecks[ci.id] === true,
+          ).length;
+
+          return (
+            <TableRow key={clinic.id}>
+              <TableCell className="font-medium">
                 <Link
                   href={`/clinicas/${clinic.id}`}
-                  className="inline-flex h-7 items-center justify-center rounded-[min(var(--radius-md),12px)] border border-border bg-background px-2.5 text-[0.8rem] font-medium transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+                  className="text-primary hover:underline"
                 >
-                  Ver
+                  {clinic.name}
                 </Link>
-                <Link
-                  href={`/clinicas/${clinic.id}/editar`}
-                  className="inline-flex h-7 items-center justify-center rounded-[min(var(--radius-md),12px)] border border-border bg-background px-2.5 text-[0.8rem] font-medium transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+              </TableCell>
+              <TableCell>
+                {clinic.city && clinic.state
+                  ? `${clinic.city}/${clinic.state}`
+                  : clinic.city ?? clinic.state ?? "—"}
+              </TableCell>
+              <TableCell>{clinic.region ?? "—"}</TableCell>
+              <TableCell>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${modeColors[clinic.mode]}`}
                 >
-                  Editar
-                </Link>
-                <form
-                  action={async () => {
-                    "use server";
-                    await archiveClinic(clinic.id);
-                  }}
+                  {modeLabels[clinic.mode]}
+                </span>
+              </TableCell>
+              <TableCell>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[clinic.contract_status]}`}
                 >
-                  <Button variant="destructive" size="sm" type="submit">
-                    Arquivar
-                  </Button>
-                </form>
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
+                  {statusLabels[clinic.contract_status]}
+                </span>
+              </TableCell>
+              {hasCheckItems && (
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-0.5">
+                      {checkItems.map((ci) => {
+                        const isChecked = clinicChecks[ci.id] === true;
+                        return (
+                          <span
+                            key={ci.id}
+                            title={`${ci.label}: ${isChecked ? "Sim" : "Não"}`}
+                            className={`inline-flex size-4 items-center justify-center rounded text-[0.55rem] font-bold ${
+                              isChecked
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : "bg-zinc-500/15 text-zinc-600"
+                            }`}
+                          >
+                            {isChecked ? "✓" : "○"}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[0.65rem] tabular-nums text-muted-foreground">
+                      {checkedCount}/{checkItems.length}
+                    </span>
+                  </div>
+                </TableCell>
+              )}
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <Link
+                    href={`/clinicas/${clinic.id}`}
+                    className="inline-flex h-7 items-center justify-center rounded-[min(var(--radius-md),12px)] border border-border bg-background px-2.5 text-[0.8rem] font-medium transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+                  >
+                    Ver
+                  </Link>
+                  <Link
+                    href={`/clinicas/${clinic.id}/editar`}
+                    className="inline-flex h-7 items-center justify-center rounded-[min(var(--radius-md),12px)] border border-border bg-background px-2.5 text-[0.8rem] font-medium transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+                  >
+                    Editar
+                  </Link>
+                  <form
+                    action={async () => {
+                      "use server";
+                      await archiveClinic(clinic.id);
+                    }}
+                  >
+                    <Button variant="destructive" size="sm" type="submit">
+                      Arquivar
+                    </Button>
+                  </form>
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
 }
+
