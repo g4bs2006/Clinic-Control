@@ -1,7 +1,8 @@
 "use client"
 
 import "leaflet/dist/leaflet.css"
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet"
+import { useEffect } from "react"
+import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, useMap } from "react-leaflet"
 
 export interface MapPoint {
   clinicId: string
@@ -44,6 +45,23 @@ function radiusFor(leads: number): number {
   return Math.min(16, Math.max(6, r))
 }
 
+// Auto-frame the map to the clinics with coordinates (instead of a fixed view).
+function FitBounds({ points }: { points: MapPoint[] }) {
+  const map = useMap()
+  useEffect(() => {
+    if (points.length === 0) return
+    if (points.length === 1) {
+      map.setView([points[0].lat, points[0].lng], 11)
+      return
+    }
+    map.fitBounds(
+      points.map((p) => [p.lat, p.lng] as [number, number]),
+      { padding: [48, 48], maxZoom: 12 },
+    )
+  }, [points, map])
+  return null
+}
+
 export default function PortfolioMapImpl({ points }: PortfolioMapImplProps) {
   return (
     <MapContainer
@@ -57,6 +75,7 @@ export default function PortfolioMapImpl({ points }: PortfolioMapImplProps) {
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
       />
+      <FitBounds points={points} />
       {points.map((p) => {
         const color = p.statusColor ?? FALLBACK_COLOR
         return (
@@ -71,6 +90,9 @@ export default function PortfolioMapImpl({ points }: PortfolioMapImplProps) {
               fillOpacity: 0.75,
             }}
           >
+            <Tooltip direction="top" offset={[0, -2]}>
+              {p.name}
+            </Tooltip>
             <Popup>
               <div style={{ minWidth: "11rem", lineHeight: 1.45 }}>
                 <div style={{ fontWeight: 700, marginBottom: 2 }}>{p.name}</div>

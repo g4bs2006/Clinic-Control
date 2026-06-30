@@ -45,7 +45,11 @@ export function PortfolioFilters({
         onValueChange={(val) => navigate(val ?? month, region)}
       >
         <SelectTrigger className="h-8 text-sm min-w-[9rem]">
-          <SelectValue />
+          <SelectValue>
+            {(val) =>
+              monthOptions.find((o) => o.key === val)?.label ?? String(val ?? "")
+            }
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {monthOptions.map((opt) => (
@@ -63,7 +67,11 @@ export function PortfolioFilters({
           onValueChange={(val) => navigate(month, val)}
         >
           <SelectTrigger className="h-8 text-sm min-w-[9rem]">
-            <SelectValue />
+            <SelectValue>
+              {(val) =>
+                !val || val === "__all__" ? "Todas as regiões" : String(val)
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">Todas as regiões</SelectItem>

@@ -29,7 +29,12 @@ export function ComparisonFilters({ range }: ComparisonFiltersProps) {
       onValueChange={(val) => router.push(`/comparativo?range=${val ?? range}`)}
     >
       <SelectTrigger className="h-8 text-sm min-w-[11rem]">
-        <SelectValue />
+        <SelectValue>
+          {(val) =>
+            RANGE_OPTIONS.find((o) => o.value === String(val))?.label ??
+            String(val ?? "")
+          }
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {RANGE_OPTIONS.map((opt) => (
