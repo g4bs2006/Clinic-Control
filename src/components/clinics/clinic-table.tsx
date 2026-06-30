@@ -64,7 +64,14 @@ export function ClinicTable({ clinics }: ClinicTableProps) {
       <TableBody>
         {clinics.map((clinic) => (
           <TableRow key={clinic.id}>
-            <TableCell className="font-medium">{clinic.name}</TableCell>
+            <TableCell className="font-medium">
+              <Link
+                href={`/clinicas/${clinic.id}`}
+                className="text-primary hover:underline"
+              >
+                {clinic.name}
+              </Link>
+            </TableCell>
             <TableCell>
               {clinic.city && clinic.state
                 ? `${clinic.city}/${clinic.state}`
@@ -87,6 +94,12 @@ export function ClinicTable({ clinics }: ClinicTableProps) {
             </TableCell>
             <TableCell className="text-right">
               <div className="flex items-center justify-end gap-2">
+                <Link
+                  href={`/clinicas/${clinic.id}`}
+                  className="inline-flex h-7 items-center justify-center rounded-[min(var(--radius-md),12px)] border border-border bg-background px-2.5 text-[0.8rem] font-medium transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
+                >
+                  Ver
+                </Link>
                 <Link
                   href={`/clinicas/${clinic.id}/editar`}
                   className="inline-flex h-7 items-center justify-center rounded-[min(var(--radius-md),12px)] border border-border bg-background px-2.5 text-[0.8rem] font-medium transition-all hover:bg-muted hover:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
