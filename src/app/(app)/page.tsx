@@ -69,8 +69,9 @@ export default async function HomePage({
 
   // KPI formatting helpers (pt-BR)
   const fmtNumber = (n: number) => n.toLocaleString("pt-BR")
+  // avgRate is a fraction 0..1; display as a percentage (e.g. 0.125 → "12,5%")
   const fmtRate = (r: number) =>
-    r.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%"
+    (r * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%"
 
   const displayMonthLabel = monthLabel(month)
 

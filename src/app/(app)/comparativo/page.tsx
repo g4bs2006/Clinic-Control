@@ -1,0 +1,247 @@
+import Link from "next/link"
+import { getComparison } from "@/lib/portfolio/data"
+import { monthKey, prevMonth } from "@/lib/snapshots/month"
+import { Panel } from "@/components/dashboard/panel"
+import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart"
+import { ComparisonFilters } from "@/components/dashboard/comparison-filters"
+
+export const dynamic = "force-dynamic"
+
+type SearchParams = Promise<{ range?: string }>
+
+// Distinct, dark-background-friendly line colors. Cycles if clinics > palette.
+const PALETTE = [
+  "#2dd4bf", // teal
+  "#a78bfa", // purple
+  "#fb7185", // rose
+  "#fbbf24", // amber
+  "#38bdf8", // sky
+  "#4ade80", // green
+  "#f472b6", // pink
+  "#facc15", // yellow
+  "#818cf8", // indigo
+  "#fb923c", // orange
+  "#22d3ee", // cyan
+  "#c084fc", // violet
+]
+
+// Short pt-BR month label, e.g. "abr/25"
+function shortMonthLabel(key: string): string {
+  const [y, m] = key.split("-").map(Number)
+  const month = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("pt-BR", {
+    month: "short",
+    timeZone: "UTC",
+  })
+  return `${month.replace(".", "")}/${String(y).slice(2)}`
+}
+
+// Build N month keys (oldest → newest), including current
+function lastNMonths(current: string, n: number): string[] {
+  const keys: string[] = []
+  let key = current
+  for (let i = 0; i < n; i++) {
+    keys.unshift(key)
+    key = prevMonth(key)
+  }
+  return keys
+}
+
+const ALLOWED_RANGES = [3, 6, 12]
+const EM_DASH = "—"
+
+function fmtPct(rate: number): string {
+  return (
+    (rate * 100).toLocaleString("pt-BR", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }) + "%"
+  )
+}
+
+export default async function ComparativoPage({
+  searchParams,
+}: {
+  searchParams: SearchParams
+}) {
+  const params = await searchParams
+  const parsedRange = Number(params.range)
+  const range = ALLOWED_RANGES.includes(parsedRange) ? parsedRange : 6
+
+  const currentMonth = monthKey(new Date())
+  const months = lastNMonths(currentMonth, range)
+
+  const comparison = await getComparison(months)
+
+  // Clinics with at least one data point in the window
+  const withData = comparison.filter((row) =>
+    months.some((m) => row.byMonth[m] != null),
+  )
+
+  // Assign a stable color per clinic (by index in withData)
+  const colorByClinic = new Map<string, string>()
+  withData.forEach((row, i) => {
+    colorByClinic.set(row.clinicId, PALETTE[i % PALETTE.length])
+  })
+
+  // Chart series + data (rates already converted to %)
+  const series: TrendSeries[] = withData.map((row) => ({
+    key: row.name,
+    color: colorByClinic.get(row.clinicId)!,
+  }))
+
+  const chartData = months.map((m) => {
+    const point: Record<string, string | number | null> = {
+      month: shortMonthLabel(m),
+    }
+    for (const row of withData) {
+      const cell = row.byMonth[m]
+      point[row.name] = cell ? Number((cell.rate * 100).toFixed(2)) : null
+    }
+    return point
+  })
+
+  return (
+    <main className="p-6 space-y-6 max-w-screen-2xl mx-auto">
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Comparativo</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Taxa de conversão mês a mês · {withData.length} clínica
+            {withData.length !== 1 ? "s" : ""} com dados
+          </p>
+        </div>
+        <ComparisonFilters range={range} />
+      </div>
+
+      {/* ── Trend chart ────────────────────────────────────────── */}
+      <Panel
+        title="Tendência da taxa de conversão"
+        subtitle="clique numa clínica na legenda para mostrar ou ocultar a linha"
+      >
+        <TrendChart data={chartData} series={series} />
+      </Panel>
+
+      {/* ── Month-by-month table ───────────────────────────────── */}
+      <Panel
+        title="Taxa por mês"
+        subtitle="células coloridas pelo status do mês"
+      >
+        {withData.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+            <span className="text-2xl opacity-40">—</span>
+            <span className="text-sm">Nenhuma clínica com dados no período</span>
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th
+                    style={{
+                      padding: "0.5rem 0.75rem",
+                      fontSize: "0.65rem",
+                      fontWeight: 600,
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      color: "oklch(0.65 0.02 215)",
+                      textAlign: "left",
+                      borderBottom: "1px solid oklch(0.35 0.04 225)",
+                      whiteSpace: "nowrap",
+                      position: "sticky",
+                      left: 0,
+                      background: "var(--card)",
+                    }}
+                  >
+                    Clínica
+                  </th>
+                  {months.map((m) => (
+                    <th
+                      key={m}
+                      style={{
+                        padding: "0.5rem 0.75rem",
+                        fontSize: "0.65rem",
+                        fontWeight: 600,
+                        letterSpacing: "0.08em",
+                        textTransform: "capitalize",
+                        color: "oklch(0.65 0.02 215)",
+                        textAlign: "right",
+                        borderBottom: "1px solid oklch(0.35 0.04 225)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {shortMonthLabel(m)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {withData.map((row) => (
+                  <tr key={row.clinicId}>
+                    <td
+                      style={{
+                        padding: "0.5rem 0.75rem",
+                        fontSize: "0.8rem",
+                        borderBottom: "1px solid oklch(0.30 0.03 230)",
+                        whiteSpace: "nowrap",
+                        position: "sticky",
+                        left: 0,
+                        background: "var(--card)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: "0.5rem",
+                          height: "0.5rem",
+                          borderRadius: "9999px",
+                          background: colorByClinic.get(row.clinicId),
+                          marginRight: "0.5rem",
+                          verticalAlign: "middle",
+                        }}
+                      />
+                      <Link
+                        href={`/clinicas/${row.clinicId}`}
+                        style={{
+                          color: "oklch(0.72 0.12 183)",
+                          textDecoration: "none",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {row.name}
+                      </Link>
+                    </td>
+                    {months.map((m) => {
+                      const cell = row.byMonth[m]
+                      return (
+                        <td
+                          key={m}
+                          style={{
+                            padding: "0.5rem 0.75rem",
+                            fontSize: "0.8rem",
+                            textAlign: "right",
+                            fontVariantNumeric: "tabular-nums",
+                            borderBottom: "1px solid oklch(0.30 0.03 230)",
+                            color: cell
+                              ? "oklch(0.97 0.005 210)"
+                              : "oklch(0.55 0.02 215)",
+                            background:
+                              cell && cell.color ? `${cell.color}26` : "transparent",
+                            fontWeight: cell ? 600 : 400,
+                          }}
+                          title={cell?.status ?? undefined}
+                        >
+                          {cell ? fmtPct(cell.rate) : EM_DASH}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+    </main>
+  )
+}

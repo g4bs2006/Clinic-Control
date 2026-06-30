@@ -22,7 +22,8 @@ function contrastText(hex: string): string {
 }
 
 function formatRate(rate: number): string {
-  return rate.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%"
+  // rate is a fraction 0..1; display as a percentage (e.g. 0.125 → "12,5%")
+  return (rate * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%"
 }
 
 function formatNumber(n: number): string {
