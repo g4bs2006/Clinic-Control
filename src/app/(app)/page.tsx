@@ -137,9 +137,9 @@ export default async function HomePage({
     ? (totalCheckedChecks / (totalClinics * totalCheckItemsCount)) * 100
     : 0
 
-  // ── Calculate Churn Risk Alerts ─────────────────────────────
+  // ── Calculate Churn Risk Alerts (Bottom 5 active clinics by scheduling rate) ──
   const riskRows = allRows
-    .filter((r) => r.status === "Risco Churn" || r.status === "Preocupante")
+    .filter((r) => r.source !== "none") // only active clinics with data in this period
     .map((r) => {
       const checks = allChecks[r.clinicId] ?? {}
       const checkedCount = checkItems.filter((ci) => checks[ci.id] === true).length
@@ -150,6 +150,7 @@ export default async function HomePage({
       }
     })
     .sort((a, b) => a.rate - b.rate)
+    .slice(0, 5)
 
   // ── Prepare CSV Export Data ─────────────────────────────────
   const exportData = filteredRows.map((row) => {
@@ -286,11 +287,11 @@ export default async function HomePage({
           </Panel>
 
           {/* ── Churn Risk Alerts ────────────────────────────────── */}
-          <Panel title="Alertas de risco" subtitle="desempenho crítico ou preocupante">
+          <Panel title="Alertas de risco" subtitle="as 5 menores taxas de agendamento">
             {riskRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-6 text-center">
                 <CheckCircle2 className="size-8 text-emerald-500/80 mb-2" />
-                <p className="text-xs text-muted-foreground">Tudo sob controle! Nenhuma clínica em risco este mês.</p>
+                <p className="text-xs text-muted-foreground">Nenhuma clínica ativa no período.</p>
               </div>
             ) : (
               <ul className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
