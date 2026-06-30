@@ -49,21 +49,19 @@ export function FunnelView({ steps }: FunnelViewProps) {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Funil de conversão */}
-      <div className="flex flex-col">
+      {/* Funil de conversão — barras centralizadas empilhadas */}
+      <div className="flex flex-col gap-1.5">
         {levels.map((lvl, i) => {
-          const wTop = widthOf(lvl.count) * 100
-          const wBot = widthOf(levels[i + 1]?.count ?? lvl.count * 0.55) * 100
+          const w = widthOf(lvl.count) * 100
           const light = 0.66 - i * 0.07 // escurece conforme afunila
           const fill = `oklch(${light.toFixed(2)} 0.17 255)`
-          const clip = `polygon(${(50 - wTop / 2).toFixed(2)}% 0, ${(50 + wTop / 2).toFixed(2)}% 0, ${(50 + wBot / 2).toFixed(2)}% 100%, ${(50 - wBot / 2).toFixed(2)}% 100%)`
           return (
-            <div key={lvl.name} className="flex items-stretch gap-3">
-              <div className="relative h-14 flex-1">
-                <div className="absolute inset-0" style={{ clipPath: clip, background: fill }} />
+            <div key={lvl.name} className="flex items-center gap-3">
+              {/* área da barra (centralizada) */}
+              <div className="flex flex-1 justify-center">
                 <div
-                  className="absolute inset-0 flex flex-col items-center justify-center leading-tight text-white"
-                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                  className="flex h-14 flex-col items-center justify-center rounded-lg leading-tight text-white"
+                  style={{ width: `${w}%`, minWidth: "5rem", background: fill, textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
                 >
                   <span className="text-[0.7rem] font-medium uppercase tracking-wide opacity-90">
                     {lvl.name}
