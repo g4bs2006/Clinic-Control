@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { listClinics } from "@/lib/clinics/actions";
-import { listSnapshotsForMonth, ensureFrozen } from "@/lib/snapshots/actions";
+import { listSnapshotsForMonth, ensureFrozen, freezeAllPastMonths } from "@/lib/snapshots/actions";
 import { getLiveFunnel } from "@/lib/clinics/integration-actions";
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status";
 import { monthKey, prevMonth } from "@/lib/snapshots/month";
@@ -34,8 +34,12 @@ export async function getPortfolioForMonth(
 ): Promise<{ rows: PortfolioRow[]; summary: ReturnType<typeof summarize> }> {
   const [clinics, rules] = await Promise.all([listClinics(), loadStatusRules()]);
 
-  // Lazy freeze: fire for all clinics, tolerate individual failures
-  await Promise.allSettled(clinics.map((c) => ensureFrozen(c.id, c.mode)));
+  // Freeze all past months in a single query; only auto clinics need the
+  // per-clinic CRM backfill loop.
+  await freezeAllPastMonths();
+  await Promise.allSettled(
+    clinics.filter((c) => c.mode === "auto").map((c) => ensureFrozen(c.id, c.mode)),
+  );
 
   const snapshots = await listSnapshotsForMonth(month);
   const snapshotByClinic = new Map(snapshots.map((s) => [s.clinicId, s]));
@@ -214,8 +218,11 @@ export type ComparisonRow = {
 export async function getComparison(months: string[]): Promise<ComparisonRow[]> {
   const [clinics, rules] = await Promise.all([listClinics(), loadStatusRules()]);
 
-  // Lazy freeze dos meses passados; tolera falha por clínica.
-  await Promise.allSettled(clinics.map((c) => ensureFrozen(c.id, c.mode)));
+  // Freeze all past months in one query; só auto precisa do backfill por clínica.
+  await freezeAllPastMonths();
+  await Promise.allSettled(
+    clinics.filter((c) => c.mode === "auto").map((c) => ensureFrozen(c.id, c.mode)),
+  );
 
   const supabase = await createClient();
   const clinicIds = clinics.map((c) => c.id);

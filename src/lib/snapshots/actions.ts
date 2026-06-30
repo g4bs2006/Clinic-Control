@@ -154,8 +154,27 @@ export async function setStatusOverride(
 }
 
 // ---------------------------------------------------------------------------
-// ensureFrozen
+// freezeAllPastMonths / ensureFrozen
 // ---------------------------------------------------------------------------
+
+// Freezes every past unfrozen snapshot across ALL clinics in a single query.
+// Past months should always be frozen; doing it in one UPDATE replaces the
+// previous per-clinic fan-out (one client + query per clinic) that made the
+// dashboard feel sluggish. Auto clinics still need ensureFrozen() to backfill
+// missing months from the CRM.
+export async function freezeAllPastMonths(): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const currentKey = monthKey(new Date());
+    await supabase
+      .from("monthly_snapshots")
+      .update({ frozen: true })
+      .lt("year_month", currentKey)
+      .eq("frozen", false);
+  } catch (e) {
+    console.error("[freezeAllPastMonths] unexpected error:", e);
+  }
+}
 
 export async function ensureFrozen(
   clinicId: string,
