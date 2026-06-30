@@ -41,7 +41,7 @@ function SortIcon({ active, asc }: { active: boolean; asc: boolean }) {
         marginLeft: "0.25rem",
         fontSize: "0.65rem",
         opacity: active ? 1 : 0.3,
-        color: "oklch(0.62 0.20 292)",
+        color: "oklch(0.62 0.17 255)",
       }}
     >
       {active ? (asc ? "▲" : "▼") : "▼"}
@@ -196,7 +196,7 @@ export function RankingTable({ rows }: RankingTableProps) {
                   <Link
                     href={`/clinicas/${row.clinicId}`}
                     style={{
-                      color: "oklch(0.62 0.20 292)",
+                      color: "oklch(0.62 0.17 255)",
                       textDecoration: "none",
                       fontWeight: 500,
                     }}

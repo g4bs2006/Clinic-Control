@@ -18,7 +18,7 @@ import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart
 
 export const dynamic = "force-dynamic"
 
-const CLINIC_COLOR = "#a78bfa" // violet accent
+const CLINIC_COLOR = "#60a5fa" // blue accent
 
 function fmtPct(rate: number): string {
   return (
@@ -194,7 +194,7 @@ export default async function ClinicDetailPage({
                   : "Funil completo só para clínicas automáticas"}
               </span>
               {!isAuto && (
-                <Link href="/mensal" className="text-xs text-[oklch(0.62_0.20_292)] hover:underline">
+                <Link href="/mensal" className="text-xs text-[oklch(0.62_0.17_255)] hover:underline">
                   Editar dados na grade mensal →
                 </Link>
               )}

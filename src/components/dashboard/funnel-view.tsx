@@ -27,7 +27,7 @@ export function FunnelView({ steps }: FunnelViewProps) {
         // Violet monochrome, fading slightly lighter down the funnel
         const t = steps.length > 1 ? i / (steps.length - 1) : 0
         const light = 0.66 - t * 0.1 // 0.66 → 0.56
-        const fill = `oklch(${light.toFixed(2)} 0.19 292)`
+        const fill = `oklch(${light.toFixed(2)} 0.17 255)`
 
         return (
           <div key={step.title} className="flex items-center gap-3">

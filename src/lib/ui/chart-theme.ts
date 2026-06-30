@@ -13,8 +13,8 @@ export const CHART = {
   fg: "oklch(0.96 0 0)",
   /** Secondary / muted text */
   muted: "oklch(0.64 0 0)",
-  /** Violet brand accent */
-  accent: "oklch(0.62 0.20 292)",
+  /** Blue brand accent */
+  accent: "oklch(0.62 0.17 255)",
   /** Chart grid lines (very subtle) */
   grid: "oklch(0.27 0.006 286)",
   /** Table row divider */
@@ -29,18 +29,18 @@ export const CHART = {
 
 /**
  * Distinct line/series colors for multi-clinic charts, legible on near-black.
- * Led by the violet accent, then spread across the hue wheel.
+ * Led by the blue accent, then spread across the hue wheel.
  */
 export const SERIES_PALETTE = [
-  "#a78bfa", // violet (accent)
-  "#60a5fa", // blue
+  "#3b82f6", // blue (accent)
   "#34d399", // emerald
   "#fbbf24", // amber
   "#f472b6", // pink
   "#22d3ee", // cyan
+  "#a78bfa", // violet
   "#a3e635", // lime
   "#fb923c", // orange
-  "#818cf8", // indigo
+  "#60a5fa", // light blue
   "#f87171", // red
   "#2dd4bf", // teal
   "#c084fc", // purple

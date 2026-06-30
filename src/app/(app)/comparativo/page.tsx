@@ -188,7 +188,7 @@ export default async function ComparativoPage({
                       <Link
                         href={`/clinicas/${row.clinicId}`}
                         style={{
-                          color: "oklch(0.62 0.20 292)",
+                          color: "oklch(0.62 0.17 255)",
                           textDecoration: "none",
                           fontWeight: 500,
                         }}

@@ -40,7 +40,7 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* Dark mode — neutral near-black + violet accent (Vercel-leaning, forced via .dark on <html>) */
+/* Dark mode — neutral near-black + blue accent (Vercel-leaning, forced via .dark on <html>) */
 .dark {
   /* Surfaces: near-black neutral with a whisper of cool hue for depth */
   --background: oklch(0.145 0 0);          /* ~#0a0a0a */
@@ -49,10 +49,10 @@
   --muted-foreground: oklch(0.64 0 0);     /* ~#8f8f94 */
   --border: oklch(0.27 0.006 286);         /* hairline, cool-neutral */
   --input: oklch(0.27 0.006 286);
-  /* Brand accent: violet */
-  --primary: oklch(0.62 0.20 292);
+  /* Brand accent: blue */
+  --primary: oklch(0.62 0.17 255);
   --primary-foreground: oklch(0.99 0 0);
-  --ring: oklch(0.62 0.20 292);
+  --ring: oklch(0.62 0.17 255);
   /* shadcn structural tokens */
   --card: oklch(0.178 0 0);                /* panel ~#141416 */
   --card-foreground: oklch(0.96 0 0);
@@ -63,21 +63,21 @@
   --accent: oklch(0.24 0.006 286);
   --accent-foreground: oklch(0.97 0 0);
   --destructive: oklch(0.62 0.21 25);
-  /* Chart sequence — distinct hues legible on near-black, led by the violet accent */
-  --chart-1: oklch(0.62 0.20 292);         /* violet */
-  --chart-2: oklch(0.70 0.15 230);         /* blue */
-  --chart-3: oklch(0.74 0.15 165);         /* teal-green */
+  /* Chart sequence — distinct hues legible on near-black, led by the blue accent */
+  --chart-1: oklch(0.62 0.17 255);         /* blue */
+  --chart-2: oklch(0.76 0.13 200);         /* cyan */
+  --chart-3: oklch(0.74 0.15 165);         /* emerald */
   --chart-4: oklch(0.80 0.16 75);          /* amber */
   --chart-5: oklch(0.68 0.19 350);         /* pink */
   /* Sidebar: a touch darker than the page for separation */
   --sidebar: oklch(0.125 0 0);
   --sidebar-foreground: oklch(0.96 0 0);
-  --sidebar-primary: oklch(0.62 0.20 292);
+  --sidebar-primary: oklch(0.62 0.17 255);
   --sidebar-primary-foreground: oklch(0.99 0 0);
   --sidebar-accent: oklch(0.22 0.006 286);
   --sidebar-accent-foreground: oklch(0.97 0 0);
   --sidebar-border: oklch(0.24 0.006 286);
-  --sidebar-ring: oklch(0.62 0.20 292);
+  --sidebar-ring: oklch(0.62 0.17 255);
 }
 
 @theme inline {

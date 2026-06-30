@@ -40,7 +40,7 @@ export default async function ConfiguracoesPage() {
               </span>
               <span className="flex-1 text-sm text-foreground">{step.name}</span>
               {step.counts_as_scheduling && (
-                <span className="rounded-full bg-[oklch(0.62_0.20_292)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[oklch(0.68_0.18_292)]">
+                <span className="rounded-full bg-[oklch(0.62_0.17_255)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[oklch(0.70_0.16_255)]">
                   Agendamento
                 </span>
               )}
