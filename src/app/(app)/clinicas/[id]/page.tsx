@@ -164,9 +164,22 @@ export default async function ClinicDetailPage({
       </Panel>
 
       {/* ── Credenciais do Formulário ──────────────────────────── */}
-      <Panel title="Credenciais do Formulário" subtitle="dados preenchidos pela clínica · clique para copiar">
-        <ClinicFormCredentials clinicId={id} credentials={formCredentials} />
-      </Panel>
+      {(clinic.system === "Google Agenda" || clinic.system === "Clinicorp") && (
+        <Panel
+          title={clinic.system === "Google Agenda" ? "Agendas (Google Calendar)" : "Credenciais do Formulário (Clinicorp)"}
+          subtitle={
+            clinic.system === "Google Agenda"
+              ? "identificadores das agendas de cada unidade"
+              : "dados de integração de cada unidade · clique para copiar"
+          }
+        >
+          <ClinicFormCredentials
+            clinicId={id}
+            credentials={formCredentials}
+            system={clinic.system}
+          />
+        </Panel>
+      )}
 
       {/* ── Auto clinic without live data: warning ─────────────── */}
       {isAuto && !liveFunnel && (

@@ -80,10 +80,12 @@ function CredentialCard({
   credential,
   onEdit,
   onDelete,
+  system,
 }: {
   credential: FormCredential;
   onEdit: () => void;
   onDelete: () => void;
+  system: string | null;
 }) {
   const fmtDate = credential.submitted_at
     ? new Date(credential.submitted_at).toLocaleDateString("pt-BR", {
@@ -125,38 +127,52 @@ function CredentialCard({
 
       {/* Fields */}
       <div className="space-y-2">
-        {credential.email && (
-          <FieldRow label="E-mail" value={credential.email} />
-        )}
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[0.68rem] font-medium uppercase tracking-wider text-muted-foreground shrink-0 w-24">
-            Token
-          </span>
-          <TokenField value={credential.token} />
-        </div>
-        {credential.api_user && (
-          <FieldRow label="Usuário API" value={credential.api_user} />
-        )}
-        {credential.agenda_link && (
+        {system === "Google Agenda" ? (
           <div className="flex items-center justify-between gap-2">
             <span className="text-[0.68rem] font-medium uppercase tracking-wider text-muted-foreground shrink-0 w-24">
-              Link Agenda
+              ID da Agenda
             </span>
             <div className="flex items-center gap-1 min-w-0">
-              <a
-                href={credential.agenda_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono text-xs text-primary hover:underline truncate"
-              >
-                {credential.agenda_link}
-              </a>
-              <CopyButton value={credential.agenda_link} label="Link Agenda" />
+              <span className="font-mono text-xs text-foreground truncate">{credential.token}</span>
+              <CopyButton value={credential.token} label="ID da Agenda" />
             </div>
           </div>
-        )}
-        {credential.agenda_code && (
-          <FieldRow label="Cód. Agenda" value={credential.agenda_code} />
+        ) : (
+          <>
+            {credential.email && (
+              <FieldRow label="E-mail" value={credential.email} />
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[0.68rem] font-medium uppercase tracking-wider text-muted-foreground shrink-0 w-24">
+                Token
+              </span>
+              <TokenField value={credential.token} />
+            </div>
+            {credential.api_user && (
+              <FieldRow label="Usuário API" value={credential.api_user} />
+            )}
+            {credential.agenda_link && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[0.68rem] font-medium uppercase tracking-wider text-muted-foreground shrink-0 w-24">
+                  Link Agenda
+                </span>
+                <div className="flex items-center gap-1 min-w-0">
+                  <a
+                    href={credential.agenda_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs text-primary hover:underline truncate"
+                  >
+                    {credential.agenda_link}
+                  </a>
+                  <CopyButton value={credential.agenda_link} label="Link Agenda" />
+                </div>
+              </div>
+            )}
+            {credential.agenda_code && (
+              <FieldRow label="Cód. Agenda" value={credential.agenda_code} />
+            )}
+          </>
         )}
       </div>
     </div>
@@ -190,11 +206,13 @@ function CredentialForm({
   initial,
   onDone,
   onCancel,
+  system,
 }: {
   clinicId: string;
   initial?: FormCredential;
   onDone: () => void;
   onCancel: () => void;
+  system: string | null;
 }) {
   const isEditing = !!initial;
   const [formName, setFormName] = useState(initial?.form_name ?? "");
@@ -233,7 +251,13 @@ function CredentialForm({
     <form onSubmit={handleSubmit} className="rounded-lg border border-primary/30 bg-card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-foreground">
-          {isEditing ? "Editar credencial" : "Nova credencial"}
+          {isEditing
+            ? system === "Google Agenda"
+              ? "Editar agenda"
+              : "Editar credencial"
+            : system === "Google Agenda"
+              ? "Nova agenda"
+              : "Nova credencial"}
         </h4>
         <button
           type="button"
@@ -246,53 +270,70 @@ function CredentialForm({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <Label htmlFor="fc-name">Nome da clínica/unidade *</Label>
+          <Label htmlFor="fc-name">
+            {system === "Google Agenda" ? "Nome da unidade *" : "Nome da clínica/unidade *"}
+          </Label>
           <Input
             id="fc-name"
             value={formName}
             onChange={(e) => setFormName(e.target.value)}
-            placeholder="Ex.: Prime Odontocenter"
+            placeholder={system === "Google Agenda" ? "Ex.: Unidade Centro" : "Ex.: Prime Odontocenter"}
             required
           />
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="fc-email">E-mail</Label>
-          <Input
-            id="fc-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="contato@clinica.com"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="fc-token">Token *</Label>
-          <Input
-            id="fc-token"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="Cole o token aqui"
-            required
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="fc-api-user">Usuário API</Label>
-          <Input
-            id="fc-api-user"
-            value={apiUser}
-            onChange={(e) => setApiUser(e.target.value)}
-            placeholder="Ex.: primeodontocenter"
-          />
-        </div>
-        <div className="space-y-1 sm:col-span-2">
-          <Label htmlFor="fc-link">Link Agenda</Label>
-          <Input
-            id="fc-link"
-            value={agendaLink}
-            onChange={(e) => setAgendaLink(e.target.value)}
-            placeholder="https://agenda.link/12345"
-          />
-        </div>
+        {system === "Google Agenda" ? (
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="fc-token">ID da Agenda (Google Calendar) *</Label>
+            <Input
+              id="fc-token"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Ex.: primary ou xxxxx@group.calendar.google.com"
+              required
+            />
+          </div>
+        ) : (
+          <>
+            <div className="space-y-1">
+              <Label htmlFor="fc-email">E-mail</Label>
+              <Input
+                id="fc-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="contato@clinica.com"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="fc-token">Token *</Label>
+              <Input
+                id="fc-token"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="Cole o token aqui"
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="fc-api-user">Usuário API</Label>
+              <Input
+                id="fc-api-user"
+                value={apiUser}
+                onChange={(e) => setApiUser(e.target.value)}
+                placeholder="Ex.: primeodontocenter"
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor="fc-link">Link Agenda</Label>
+              <Input
+                id="fc-link"
+                value={agendaLink}
+                onChange={(e) => setAgendaLink(e.target.value)}
+                placeholder="https://agenda.link/12345"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex gap-2 pt-1">
@@ -320,9 +361,11 @@ function CredentialForm({
 export function ClinicFormCredentials({
   clinicId,
   credentials,
+  system,
 }: {
   clinicId: string;
   credentials: FormCredential[];
+  system: string | null;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -360,6 +403,7 @@ export function ClinicFormCredentials({
             initial={editingCredential}
             onDone={() => setEditingId(null)}
             onCancel={() => setEditingId(null)}
+            system={system}
           />
         ) : (
           <CredentialCard
@@ -370,6 +414,7 @@ export function ClinicFormCredentials({
               setShowForm(false);
             }}
             onDelete={() => handleDelete(cred.id, cred.form_name)}
+            system={system}
           />
         ),
       )}
@@ -379,6 +424,7 @@ export function ClinicFormCredentials({
           clinicId={clinicId}
           onDone={() => setShowForm(false)}
           onCancel={() => setShowForm(false)}
+          system={system}
         />
       )}
 
@@ -392,7 +438,7 @@ export function ClinicFormCredentials({
           className="gap-1.5"
         >
           <Plus className="size-3.5" />
-          Adicionar credencial
+          {system === "Google Agenda" ? "Adicionar agenda" : "Adicionar credencial"}
         </Button>
       )}
     </div>
