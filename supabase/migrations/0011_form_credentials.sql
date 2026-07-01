@@ -3,6 +3,8 @@
 -- um por unidade). O vínculo com a clínica (clinic_id) é feito manualmente
 -- pela equipe no app.
 
+set search_path to clinic_control, public;
+
 create table if not exists form_credentials (
   id            uuid primary key default gen_random_uuid(),
   clinic_id     uuid references clinics(id) on delete set null,
