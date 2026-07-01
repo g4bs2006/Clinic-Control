@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { getClinic } from "@/lib/clinics/actions"
+import { getClinic, listClinics } from "@/lib/clinics/actions"
 import { getClinicHistory } from "@/lib/portfolio/data"
 import { getLiveFunnel } from "@/lib/clinics/integration-actions"
 import { derivedMetrics } from "@/lib/portfolio/metrics"
@@ -79,11 +79,17 @@ export default async function ClinicDetailPage({
   const isAuto = clinic.mode === "auto"
   const currentMonth = monthKey(new Date())
 
-  const [history, rules, funnelRes] = await Promise.all([
+  // Fetch all clinics to determine previous/next clinic in order
+  const [allClinics, history, rules, funnelRes] = await Promise.all([
+    listClinics(),
     getClinicHistory(id, 6),
     loadStatusRules(),
     isAuto ? getLiveFunnel(id) : Promise.resolve(null),
   ])
+
+  const currentIndex = allClinics.findIndex((c) => c.id === id)
+  const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
+  const nextClinic = currentIndex < allClinics.length - 1 ? allClinics[currentIndex + 1] : null
 
   const [agents, files, clinicChecks, formCredentials] = await Promise.all([
     listClinicAgents(id),
@@ -127,12 +133,34 @@ export default async function ClinicDetailPage({
     <main className="p-6 space-y-6 max-w-screen-2xl mx-auto">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3">
-        <Link
-          href="/"
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors w-fit"
-        >
-          ← Carteira
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link
+            href="/"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors w-fit"
+          >
+            ← Carteira
+          </Link>
+          <div className="flex items-center gap-2">
+            {prevClinic && (
+              <Link
+                href={`/clinicas/${prevClinic.id}`}
+                title={prevClinic.name}
+                className="inline-flex items-center justify-center rounded-md border border-border bg-card px-2.5 py-1.2 text-[0.7rem] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              >
+                ← Anterior
+              </Link>
+            )}
+            {nextClinic && (
+              <Link
+                href={`/clinicas/${nextClinic.id}`}
+                title={nextClinic.name}
+                className="inline-flex items-center justify-center rounded-md border border-border bg-card px-2.5 py-1.2 text-[0.7rem] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              >
+                Próxima →
+              </Link>
+            )}
+          </div>
+        </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{clinic.name}</h1>
