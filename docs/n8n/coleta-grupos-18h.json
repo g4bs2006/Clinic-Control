@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Coleta diaria de mensagens dos grupos (18h)\n\nFluxo: Agendar 18h -> Buscar Grupos -> Extrair grupos -> Loop Over Items\n  (para cada grupo) -> Buscar Mensagens -> Normalizar -> Supabase (whatsapp_group_messages)\n  Ramo: Extrair grupos -> Supabase (whatsapp_groups)  [auto-descobre grupos p/ mapear a clinica]\n\nO Loop Over Items (batch 1) garante que \"Buscar Mensagens\" rode 1x POR GRUPO\n(nodes da comunidade as vezes so leem o 1o item; o loop resolve isso).\n\n**Setup**\n1. Credencial \"Evolution API\" (server-url + apikey) nos 2 nodes Evolution.\n2. Confirme a instancia: CONTAC.IA (nodes Evolution e nos 2 Code).\n3. Credencial \"Supabase API\" (Host + Service Role key) nos 2 nodes Supabase.\n4. PRIMEIRA execucao = backfill: no node \"Normalizar\", suba LOOKBACK_HORAS (ex.: 24*365 ou 0).\n   Depois volte para 24 (so as mensagens do dia).\n\nMetrica (calculada no APP): tempo ate um HUMANO da equipe responder no grupo.\n- inicio = msg de cliente (participant fora da equipe, from_me=false)\n- parada = msg de um numero da equipe (ex.: 3193-0175); bot (from_me=true) ignorado.\nGuardamos participant + from_me crus. Cadastrar numeros da equipe em whatsapp_team_members.\n\nIdempotente: unique (group_jid, message_id) + Continue On Fail nos inserts.",
+        "content": "## Coleta diaria de mensagens dos grupos (18h)\n\nFluxo: Agendar 18h -> Buscar Grupos -> Extrair grupos -> Loop Over Items\n  (para cada grupo) -> Buscar Mensagens -> Normalizar -> Supabase (whatsapp_group_messages)\n  Ramo: Extrair grupos -> Supabase (whatsapp_groups)  [auto-descobre grupos p/ mapear a clinica]\n\nO Loop Over Items (batch 1) garante que \"Buscar Mensagens\" rode 1x POR GRUPO\n(nodes da comunidade as vezes so leem o 1o item; o loop resolve isso).\n\n**Setup**\n1. Credencial \"Evolution API\" (server-url + apikey) nos 2 nodes Evolution.\n2. Confirme a instancia: CONTAC.IA (nodes Evolution e nos 2 Code).\n3. Insert via HTTP Request no PostgREST (o node nativo do Supabase e fixo no schema\n   public; aqui escrevemos no schema clinic_control via header Content-Profile).\n   - Defina no n8n a env var SUPABASE_SERVICE_ROLE_KEY (usada nos 2 nodes de insert).\n   - Exija: clinic_control em Settings -> API -> Exposed schemas do projeto Supabase.\n4. PRIMEIRA execucao = backfill: no node \"Normalizar\", suba LOOKBACK_HORAS (ex.: 24*365 ou 0).\n   Depois volte para 24 (so as mensagens do dia).\n\nMetrica (calculada no APP): tempo ate um HUMANO da equipe responder no grupo.\n- inicio = msg de cliente (participant fora da equipe, from_me=false)\n- parada = msg de um numero da equipe (ex.: 3193-0175); bot (from_me=true) ignorado.\nGuardamos participant + from_me crus. Cadastrar numeros da equipe em whatsapp_team_members.\n\nIdempotente: unique (group_jid, message_id) + Continue On Fail nos inserts.",
         "height": 400,
         "width": 600,
         "color": 4
@@ -129,50 +129,90 @@
     },
     {
       "parameters": {
-        "resource": "row",
-        "operation": "create",
-        "tableId": "whatsapp_group_messages",
-        "dataToSend": "autoMapInputData",
-        "inputsToIgnore": ""
+        "method": "POST",
+        "url": "https://jggfnfxdtfqeqyvxufgu.supabase.co/rest/v1/whatsapp_group_messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "clinic_control"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify([$json]) }}",
+        "options": {}
       },
       "id": "sb-mensagens",
       "name": "Mensagens -> Supabase",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1500,
         400
       ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
-          "name": "Supabase Clinic Manager"
-        }
-      },
       "continueOnFail": true
     },
     {
       "parameters": {
-        "resource": "row",
-        "operation": "create",
-        "tableId": "whatsapp_groups",
-        "dataToSend": "autoMapInputData",
-        "inputsToIgnore": ""
+        "method": "POST",
+        "url": "https://jggfnfxdtfqeqyvxufgu.supabase.co/rest/v1/whatsapp_groups",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "clinic_control"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify([$json]) }}",
+        "options": {}
       },
       "id": "sb-grupos",
       "name": "Grupos -> Supabase",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         820,
         700
       ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "REPLACE_WITH_SUPABASE_CREDENTIAL_ID",
-          "name": "Supabase Clinic Manager"
-        }
-      },
       "continueOnFail": true
     }
   ],
