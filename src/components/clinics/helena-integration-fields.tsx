@@ -102,6 +102,9 @@ export function HelenaIntegrationFields({
         return;
       }
       toast.success("Integração Helena salva com sucesso.");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     });
   }
 

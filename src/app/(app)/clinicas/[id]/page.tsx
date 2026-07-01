@@ -21,6 +21,7 @@ import { ClinicChecks } from "@/components/clinics/clinic-checks"
 import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
 import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
 import { ClinicManualMetricsForm } from "@/components/clinics/clinic-manual-metrics-form"
+import { HelenaIntegrationFields } from "@/components/clinics/helena-integration-fields"
 
 export const dynamic = "force-dynamic"
 
@@ -216,14 +217,19 @@ export default async function ClinicDetailPage({
           <Panel title="Funil de leads" subtitle="mês corrente · ao vivo da Helena">
             <FunnelView steps={liveFunnel.steps} />
           </Panel>
+        ) : isAuto ? (
+          <Panel title="Integração CRM Helena" subtitle="vincular painel para carregar o funil ao vivo">
+            <div className="py-2">
+              <HelenaIntegrationFields
+                clinicId={id}
+                onPanelSelected={(_token, _panelId) => {}}
+              />
+            </div>
+          </Panel>
         ) : (
           <Panel
             title="Dados de Leads"
-            subtitle={
-              isAuto
-                ? "funil indisponível · registro manual alternativo"
-                : "registro manual de leads e agendamentos"
-            }
+            subtitle="registro manual de leads e agendamentos"
           >
             <ClinicManualMetricsForm
               clinicId={id}
