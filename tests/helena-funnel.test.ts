@@ -12,9 +12,9 @@ const card = (id: string, stepId: string, amount: number | null = null) =>
 describe("buildLiveFunnel", () => {
   it("conta por etapa e calcula taxa", () => {
     const r = buildLiveFunnel(steps, [card("a", "s1"), card("b", "s1"), card("c", "s1"), card("d", "s1"), card("e", "s1"), card("f", "s2")]);
-    expect(r.leads).toBe(5); // 5 cards em Leads
+    expect(r.leads).toBe(6); // 6 cards no total
     expect(r.scheduled).toBe(1);
-    expect(r.rate).toBeCloseTo(0.2);
+    expect(r.rate).toBeCloseTo(1 / 6);
   });
 
   it("taxa 0 quando não há leads", () => {
