@@ -16,10 +16,20 @@ interface ClinicChecksProps {
 
 export function ClinicChecks({ clinicId, checks }: ClinicChecksProps) {
   const [items, setItems] = useState(checks)
-  const [pending, startTransition] = useTransition()
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
+  const [, startTransition] = useTransition()
 
   function toggle(checkItemId: string, current: boolean) {
+    if (savingIds.has(checkItemId)) return
+
     const next = !current
+
+    // Add to saving
+    setSavingIds((prev) => {
+      const nextSet = new Set(prev)
+      nextSet.add(checkItemId)
+      return nextSet
+    })
 
     // Optimistic update
     setItems((prev) =>
@@ -29,15 +39,32 @@ export function ClinicChecks({ clinicId, checks }: ClinicChecksProps) {
     )
 
     startTransition(async () => {
-      const res = await toggleClinicCheck(clinicId, checkItemId, next)
-      if (!res.ok) {
+      try {
+        const res = await toggleClinicCheck(clinicId, checkItemId, next)
+        if (!res.ok) {
+          // Revert on error
+          setItems((prev) =>
+            prev.map((c) =>
+              c.check_item_id === checkItemId ? { ...c, checked: current } : c,
+            ),
+          )
+          toast.error(res.error)
+        }
+      } catch {
         // Revert on error
         setItems((prev) =>
           prev.map((c) =>
             c.check_item_id === checkItemId ? { ...c, checked: current } : c,
           ),
         )
-        toast.error(res.error)
+        toast.error("Erro ao salvar alteração")
+      } finally {
+        // Remove from saving
+        setSavingIds((prev) => {
+          const nextSet = new Set(prev)
+          nextSet.delete(checkItemId)
+          return nextSet
+        })
       }
     })
   }
@@ -76,7 +103,7 @@ export function ClinicChecks({ clinicId, checks }: ClinicChecksProps) {
           <button
             key={item.check_item_id}
             type="button"
-            disabled={pending}
+            disabled={savingIds.has(item.check_item_id)}
             onClick={() => toggle(item.check_item_id, item.checked)}
             className={cn(
               "group flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-150",
