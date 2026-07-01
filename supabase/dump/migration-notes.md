@@ -3,6 +3,36 @@
 Passo a passo para reconstruir o projeto numa **nova conta Supabase**.
 Gerado em 2026-07-01 a partir da conta antiga (`hrwfmrkvpsojgjpeccyi`).
 
+## ⭐ STATUS (2026-07-01) — aplicado no projeto novo `jggfnfxdtfqeqyvxufgu`
+O projeto novo é **compartilhado com outro sistema** (schema `public` tem `clinics`
+diferente + `automacao_clinicas`). Por isso o Clinic Control foi instalado num
+**schema dedicado `clinic_control`** (não toca no `public`).
+
+**JÁ FEITO:**
+- Schema `clinic_control` + todas as tabelas/tipos/RLS/grants criados.
+- Bucket de Storage `clinic-files` + policies.
+- Dados carregados: 29 clinics, 46 monthly_snapshots, 5 status_rules, 9 funnel_steps,
+  1 clinic_integrations, 1 whatsapp_team_members.
+- App: os 3 clients Supabase usam `db.schema = 'clinic_control'` (`src/lib/supabase/config.ts`).
+
+**FALTA (manual):**
+1. **Expor o schema na API:** painel do projeto novo → Settings → API → **Exposed schemas**
+   → adicionar `clinic_control`. SEM ISSO o PostgREST (`.from()`) não enxerga as tabelas.
+2. **Env vars** (local `.env` + Vercel):
+   - `NEXT_PUBLIC_SUPABASE_URL = https://jggfnfxdtfqeqyvxufgu.supabase.co`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY = sb_publishable_oKvLEB2qbPPs4DFAr48J2Q_86_xTQIv`
+   - `SUPABASE_SERVICE_ROLE_KEY = <pegar no painel do projeto novo>`
+   - `ENCRYPTION`/chave AES da Helena: **reusar a mesma** do deploy antigo (senão o token
+     em clinic_integrations não descriptografa → re-cadastrar pela UI).
+3. **Auth users** (logins da equipe): recriar no painel (Authentication → Users).
+4. **Agentes + arquivos:** re-importar as pastas das clínicas pela UI (recria
+   clinic_agents=26, agent_stages=307 e os 631 arquivos do Storage).
+5. **n8n:** o node Supabase precisa gravar no schema `clinic_control` (não `public`) —
+   ajustar o schema no node/credencial ao montar o fluxo.
+
+---
+## (Referência) Reconstrução do zero num projeto VAZIO
+
 ## Arquivos deste dump
 - `schema.sql` — todo o schema (concatenação das migrations 0001→0010).
 - `data.sql` — dados **não reproduzíveis** (clínicas, integração, snapshots, faixas de

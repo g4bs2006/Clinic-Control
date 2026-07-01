@@ -35,7 +35,8 @@ export type StoredFile = {
 // Lista recursiva de todos os arquivos sob "<clinicId>/" (Supabase Storage
 // lista só um nível por chamada, então descemos nas subpastas).
 export async function listAllFiles(
-  supabase: SupabaseClient,
+  // schema-agnostic: só usa .storage (independe do schema do banco)
+  supabase: SupabaseClient<any, any, any>,
   clinicId: string,
 ): Promise<StoredFile[]> {
   const out: StoredFile[] = []
