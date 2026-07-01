@@ -31,3 +31,8 @@ revoke all on form_credentials from anon;
 drop policy if exists form_credentials_auth_all on form_credentials;
 create policy form_credentials_auth_all on form_credentials
   for all to authenticated using (true) with check (true);
+
+-- Permissões de tabela no schema clinic_control
+grant all privileges on table form_credentials to authenticated;
+grant all privileges on table form_credentials to service_role;
+
