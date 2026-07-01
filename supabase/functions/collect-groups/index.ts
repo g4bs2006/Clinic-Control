@@ -14,11 +14,12 @@ const SCHEMA = "clinic_control";
 const PAGE_SIZE = 1000;
 const CONCURRENCY = 5;
 
-const EVO_URL = (Deno.env.get("EVOLUTION_API_URL") ?? "").replace(/\/+$/, "");
-const EVO_KEY = Deno.env.get("EVOLUTION_API_KEY") ?? "";
-const EVO_INSTANCE = Deno.env.get("EVOLUTION_INSTANCE") ?? "";
-const INST = encodeURIComponent(EVO_INSTANCE); // o nome pode ter espaços
-const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
+// .trim() defende contra espaços acidentais ao colar os secrets.
+const EVO_URL = (Deno.env.get("EVOLUTION_API_URL") ?? "").trim().replace(/\/+$/, "");
+const EVO_KEY = (Deno.env.get("EVOLUTION_API_KEY") ?? "").trim();
+const EVO_INSTANCE = (Deno.env.get("EVOLUTION_INSTANCE") ?? "").trim();
+const INST = encodeURIComponent(EVO_INSTANCE); // o nome pode ter espaços internos
+const CRON_SECRET = (Deno.env.get("CRON_SECRET") ?? "").trim();
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
