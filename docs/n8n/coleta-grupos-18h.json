@@ -3,9 +3,9 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Coleta diaria de mensagens dos grupos (18h)\n\nFluxo: Agendar 18h -> Buscar Grupos -> Extrair grupos\n  -> Buscar Mensagens (por grupo) -> Normalizar -> Supabase (whatsapp_group_messages)\n  -> (ramo) Supabase (whatsapp_groups)  [auto-descobre grupos p/ mapear a clinica]\n\n**Setup**\n1. Credencial \"Evolution API\" (server-url + apikey) nos 2 nodes Evolution.\n2. Troque SUA_INSTANCIA pelo nome da sua instancia (nodes Evolution e nos 2 Code).\n3. Credencial \"Supabase API\" (Host + Service Role key) nos 2 nodes Supabase.\n4. PRIMEIRA execucao = backfill: no node \"Normalizar\", suba LOOKBACK_HORAS (ex.: 24*365 ou 0).\n   Depois volte para 24 (so as mensagens do dia).\n\nMetrica (calculada no APP, nao aqui): tempo ate um HUMANO da equipe responder no grupo.\n- inicio do relogio = msg de um cliente (participant fora da lista da equipe, from_me=false)\n- parada = proxima msg de um numero da equipe;  msgs do bot (from_me=true) sao ignoradas.\nPor isso guardamos \"participant\" e \"from_me\" crus. Falta cadastrar os numeros da equipe.\n\nIdempotente: unique (group_jid, message_id) + Continue On Fail nos inserts.",
-        "height": 380,
-        "width": 560,
+        "content": "## Coleta diaria de mensagens dos grupos (18h)\n\nFluxo: Agendar 18h -> Buscar Grupos -> Extrair grupos -> Loop Over Items\n  (para cada grupo) -> Buscar Mensagens -> Normalizar -> Supabase (whatsapp_group_messages)\n  Ramo: Extrair grupos -> Supabase (whatsapp_groups)  [auto-descobre grupos p/ mapear a clinica]\n\nO Loop Over Items (batch 1) garante que \"Buscar Mensagens\" rode 1x POR GRUPO\n(nodes da comunidade as vezes so leem o 1o item; o loop resolve isso).\n\n**Setup**\n1. Credencial \"Evolution API\" (server-url + apikey) nos 2 nodes Evolution.\n2. Confirme a instancia: CONTAC.IA (nodes Evolution e nos 2 Code).\n3. Credencial \"Supabase API\" (Host + Service Role key) nos 2 nodes Supabase.\n4. PRIMEIRA execucao = backfill: no node \"Normalizar\", suba LOOKBACK_HORAS (ex.: 24*365 ou 0).\n   Depois volte para 24 (so as mensagens do dia).\n\nMetrica (calculada no APP): tempo ate um HUMANO da equipe responder no grupo.\n- inicio = msg de cliente (participant fora da equipe, from_me=false)\n- parada = msg de um numero da equipe (ex.: 3193-0175); bot (from_me=true) ignorado.\nGuardamos participant + from_me crus. Cadastrar numeros da equipe em whatsapp_team_members.\n\nIdempotente: unique (group_jid, message_id) + Continue On Fail nos inserts.",
+        "height": 400,
+        "width": 600,
         "color": 4
       },
       "id": "sticky",
@@ -13,7 +13,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        120,
+        100,
         20
       ]
     },
@@ -33,15 +33,15 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        180,
-        460
+        160,
+        500
       ]
     },
     {
       "parameters": {
         "resource": "groups-api",
         "operation": "fetch-groups",
-        "instanceName": "SUA_INSTANCIA",
+        "instanceName": "CONTAC.IA",
         "searchMethod": "fetchAll",
         "getParticipants": false
       },
@@ -50,8 +50,8 @@
       "type": "n8n-nodes-evolution-api.evolutionApi",
       "typeVersion": 1,
       "position": [
-        400,
-        460
+        380,
+        500
       ],
       "credentials": {
         "evolutionApi": {
@@ -62,7 +62,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Recebe a saida de \"Buscar Grupos\" e emite 1 item por grupo.\n// Defensivo: a resposta pode vir como array de grupos, {groups:[...]}, ou 1 item/grupo.\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  const groups = Array.isArray(j) ? j : (Array.isArray(j.groups) ? j.groups : [j]);\n  for (const g of groups) {\n    const jid = g.id || g.remoteJid || g.jid;\n    if (!jid || !String(jid).endsWith(\"@g.us\")) continue;\n    out.push({\n      json: {\n        group_jid: jid,\n        name: g.subject || g.subjectOwner || g.name || null,\n        instance: g.instanceId || \"SUA_INSTANCIA\",\n      },\n    });\n  }\n}\nreturn out;",
+        "jsCode": "// Recebe a saida de \"Buscar Grupos\" e emite 1 item por grupo.\n// A Evolution devolve { success, data: [ ...grupos... ] }; tratamos varios formatos.\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  const groups =\n    (Array.isArray(j) && j) ||\n    (Array.isArray(j.data) && j.data) ||\n    (Array.isArray(j.groups) && j.groups) ||\n    (j.data && Array.isArray(j.data.groups) && j.data.groups) ||\n    [j];\n  for (const g of groups) {\n    const jid = g.id || g.remoteJid || g.jid;\n    if (!jid || !String(jid).endsWith(\"@g.us\")) continue;\n    out.push({\n      json: {\n        group_jid: jid,\n        name: g.subject || g.subjectOwner || g.name || null,\n        instance: g.instanceId || \"CONTAC.IA\",\n      },\n    });\n  }\n}\nreturn out;",
         "mode": "runOnceForAllItems"
       },
       "id": "extrair-grupos",
@@ -70,15 +70,29 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        620,
-        460
+        600,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-grupos",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        820,
+        500
       ]
     },
     {
       "parameters": {
         "resource": "chat-api",
         "operation": "find-messages",
-        "instanceName": "SUA_INSTANCIA",
+        "instanceName": "CONTAC.IA",
         "remoteJid": "={{ $json.group_jid }}",
         "page": 1,
         "offset": 1000
@@ -88,8 +102,8 @@
       "type": "n8n-nodes-evolution-api.evolutionApi",
       "typeVersion": 1,
       "position": [
-        860,
-        360
+        1060,
+        400
       ],
       "credentials": {
         "evolutionApi": {
@@ -101,7 +115,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Achata as mensagens de todos os grupos e mapeia p/ linhas de whatsapp_group_messages.\n// LOOKBACK_HORAS: use 24 no dia a dia. No PRIMEIRO backfill, use um numero grande\n// (ex.: 24 * 365) ou 0 para desligar o filtro e pegar todo o historico disponivel.\nconst LOOKBACK_HORAS = 24;\nconst cutoffMs = LOOKBACK_HORAS > 0 ? Date.now() - LOOKBACK_HORAS * 3600 * 1000 : 0;\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  // find-messages (Evolution v2) costuma devolver { messages: { records: [...] } }\n  const records =\n    (j.messages && Array.isArray(j.messages.records) && j.messages.records) ||\n    (Array.isArray(j.messages) && j.messages) ||\n    (Array.isArray(j) && j) ||\n    [];\n\n  for (const r of records) {\n    const key = r.key || {};\n    if (!key.id) continue;\n\n    const groupJid = key.remoteJid || \"\";\n    if (!groupJid.endsWith(\"@g.us\")) continue; // so grupos\n\n    let ts = r.messageTimestamp ?? null;\n    const tsMs =\n      typeof ts === \"number\"\n        ? (ts < 1e12 ? ts * 1000 : ts)\n        : ts\n        ? new Date(ts).getTime()\n        : Date.now();\n    if (tsMs < cutoffMs) continue;\n\n    out.push({\n      json: {\n        clinic_id: null, // mapeado depois via whatsapp_groups (grupo -> clinica)\n        instance: r.instanceId || \"SUA_INSTANCIA\",\n        group_jid: groupJid,\n        message_id: key.id,\n        from_me: key.fromMe === true, // true = conta do bot (a instancia)\n        participant: key.participant ? String(key.participant).split(\"@\")[0] : null,\n        push_name: r.pushName || null,\n        message_type: r.messageType || null,\n        event_ts: new Date(tsMs).toISOString(),\n      },\n    });\n  }\n}\nreturn out;",
+        "jsCode": "// Achata as mensagens do(s) grupo(s) e mapeia p/ linhas de whatsapp_group_messages.\n// LOOKBACK_HORAS: use 24 no dia a dia. No PRIMEIRO backfill, use um numero grande\n// (ex.: 24 * 365) ou 0 para desligar o filtro e pegar todo o historico disponivel.\nconst LOOKBACK_HORAS = 24;\nconst cutoffMs = LOOKBACK_HORAS > 0 ? Date.now() - LOOKBACK_HORAS * 3600 * 1000 : 0;\n\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  // Evolution embrulha em { success, data: ... }. As mensagens ficam em\n  // data.messages.records (v2), ou data pode ser o proprio array.\n  const d = j.data ?? j;\n  const records =\n    (d.messages && Array.isArray(d.messages.records) && d.messages.records) ||\n    (Array.isArray(d.messages) && d.messages) ||\n    (Array.isArray(d) && d) ||\n    (Array.isArray(j) && j) ||\n    [];\n\n  for (const r of records) {\n    const key = r.key || {};\n    if (!key.id) continue;\n\n    const groupJid = key.remoteJid || \"\";\n    if (!groupJid.endsWith(\"@g.us\")) continue; // so grupos\n\n    let ts = r.messageTimestamp ?? null;\n    const tsMs =\n      typeof ts === \"number\"\n        ? (ts < 1e12 ? ts * 1000 : ts)\n        : ts\n        ? new Date(ts).getTime()\n        : Date.now();\n    if (tsMs < cutoffMs) continue;\n\n    out.push({\n      json: {\n        clinic_id: null, // mapeado depois via whatsapp_groups (grupo -> clinica)\n        instance: r.instanceId || \"CONTAC.IA\",\n        group_jid: groupJid,\n        message_id: key.id,\n        from_me: key.fromMe === true, // true = conta do bot (a instancia)\n        participant: key.participant ? String(key.participant).split(\"@\")[0] : null,\n        push_name: r.pushName || null,\n        message_type: r.messageType || null,\n        event_ts: new Date(tsMs).toISOString(),\n      },\n    });\n  }\n}\nreturn out;",
         "mode": "runOnceForAllItems"
       },
       "id": "normalizar",
@@ -109,8 +123,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1080,
-        360
+        1280,
+        400
       ]
     },
     {
@@ -126,8 +140,8 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        1300,
-        360
+        1500,
+        400
       ],
       "credentials": {
         "supabaseApi": {
@@ -150,8 +164,8 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        860,
-        600
+        820,
+        700
       ],
       "credentials": {
         "supabaseApi": {
@@ -189,12 +203,24 @@
       "main": [
         [
           {
-            "node": "Buscar Mensagens",
+            "node": "Loop Over Items",
             "type": "main",
             "index": 0
           },
           {
             "node": "Grupos -> Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Buscar Mensagens",
             "type": "main",
             "index": 0
           }
@@ -217,6 +243,17 @@
         [
           {
             "node": "Mensagens -> Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagens -> Supabase": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
             "type": "main",
             "index": 0
           }
