@@ -7,6 +7,7 @@ export const clinicInputSchema = z.object({
   state: z.string().length(2, "Use a UF com 2 letras").optional(),
   mode: z.enum(["auto", "manual"]).default("manual"),
   contract_status: z.enum(["active", "suspended", "archived"]).default("active"),
+  system: z.string().optional(),
 });
 
 export type ClinicInput = z.infer<typeof clinicInputSchema>;

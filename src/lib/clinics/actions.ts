@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { clinicInputSchema, type ClinicInput, type Clinic } from "./schema";
 import { regionFromState } from "./region";
 import { geocodeAddress } from "@/lib/geocoding/nominatim";
+import { CLINIC_SYSTEMS } from "./systems";
 
 async function geoFields(input: ClinicInput) {
   const region = input.state ? regionFromState(input.state) : null;
@@ -59,6 +60,30 @@ export async function updateClinic(id: string, input: ClinicInput) {
     .update({ ...parsed.data, ...(await geoFields(parsed.data)) })
     .eq("id", id);
   if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/clinicas");
+  return { ok: true as const };
+}
+
+// Atualiza apenas o sistema/prontuário da clínica (sem re-geocodificar).
+// `system` vazio limpa o campo. Valida contra a lista conhecida.
+export async function updateClinicSystem(id: string, system: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado" };
+
+  const value = system.trim();
+  if (value && !(CLINIC_SYSTEMS as readonly string[]).includes(value)) {
+    return { ok: false as const, error: "Sistema inválido" };
+  }
+
+  const { error } = await supabase
+    .from("clinics")
+    .update({ system: value || null })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath(`/clinicas/${id}`);
   revalidatePath("/clinicas");
   return { ok: true as const };
 }

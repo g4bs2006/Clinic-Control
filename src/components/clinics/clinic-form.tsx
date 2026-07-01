@@ -14,7 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Clinic, ClinicInput } from "@/lib/clinics/schema";
+import { CLINIC_SYSTEMS } from "@/lib/clinics/systems";
 import { HelenaIntegrationFields } from "@/components/clinics/helena-integration-fields";
+
+const SYSTEM_NONE = "__none__";
 
 type ContractStatus = "active" | "suspended" | "archived";
 type Mode = "manual" | "auto";
@@ -35,6 +38,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
   const [contractStatus, setContractStatus] = useState<ContractStatus>(
     defaultValues?.contract_status ?? "active"
   );
+  const [system, setSystem] = useState<string>(defaultValues?.system ?? "");
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
@@ -47,6 +51,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
       state: state || undefined,
       mode,
       contract_status: contractStatus,
+      system: system || undefined,
     };
 
     startTransition(async () => {
@@ -120,6 +125,28 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
               <SelectItem value="active">Ativo</SelectItem>
               <SelectItem value="suspended">Suspenso</SelectItem>
               <SelectItem value="archived">Arquivado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="system">Sistema</Label>
+          <Select
+            value={system || SYSTEM_NONE}
+            onValueChange={(val) => {
+              if (val) setSystem(val === SYSTEM_NONE ? "" : val);
+            }}
+          >
+            <SelectTrigger id="system" className="w-full">
+              <SelectValue placeholder="Selecione o sistema" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SYSTEM_NONE}>— Não definido —</SelectItem>
+              {CLINIC_SYSTEMS.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

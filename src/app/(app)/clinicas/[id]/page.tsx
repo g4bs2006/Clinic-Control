@@ -17,6 +17,7 @@ import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart
 import { ClinicAgents } from "@/components/clinics/clinic-agents"
 import { ClinicFiles } from "@/components/clinics/clinic-files"
 import { ClinicChecks } from "@/components/clinics/clinic-checks"
+import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
 
 export const dynamic = "force-dynamic"
 
@@ -153,6 +154,11 @@ export default async function ClinicDetailPage({
           </div>
         </div>
       </div>
+
+      {/* ── Sistema utilizado ──────────────────────────────────── */}
+      <Panel title="Sistema" subtitle="prontuário / agenda utilizado pela clínica">
+        <ClinicSystemSelect clinicId={id} current={clinic.system ?? null} />
+      </Panel>
 
       {/* ── Auto clinic without live data: warning ─────────────── */}
       {isAuto && !liveFunnel && (

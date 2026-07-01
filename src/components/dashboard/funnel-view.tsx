@@ -1,4 +1,4 @@
-import { ArrowDown, Users, Calendar, Eye, CheckCircle2 } from "lucide-react"
+import { Users, Calendar, Eye, CheckCircle2 } from "lucide-react"
 
 interface FunnelStep {
   title: string
@@ -49,7 +49,7 @@ export function FunnelView({ steps }: FunnelViewProps) {
         {/* Continuous Connecting line in the background */}
         <div className="absolute bottom-6 left-9 top-6 w-0.5 bg-gradient-to-b from-blue-500/40 via-indigo-500/25 to-emerald-500/10" />
 
-        {levels.map((lvl, i) => {
+        {levels.map((lvl) => {
           const Icon = lvl.icon
           // Percentage relative to first step (Leads)
           const pctOfTotal = (lvl.count / top) * 100
