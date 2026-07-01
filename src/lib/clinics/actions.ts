@@ -88,6 +88,24 @@ export async function updateClinicSystem(id: string, system: string) {
   return { ok: true as const };
 }
 
+// Atualiza apenas o modo de integração da clínica (sem re-geocodificar).
+export async function updateClinicMode(id: string, mode: "auto" | "manual") {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado" };
+
+  const { error } = await supabase
+    .from("clinics")
+    .update({ mode })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath(`/clinicas/${id}`);
+  revalidatePath("/clinicas");
+  return { ok: true as const };
+}
+
 export async function archiveClinic(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("clinics").update({ contract_status: "archived" }).eq("id", id);
