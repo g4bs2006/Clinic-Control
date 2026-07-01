@@ -49,14 +49,22 @@ function deriveAgendaCode(link: string | null | undefined): string | null {
 // ---------------------------------------------------------------------------
 
 export async function listFormCredentials(clinicId: string): Promise<FormCredential[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("form_credentials")
-    .select("*")
-    .eq("clinic_id", clinicId)
-    .order("submitted_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as FormCredential[];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("form_credentials")
+      .select("*")
+      .eq("clinic_id", clinicId)
+      .order("submitted_at", { ascending: false });
+    if (error) {
+      console.error("Erro ao buscar credenciais do formulario:", error.message);
+      return [];
+    }
+    return (data ?? []) as FormCredential[];
+  } catch (e) {
+    console.error("Falha ao buscar credenciais do formulario:", e);
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -64,14 +72,22 @@ export async function listFormCredentials(clinicId: string): Promise<FormCredent
 // ---------------------------------------------------------------------------
 
 export async function listUnlinkedCredentials(): Promise<FormCredential[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("form_credentials")
-    .select("*")
-    .is("clinic_id", null)
-    .order("submitted_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as FormCredential[];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("form_credentials")
+      .select("*")
+      .is("clinic_id", null)
+      .order("submitted_at", { ascending: false });
+    if (error) {
+      console.error("Erro ao buscar credenciais nao vinculadas:", error.message);
+      return [];
+    }
+    return (data ?? []) as FormCredential[];
+  } catch (e) {
+    console.error("Falha ao buscar credenciais nao vinculadas:", e);
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
