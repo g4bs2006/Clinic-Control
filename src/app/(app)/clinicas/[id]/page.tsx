@@ -20,6 +20,7 @@ import { ClinicFiles } from "@/components/clinics/clinic-files"
 import { ClinicChecks } from "@/components/clinics/clinic-checks"
 import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
 import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
+import { ClinicManualMetricsForm } from "@/components/clinics/clinic-manual-metrics-form"
 
 export const dynamic = "force-dynamic"
 
@@ -216,20 +217,21 @@ export default async function ClinicDetailPage({
             <FunnelView steps={liveFunnel.steps} />
           </Panel>
         ) : (
-          <Panel title="Funil de leads" subtitle="indisponível">
-            <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
-              <span className="text-2xl opacity-40">—</span>
-              <span className="text-sm">
-                {isAuto
-                  ? "Funil ao vivo indisponível"
-                  : "Funil completo só para clínicas automáticas"}
-              </span>
-              {!isAuto && (
-                <Link href="/mensal" className="text-xs text-[oklch(0.62_0.17_255)] hover:underline">
-                  Editar dados na grade mensal →
-                </Link>
-              )}
-            </div>
+          <Panel
+            title="Dados de Leads"
+            subtitle={
+              isAuto
+                ? "funil indisponível · registro manual alternativo"
+                : "registro manual de leads e agendamentos"
+            }
+          >
+            <ClinicManualMetricsForm
+              clinicId={id}
+              currentMonth={currentMonth}
+              initialLeads={leadsCount}
+              initialScheduled={scheduledCount}
+              hasData={leadsCount > 0 || scheduledCount > 0}
+            />
           </Panel>
         )}
 
