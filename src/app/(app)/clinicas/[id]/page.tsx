@@ -10,6 +10,7 @@ import { monthKey, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { listClinicAgents } from "@/lib/agents/actions"
 import { listClinicFiles } from "@/lib/clinics/files-actions"
 import { listClinicChecks } from "@/lib/clinics/check-items-actions"
+import { listFormCredentials } from "@/lib/clinics/form-credentials-actions"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { FunnelView } from "@/components/dashboard/funnel-view"
@@ -18,6 +19,7 @@ import { ClinicAgents } from "@/components/clinics/clinic-agents"
 import { ClinicFiles } from "@/components/clinics/clinic-files"
 import { ClinicChecks } from "@/components/clinics/clinic-checks"
 import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
+import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
 
 export const dynamic = "force-dynamic"
 
@@ -82,10 +84,11 @@ export default async function ClinicDetailPage({
     isAuto ? getLiveFunnel(id) : Promise.resolve(null),
   ])
 
-  const [agents, files, clinicChecks] = await Promise.all([
+  const [agents, files, clinicChecks, formCredentials] = await Promise.all([
     listClinicAgents(id),
     listClinicFiles(id),
     listClinicChecks(id),
+    listFormCredentials(id),
   ])
 
   const liveFunnel = funnelRes && funnelRes.ok ? funnelRes.funnel : null
@@ -158,6 +161,11 @@ export default async function ClinicDetailPage({
       {/* ── Sistema utilizado ──────────────────────────────────── */}
       <Panel title="Sistema" subtitle="prontuário / agenda utilizado pela clínica">
         <ClinicSystemSelect clinicId={id} current={clinic.system ?? null} />
+      </Panel>
+
+      {/* ── Credenciais do Formulário ──────────────────────────── */}
+      <Panel title="Credenciais do Formulário" subtitle="dados preenchidos pela clínica · clique para copiar">
+        <ClinicFormCredentials clinicId={id} credentials={formCredentials} />
       </Panel>
 
       {/* ── Auto clinic without live data: warning ─────────────── */}
