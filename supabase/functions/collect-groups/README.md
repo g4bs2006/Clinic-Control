@@ -25,6 +25,11 @@ Resposta: `{ ok, groups, messages_seen, inserted, fetchErrors, insertErrors }`.
 
 ## 3. Agendamento diário (18h BRT = 21:00 UTC)
 
+> ✅ JÁ ATIVO via pg_cron: job `collect-groups-daily` (`0 21 * * *`), secret no Vault
+> (`collect_groups_cron_secret`). Ver/gerir:
+> `select * from cron.job;` · desativar: `select cron.unschedule('collect-groups-daily');`
+> · histórico: `select * from cron.job_run_details order by start_time desc limit 10;`
+
 **Opção A — Dashboard (recomendado):** Integrations → Cron → Create job →
 Type "Supabase Edge Function" → `collect-groups`, schedule `0 21 * * *`,
 query `?lookbackHours=24`, header `x-cron-secret: <CRON_SECRET>`.
