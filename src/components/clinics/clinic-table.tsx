@@ -16,6 +16,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const modeLabels: Record<Clinic["mode"], string> = {
@@ -51,6 +53,7 @@ export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [filter, setFilter] = useState<"all" | "completed" | "pending">("all")
+  const [query, setQuery] = useState("")
 
   if (clinics.length === 0) {
     return (
@@ -80,16 +83,30 @@ export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps
     return checkedCount < checkItems.length
   }).length
 
-  // Filter rows
+  // Filter rows by status and search query
   const filteredClinics = clinics.filter((c) => {
-    if (filter === "all") return true
-    if (!hasCheckItems) return true
-    const checks = allChecks[c.id] ?? {}
-    const checkedCount = checkItems.filter((ci) => checks[ci.id] === true).length
-    const isCompleted = checkedCount === checkItems.length
+    // 1. Status Filter
+    if (filter !== "all" && hasCheckItems) {
+      const checks = allChecks[c.id] ?? {}
+      const checkedCount = checkItems.filter((ci) => checks[ci.id] === true).length
+      const isCompleted = checkedCount === checkItems.length
 
-    if (filter === "completed") return isCompleted
-    if (filter === "pending") return !isCompleted
+      if (filter === "completed" && !isCompleted) return false
+      if (filter === "pending" && isCompleted) return false
+    }
+
+    // 2. Search Query Filter
+    if (query.trim()) {
+      const term = query.toLowerCase()
+      const match =
+        c.name.toLowerCase().includes(term) ||
+        (c.city && c.city.toLowerCase().includes(term)) ||
+        (c.state && c.state.toLowerCase().includes(term)) ||
+        (c.region && c.region.toLowerCase().includes(term)) ||
+        (c.system && c.system.toLowerCase().includes(term))
+      if (!match) return false
+    }
+
     return true
   })
 
@@ -109,47 +126,63 @@ export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps
 
   return (
     <div className="space-y-4">
-      {/* ── Filters Tabs ───────────────────────────────────────── */}
-      {hasCheckItems && (
-        <div className="flex items-center gap-1.5 border-b border-border/40 pb-3">
-          <button
-            type="button"
-            onClick={() => setFilter("all")}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
-              filter === "all"
-                ? "bg-primary text-primary-foreground shadow"
-                : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-            )}
-          >
-            Todas ({clinics.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilter("completed")}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
-              filter === "completed"
-                ? "bg-emerald-600 text-white shadow"
-                : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-            )}
-          >
-            Prontas ({completedClinicsCount})
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilter("pending")}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
-              filter === "pending"
-                ? "bg-amber-600 text-white shadow"
-                : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-            )}
-          >
-            Com Pendências ({pendingClinicsCount})
-          </button>
+      {/* ── Filters & Search Row ───────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/40 pb-3">
+        {hasCheckItems ? (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFilter("all")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
+                filter === "all"
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+              )}
+            >
+              Todas ({clinics.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter("completed")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
+                filter === "completed"
+                  ? "bg-emerald-600 text-white shadow"
+                  : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+              )}
+            >
+              Prontas ({completedClinicsCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter("pending")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
+                filter === "pending"
+                  ? "bg-amber-600 text-white shadow"
+                  : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+              )}
+            >
+              Com Pendências ({pendingClinicsCount})
+            </button>
+          </div>
+        ) : (
+          <div /> // spacing placeholder
+        )}
+
+        {/* Input de busca local */}
+        <div className="relative w-full sm:w-64 shrink-0">
+          <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+          <Input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar clínica..."
+            className="pl-9 h-9 text-xs"
+          />
         </div>
-      )}
+      </div>
 
       {/* ── Table ──────────────────────────────────────────────── */}
       {filteredClinics.length === 0 ? (

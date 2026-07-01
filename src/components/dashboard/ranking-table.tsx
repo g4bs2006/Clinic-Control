@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { Search } from "lucide-react"
 import type { PortfolioRow } from "@/lib/portfolio/aggregate"
 
 interface RankingTableProps {
@@ -52,6 +53,7 @@ function SortIcon({ active, asc }: { active: boolean; asc: boolean }) {
 export function RankingTable({ rows }: RankingTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("rate")
   const [sortAsc, setSortAsc] = useState(false)
+  const [query, setQuery] = useState("")
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -62,7 +64,18 @@ export function RankingTable({ rows }: RankingTableProps) {
     }
   }
 
-  const sorted = [...rows].sort((a, b) => {
+  const filtered = rows.filter((row) => {
+    if (!query.trim()) return true
+    const term = query.toLowerCase()
+    return (
+      row.name.toLowerCase().includes(term) ||
+      (row.city && row.city.toLowerCase().includes(term)) ||
+      (row.state && row.state.toLowerCase().includes(term)) ||
+      (row.status && row.status.toLowerCase().includes(term))
+    )
+  })
+
+  const sorted = [...filtered].sort((a, b) => {
     const va = a[sortKey]
     const vb = b[sortKey]
     return sortAsc ? va - vb : vb - va
@@ -129,8 +142,50 @@ export function RankingTable({ rows }: RankingTableProps) {
   }
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      {/* Input de busca local no ranking */}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ position: "relative", width: "100%", maxWidth: "260px" }}>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar clínica no ranking..."
+            style={{
+              width: "100%",
+              height: "2.25rem",
+              padding: "0.5rem 0.75rem 0.5rem 2.25rem",
+              fontSize: "0.75rem",
+              background: "oklch(0.18 0.006 286 / 0.5)",
+              border: "1px solid oklch(0.27 0.006 286)",
+              borderRadius: "8px",
+              color: "oklch(0.96 0 0)",
+              outline: "none",
+              transition: "border-color 0.15s ease",
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = "oklch(0.62 0.17 255)";
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = "oklch(0.27 0.006 286)";
+            }}
+          />
+          <Search
+            style={{
+              position: "absolute",
+              left: "0.75rem",
+              top: "0.625rem",
+              width: "1rem",
+              height: "1rem",
+              color: "oklch(0.64 0 0)",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
             <th style={thStyle}>Clínica</th>
@@ -259,7 +314,8 @@ export function RankingTable({ rows }: RankingTableProps) {
             )
           })}
         </tbody>
-      </table>
+        </table>
+      </div>
     </div>
   )
 }
