@@ -339,7 +339,7 @@ export default async function WhatsappPage({
                               }`}
                             >
                               <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-rose-400 animate-pulse"}`} />
-                              {c.name} ({c.type})
+                              {c.name} ({isOnline ? "Online" : c.status ?? "Offline"})
                             </span>
                           )
                         })

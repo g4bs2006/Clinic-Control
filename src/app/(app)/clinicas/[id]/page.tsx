@@ -191,7 +191,7 @@ export default async function ClinicDetailPage({
                       }`}
                     >
                       <span className={`w-1 h-1 rounded-full ${isOnline ? "bg-emerald-400" : "bg-rose-400 animate-pulse"}`} />
-                      {c.name}: {isOnline ? "Conectado" : "Offline"}
+                      {c.name}: {isOnline ? "Conectado" : `Offline (${c.status ?? "Sem status"})`}
                     </span>
                   )
                 })}
