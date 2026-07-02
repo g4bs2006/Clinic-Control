@@ -9,6 +9,8 @@ import {
   CalendarDays,
   BarChart3,
   Map as MapIcon,
+  MessageCircle,
+  UserMinus,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -24,6 +26,8 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/mensal", label: "Mensal", icon: CalendarDays },
   { href: "/comparativo", label: "Comparativo", icon: BarChart3 },
   { href: "/mapa", label: "Mapa", icon: MapIcon },
+  { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { href: "/churns", label: "Churns", icon: UserMinus },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 

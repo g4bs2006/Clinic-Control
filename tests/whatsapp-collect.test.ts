@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractGroups,
+  extractText,
   normalizeMessages,
 } from "../supabase/functions/collect-groups/normalize";
 
@@ -34,6 +35,7 @@ const messagesPayload = {
           key: { id: "A1", fromMe: false, remoteJid: "120363423863461716@g.us" },
           pushName: "34278771552312",
           messageType: "conversation",
+          message: { conversation: "Bom dia! Paciente confirmou?" },
           messageTimestamp: 1771533902,
         },
         {
@@ -64,10 +66,12 @@ describe("normalizeMessages", () => {
       participant: "34278771552312",
       push_name: "34278771552312",
       message_type: "conversation",
+      text: "Bom dia! Paciente confirmou?",
       instance: "CONTAC.IA",
       clinic_id: null,
     });
     expect(rows[0].event_ts).toBe(new Date(1771533902 * 1000).toISOString());
+    expect(rows[1].text).toBeNull(); // A2 não tem message → sem texto
   });
 
   it("prefere key.participant quando presente (strip do @lid)", () => {
@@ -77,6 +81,18 @@ describe("normalizeMessages", () => {
       ] } },
     };
     expect(normalizeMessages(p, "I", 0)[0].participant).toBe("5531999");
+  });
+
+  it("extractText cobre conversa, texto estendido, legendas e limite", () => {
+    expect(extractText({ conversation: "oi" })).toBe("oi");
+    expect(extractText({ extendedTextMessage: { text: "resposta citada" } })).toBe("resposta citada");
+    expect(extractText({ imageMessage: { caption: "segue o print" } })).toBe("segue o print");
+    expect(extractText({ videoMessage: { caption: "vídeo da recepção" } })).toBe("vídeo da recepção");
+    expect(extractText({ documentMessage: { caption: "contrato.pdf" } })).toBe("contrato.pdf");
+    expect(extractText({ audioMessage: {} })).toBeNull(); // mídia sem legenda
+    expect(extractText({ conversation: "   " })).toBeNull();
+    expect(extractText(undefined)).toBeNull();
+    expect(extractText({ conversation: "x".repeat(5000) })).toHaveLength(4000);
   });
 
   it("lookbackHours corta mensagens mais antigas que a janela", () => {

@@ -16,7 +16,27 @@ export interface MessageRow {
   participant: string | null;
   push_name: string | null;
   message_type: string | null;
+  text: string | null;
   event_ts: string;
+}
+
+const MAX_TEXT_LEN = 4000;
+
+// Texto da mensagem: conversa simples, texto estendido (reply/link) ou legenda
+// de mídia. Mídia sem legenda (áudio, figurinha…) fica null.
+export function extractText(message: unknown): string | null {
+  const m = (message ?? {}) as Record<string, any>;
+  const raw =
+    m.conversation ||
+    m.extendedTextMessage?.text ||
+    m.imageMessage?.caption ||
+    m.videoMessage?.caption ||
+    m.documentMessage?.caption ||
+    null;
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t) return null;
+  return t.length > MAX_TEXT_LEN ? t.slice(0, MAX_TEXT_LEN) : t;
 }
 
 // A Evolution devolve { success, data: [ ...grupos... ] } no fetchAllGroups.
@@ -93,6 +113,7 @@ export function normalizeMessages(
       participant: sender,
       push_name: r.pushName || null,
       message_type: r.messageType || null,
+      text: extractText(r.message),
       event_ts: new Date(tsMs).toISOString(),
     });
   }

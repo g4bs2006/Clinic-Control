@@ -94,13 +94,24 @@ Deno.serve(async (req) => {
   }
 
   // 3) grava mensagens (idempotente por group_jid+message_id)
+  // dedup: a Evolution repete records; ON CONFLICT DO UPDATE não aceita a mesma
+  // linha duas vezes no mesmo comando. Em duplicata, fica a versão com texto.
+  const byKey = new Map<string, MessageRow>();
+  for (const r of allRows) {
+    const k = `${r.group_jid}|${r.message_id}`;
+    const prev = byKey.get(k);
+    if (!prev || (!prev.text && r.text)) byKey.set(k, r);
+  }
+  const rows = [...byKey.values()];
+
   let inserted = 0;
   let insertErrors = 0;
-  for (let i = 0; i < allRows.length; i += 500) {
-    const chunk = allRows.slice(i, i + 500);
+  for (let i = 0; i < rows.length; i += 500) {
+    const chunk = rows.slice(i, i + 500);
+    // merge (não ignore): re-runs atualizam linhas antigas — ex.: preencher text
     const { error } = await supabase
       .from("whatsapp_group_messages")
-      .upsert(chunk, { onConflict: "group_jid,message_id", ignoreDuplicates: true });
+      .upsert(chunk, { onConflict: "group_jid,message_id", ignoreDuplicates: false });
     if (error) insertErrors++;
     else inserted += chunk.length;
   }
@@ -112,6 +123,7 @@ Deno.serve(async (req) => {
     groupsUsed: groups.length,
     fetchAllGroupsStatus: gStatus,
     messages_seen: allRows.length,
+    messages_unique: rows.length,
     inserted,
     fetchErrors,
     insertErrors,

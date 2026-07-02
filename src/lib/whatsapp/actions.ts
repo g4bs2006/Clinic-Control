@@ -65,6 +65,63 @@ export async function getClinicResponseStats(clinicId: string): Promise<Response
   return (data ?? []) as ResponseStatRow[];
 }
 
+// ── Resumos diários (IA) ─────────────────────────────────────────────────────
+
+export type DailySummaryRow = {
+  clinic_id: string;
+  summary_date: string; // YYYY-MM-DD
+  summary_md: string;
+  highlights: {
+    temas?: string[];
+    pendencias?: string[];
+    reclamacoes?: string[];
+    sentimento?: "positivo" | "neutro" | "negativo";
+    risco_churn?: boolean;
+  } | null;
+  model: string | null;
+  message_count: number;
+};
+
+/** Resumos de um dia (todas as clínicas). */
+export async function listDailySummaries(date: string): Promise<DailySummaryRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("whatsapp_daily_summaries")
+    .select("clinic_id, summary_date, summary_md, highlights, model, message_count")
+    .eq("summary_date", date)
+    .order("message_count", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DailySummaryRow[];
+}
+
+/** Datas (desc) que têm pelo menos um resumo — para o seletor da página. */
+export async function listSummaryDates(limit = 30): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("whatsapp_daily_summaries")
+    .select("summary_date")
+    .order("summary_date", { ascending: false })
+    .limit(500);
+  if (error) throw new Error(error.message);
+  const seen = new Set<string>();
+  for (const row of data ?? []) {
+    seen.add(row.summary_date as string);
+    if (seen.size >= limit) break;
+  }
+  return [...seen];
+}
+
+/** Timestamp da última mensagem coletada (proxy do status do cron). */
+export async function getLastCollectedAt(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("whatsapp_group_messages")
+    .select("created_at")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  return (data?.[0]?.created_at as string | undefined) ?? null;
+}
+
 // ── Grupos ───────────────────────────────────────────────────────────────────
 
 export async function listWhatsappGroups(): Promise<WhatsappGroupRow[]> {
