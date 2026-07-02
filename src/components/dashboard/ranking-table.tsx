@@ -281,9 +281,9 @@ export function RankingTable({ rows }: RankingTableProps) {
                           <span
                             className="rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 text-[0.6rem] font-semibold uppercase"
                             style={{ display: "inline-block" }}
-                            title={`Canais offline: ${offlineChannels.map((c) => c.name || c.type || "Canal").join(", ")}`}
+                            title={`Canais inativos: ${offlineChannels.map((c) => c.name || c.type || "Canal").join(", ")}`}
                           >
-                            Offline
+                            Inativo
                           </span>
                         )}
                       </>

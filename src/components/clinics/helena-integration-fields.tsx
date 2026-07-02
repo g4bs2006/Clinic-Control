@@ -188,7 +188,7 @@ export function HelenaIntegrationFields({
                             : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                         }`}
                       >
-                        {c.name} ({isOnline ? "Online" : "Offline"})
+                        {c.name || c.type || "Canal"} ({isOnline ? "Ativo" : "Inativo"})
                       </span>
                     );
                   })
