@@ -165,7 +165,7 @@ function CustomLegend({ data }: { data: StatusEntry[] }) {
           <span
             style={{
               fontSize: "0.7rem",
-              color: "oklch(0.62 0.17 255)",
+              color: "var(--primary)",
               fontWeight: 600,
               fontVariantNumeric: "tabular-nums",
             }}

@@ -6,6 +6,13 @@
 
 /* Light mode base (fallback) */
 :root {
+  /* Brand visual identity */
+  --brand: linear-gradient(135deg, #7C3AED 0%, #C026D3 50%, #DC2626 100%);
+  --brand-solid: #9333EA;
+  --brand-light: #faf5ff;
+  --brand-text: #7C3AED;
+  --brand-border: rgba(147, 51, 234, 0.3);
+
   --primary: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
@@ -40,8 +47,12 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* Dark mode — neutral near-black + blue accent (Vercel-leaning, forced via .dark on <html>) */
+/* Dark mode — neutral near-black + purple accent (forced via .dark on <html>) */
 .dark {
+  /* Brand visual identity dark mode overrides for better contrast/visibility */
+  --brand-light: rgba(147, 51, 234, 0.12);
+  --brand-border: rgba(147, 51, 234, 0.4);
+
   /* Surfaces: near-black neutral with a whisper of cool hue for depth */
   --background: oklch(0.145 0 0);          /* ~#0a0a0a */
   --foreground: oklch(0.96 0 0);           /* ~#ededed */
@@ -49,10 +60,10 @@
   --muted-foreground: oklch(0.64 0 0);     /* ~#8f8f94 */
   --border: oklch(0.27 0.006 286);         /* hairline, cool-neutral */
   --input: oklch(0.27 0.006 286);
-  /* Brand accent: blue */
-  --primary: oklch(0.62 0.17 255);
+  /* Brand accent: purple (formerly blue) */
+  --primary: oklch(0.56 0.27 296);         /* brand solid purple (#9333EA) */
   --primary-foreground: oklch(0.99 0 0);
-  --ring: oklch(0.62 0.17 255);
+  --ring: oklch(0.56 0.27 296);
   /* shadcn structural tokens */
   --card: oklch(0.178 0 0);                /* panel ~#141416 */
   --card-foreground: oklch(0.96 0 0);
@@ -63,8 +74,8 @@
   --accent: oklch(0.24 0.006 286);
   --accent-foreground: oklch(0.97 0 0);
   --destructive: oklch(0.62 0.21 25);
-  /* Chart sequence — distinct hues legible on near-black, led by the blue accent */
-  --chart-1: oklch(0.62 0.17 255);         /* blue */
+  /* Chart sequence — distinct hues legible on near-black, led by the brand purple accent */
+  --chart-1: oklch(0.56 0.27 296);         /* purple */
   --chart-2: oklch(0.76 0.13 200);         /* cyan */
   --chart-3: oklch(0.74 0.15 165);         /* emerald */
   --chart-4: oklch(0.80 0.16 75);          /* amber */
@@ -72,15 +83,20 @@
   /* Sidebar: a touch darker than the page for separation */
   --sidebar: oklch(0.125 0 0);
   --sidebar-foreground: oklch(0.96 0 0);
-  --sidebar-primary: oklch(0.62 0.17 255);
+  --sidebar-primary: oklch(0.56 0.27 296);
   --sidebar-primary-foreground: oklch(0.99 0 0);
   --sidebar-accent: oklch(0.22 0.006 286);
   --sidebar-accent-foreground: oklch(0.97 0 0);
   --sidebar-border: oklch(0.24 0.006 286);
-  --sidebar-ring: oklch(0.62 0.17 255);
+  --sidebar-ring: oklch(0.56 0.27 296);
 }
 
 @theme inline {
+  --color-brand-solid: var(--brand-solid);
+  --color-brand-light: var(--brand-light);
+  --color-brand-text: var(--brand-text);
+  --color-brand-border: var(--brand-border);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
@@ -121,6 +137,14 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@utility bg-brand {
+  background: var(--brand);
+}
+
+.brand-header {
+  @apply bg-brand bg-clip-text text-transparent w-fit;
 }
 
 body {

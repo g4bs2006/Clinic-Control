@@ -22,7 +22,7 @@ export default async function ClinicasPage() {
   return (
     <main className="p-8 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Clínicas</h1>
+        <h1 className="text-2xl font-bold brand-header">Clínicas</h1>
         <Button render={<Link href="/clinicas/nova">Nova clínica</Link>} />
       </div>
       <ClinicTable clinics={clinics} checkItems={checkItems} allChecks={allChecks} />

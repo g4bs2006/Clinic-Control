@@ -12,9 +12,9 @@ interface KpiCardProps {
   hint?: string
   /**
    * Accent color applied to the value text.
-   * "teal"   → --primary (oklch 0.72 0.12 183)
-   * "purple" → oklch(0.65 0.18 290)
-   * "rose"   → oklch(0.70 0.18 20)
+   * "teal"   → --primary (oklch 0.56 0.27 296, brand purple)
+   * "purple" → oklch(0.76 0.13 195, cyan)
+   * "rose"   → oklch(0.74 0.15 165, emerald)
    * Defaults to foreground (no accent).
    */
   accent?: AccentColor
@@ -23,7 +23,7 @@ interface KpiCardProps {
 }
 
 const accentStyle: Record<AccentColor, React.CSSProperties> = {
-  teal: { color: "var(--primary)" }, // blue brand accent
+  teal: { color: "var(--primary)" }, // purple brand accent
   purple: { color: "oklch(0.76 0.13 195)" }, // cyan
   rose: { color: "oklch(0.74 0.15 165)" }, // emerald
 }

@@ -13,8 +13,8 @@ export const CHART = {
   fg: "oklch(0.96 0 0)",
   /** Secondary / muted text */
   muted: "oklch(0.64 0 0)",
-  /** Blue brand accent */
-  accent: "oklch(0.62 0.17 255)",
+  /** Purple brand accent */
+  accent: "oklch(0.56 0.27 296)",
   /** Chart grid lines (very subtle) */
   grid: "oklch(0.27 0.006 286)",
   /** Table row divider */
@@ -32,7 +32,7 @@ export const CHART = {
  * Led by the blue accent, then spread across the hue wheel.
  */
 export const SERIES_PALETTE = [
-  "#3b82f6", // blue (accent)
+  "#9333EA", // brand purple (accent)
   "#34d399", // emerald
   "#fbbf24", // amber
   "#f472b6", // pink
@@ -40,7 +40,7 @@ export const SERIES_PALETTE = [
   "#a78bfa", // violet
   "#a3e635", // lime
   "#fb923c", // orange
-  "#60a5fa", // light blue
+  "#C026D3", // fuchsia
   "#f87171", // red
   "#2dd4bf", // teal
   "#c084fc", // purple

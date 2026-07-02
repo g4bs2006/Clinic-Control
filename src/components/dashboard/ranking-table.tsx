@@ -42,7 +42,7 @@ function SortIcon({ active, asc }: { active: boolean; asc: boolean }) {
         marginLeft: "0.25rem",
         fontSize: "0.65rem",
         opacity: active ? 1 : 0.3,
-        color: "oklch(0.62 0.17 255)",
+        color: "var(--primary)",
       }}
     >
       {active ? (asc ? "▲" : "▼") : "▼"}
@@ -164,7 +164,7 @@ export function RankingTable({ rows }: RankingTableProps) {
               transition: "border-color 0.15s ease",
             }}
             onFocus={(e) => {
-              e.currentTarget.style.borderColor = "oklch(0.62 0.17 255)";
+              e.currentTarget.style.borderColor = "var(--primary)";
             }}
             onBlur={(e) => {
               e.currentTarget.style.borderColor = "oklch(0.27 0.006 286)";
@@ -251,7 +251,7 @@ export function RankingTable({ rows }: RankingTableProps) {
                   <Link
                     href={`/clinicas/${row.clinicId}`}
                     style={{
-                      color: "oklch(0.62 0.17 255)",
+                      color: "var(--primary)",
                       textDecoration: "none",
                       fontWeight: 500,
                     }}

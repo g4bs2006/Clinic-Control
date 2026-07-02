@@ -23,7 +23,7 @@ export default async function ConfiguracoesPage() {
   return (
     <main className="p-6 space-y-6 max-w-screen-lg mx-auto">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Configurações</h1>
+        <h1 className="text-2xl font-bold brand-header">Configurações</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Faixas de status, definição do funil e checklist de clínicas
         </p>
@@ -46,14 +46,14 @@ export default async function ConfiguracoesPage() {
           {steps.map((step) => (
             <li
               key={step.id}
-              className="flex items-center gap-3 rounded-md border border-border/60 bg-[oklch(0.24_0.03_238)] px-3 py-2"
+              className="flex items-center gap-3 rounded-md border border-border/60 bg-accent/20 px-3 py-2"
             >
               <span className="w-6 shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
                 {String(step.position).padStart(2, "0")}
               </span>
               <span className="flex-1 text-sm text-foreground">{step.name}</span>
               {step.counts_as_scheduling && (
-                <span className="rounded-full bg-[oklch(0.62_0.17_255)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[oklch(0.70_0.16_255)]">
+                <span className="rounded-full bg-brand-solid/15 px-2 py-0.5 text-[0.65rem] font-semibold text-brand-text">
                   Agendamento
                 </span>
               )}

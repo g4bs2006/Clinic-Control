@@ -28,7 +28,7 @@ export default async function EditarClinicaPage({ params }: EditarClinicaPagePro
 
   return (
     <main className="p-8 max-w-xl space-y-6">
-      <h1 className="text-2xl font-semibold">Editar clínica</h1>
+      <h1 className="text-2xl font-bold brand-header">Editar clínica</h1>
       <ClinicForm defaultValues={clinic} onSubmit={handleUpdate} />
     </main>
   );

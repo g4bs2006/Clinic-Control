@@ -41,7 +41,7 @@ export default async function ChurnsPage() {
     <main className="p-6 space-y-6 max-w-screen-xl mx-auto">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Churns</h1>
+        <h1 className="text-2xl font-bold brand-header">Churns</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Desligamentos da carteira · registro, motivos e impacto
         </p>

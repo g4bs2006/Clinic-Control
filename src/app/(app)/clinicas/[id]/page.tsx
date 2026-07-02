@@ -26,7 +26,7 @@ import { ClinicFunnelSetup } from "@/components/clinics/clinic-funnel-setup"
 
 export const dynamic = "force-dynamic"
 
-const CLINIC_COLOR = "#60a5fa" // blue accent
+const CLINIC_COLOR = "#7C3AED" // brand purple accent
 
 function fmtPct(rate: number): string {
   return (
@@ -166,7 +166,7 @@ export default async function ClinicDetailPage({
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">{clinic.name}</h1>
+            <h1 className="text-2xl font-bold brand-header">{clinic.name}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {cityUf || "Sem localização"}
             </p>

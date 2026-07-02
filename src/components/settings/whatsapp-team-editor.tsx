@@ -74,7 +74,7 @@ export function WhatsappTeamEditor({ initialMembers }: WhatsappTeamEditorProps) 
               className={
                 m.kind === "bot"
                   ? "rounded-full bg-[oklch(0.65_0.18_290)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[oklch(0.72_0.15_290)]"
-                  : "rounded-full bg-[oklch(0.62_0.17_255)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[oklch(0.70_0.16_255)]"
+                  : "rounded-full bg-brand-solid/15 px-2 py-0.5 text-[0.65rem] font-semibold text-brand-text"
               }
             >
               {m.kind === "bot" ? "Bot" : "Equipe"}

@@ -117,7 +117,7 @@ export default async function WhatsappPage({
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">WhatsApp</h1>
+          <h1 className="text-2xl font-bold brand-header">WhatsApp</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {monthLabel(month)} · tempo de resposta e resumos diários dos grupos
           </p>
@@ -211,7 +211,7 @@ export default async function WhatsappPage({
                   href={`/whatsapp?month=${month}&date=${d}`}
                   className={`rounded-full border px-2.5 py-1 text-[0.68rem] font-medium transition-colors ${
                     d === date
-                      ? "border-primary/60 bg-primary/15 text-primary"
+                      ? "bg-brand text-white border-transparent shadow"
                       : "border-border text-muted-foreground hover:text-foreground"
                   }`}
                 >

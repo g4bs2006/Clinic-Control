@@ -26,7 +26,7 @@ const modeLabels: Record<Clinic["mode"], string> = {
 }
 
 const modeColors: Record<Clinic["mode"], string> = {
-  auto: "bg-blue-500/20 text-blue-300 border border-blue-500/30",
+  auto: "bg-brand-solid/15 text-brand-text border border-brand-solid/25",
   manual: "bg-zinc-500/20 text-zinc-300 border border-zinc-500/30",
 }
 
@@ -136,7 +136,7 @@ export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer",
                 filter === "all"
-                  ? "bg-primary text-primary-foreground shadow"
+                  ? "bg-brand text-white shadow"
                   : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
               )}
             >

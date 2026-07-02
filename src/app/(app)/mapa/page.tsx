@@ -108,7 +108,7 @@ export default async function MapaPage({
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Mapa da carteira</h1>
+          <h1 className="text-2xl font-bold brand-header">Mapa da carteira</h1>
           <p className="text-sm text-muted-foreground mt-0.5 capitalize">
             {monthLabel(month)}
             <span className="lowercase">

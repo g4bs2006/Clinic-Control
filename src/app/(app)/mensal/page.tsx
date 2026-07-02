@@ -146,7 +146,7 @@ export default async function MensalPage({
   return (
     <main className="p-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold capitalize">{monthLabel}</h1>
+        <h1 className="text-2xl font-bold capitalize brand-header">{monthLabel}</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Grade mensal — {clinics.length} clínica{clinics.length !== 1 ? "s" : ""}
         </p>

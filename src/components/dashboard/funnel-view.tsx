@@ -24,10 +24,10 @@ export function FunnelView({ steps }: FunnelViewProps) {
 
   // Monotonic levels of the funnel with corresponding icons
   const levels = [
-    { name: "Leads", count: leads, prev: null as number | null, icon: Users, color: "from-blue-500 to-cyan-400" },
-    { name: "Agendados", count: agendados, prev: leads, icon: Calendar, color: "from-indigo-500 to-blue-500" },
-    { name: "Compareceram", count: compareceram, prev: agendados, icon: Eye, color: "from-purple-500 to-indigo-500" },
-    { name: "Fecharam", count: fecharam, prev: compareceram, icon: CheckCircle2, color: "from-emerald-500 to-teal-400" },
+    { name: "Leads", count: leads, prev: null as number | null, icon: Users, color: "from-violet-600 to-fuchsia-500" },
+    { name: "Agendados", count: agendados, prev: leads, icon: Calendar, color: "from-fuchsia-500 to-pink-500" },
+    { name: "Compareceram", count: compareceram, prev: agendados, icon: Eye, color: "from-pink-500 to-rose-500" },
+    { name: "Fecharam", count: fecharam, prev: compareceram, icon: CheckCircle2, color: "from-rose-500 to-red-500" },
   ]
 
   const top = Math.max(1, leads)
@@ -47,7 +47,7 @@ export function FunnelView({ steps }: FunnelViewProps) {
       <div className="relative flex flex-col gap-4 pl-4 sm:pl-6">
         
         {/* Continuous Connecting line in the background */}
-        <div className="absolute bottom-6 left-9 top-6 w-0.5 bg-gradient-to-b from-blue-500/40 via-indigo-500/25 to-emerald-500/10" />
+        <div className="absolute bottom-6 left-9 top-6 w-0.5 bg-gradient-to-b from-violet-500/40 via-pink-500/25 to-red-500/10" />
 
         {levels.map((lvl) => {
           const Icon = lvl.icon
@@ -80,7 +80,7 @@ export function FunnelView({ steps }: FunnelViewProps) {
                   {/* Conversion pill */}
                   <div className="text-right">
                     {convRate === null ? (
-                      <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[0.65rem] font-semibold text-blue-400 border border-blue-500/15">
+                      <span className="rounded-full bg-brand-solid/10 px-2.5 py-0.5 text-[0.65rem] font-semibold text-brand-text border border-brand-solid/15">
                         Base
                       </span>
                     ) : (

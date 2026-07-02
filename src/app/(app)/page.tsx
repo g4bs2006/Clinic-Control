@@ -206,7 +206,7 @@ export default async function HomePage({
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold capitalize text-foreground">
+          <h1 className="text-2xl font-bold capitalize brand-header">
             Carteira
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">

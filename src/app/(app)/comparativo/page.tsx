@@ -91,7 +91,7 @@ export default async function ComparativoPage({
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Comparativo</h1>
+          <h1 className="text-2xl font-bold brand-header">Comparativo</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Taxa de conversão mês a mês · {withData.length} clínica
             {withData.length !== 1 ? "s" : ""} com dados
@@ -189,7 +189,7 @@ export default async function ComparativoPage({
                       <Link
                         href={`/clinicas/${row.clinicId}`}
                         style={{
-                          color: "oklch(0.62 0.17 255)",
+                          color: "var(--primary)",
                           textDecoration: "none",
                           fontWeight: 500,
                         }}
