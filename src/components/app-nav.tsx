@@ -163,7 +163,7 @@ export function AppNav() {
                 )}
               >
                 {isActive && (
-                  <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+                  <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-brand" />
                 )}
                 <Icon
                   className={cn(

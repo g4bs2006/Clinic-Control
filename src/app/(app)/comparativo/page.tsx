@@ -188,10 +188,9 @@ export default async function ComparativoPage({
                       />
                       <Link
                         href={`/clinicas/${row.clinicId}`}
+                        className="text-brand-gradient hover:opacity-85 font-medium transition-opacity"
                         style={{
-                          color: "var(--primary)",
                           textDecoration: "none",
-                          fontWeight: 500,
                         }}
                       >
                         {row.name}

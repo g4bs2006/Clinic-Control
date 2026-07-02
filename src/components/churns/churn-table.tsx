@@ -66,7 +66,7 @@ export function ChurnTable({ churns }: ChurnTableProps) {
           {churns.map((c) => (
             <tr key={c.id} className="border-b border-border/30 hover:bg-accent/40 align-top">
               <td className="py-2.5 pr-3">
-                <Link href={`/clinicas/${c.clinic_id}`} className="text-primary hover:underline">
+                <Link href={`/clinicas/${c.clinic_id}`} className="text-brand-gradient hover:opacity-85 font-medium transition-opacity">
                   {c.clinic_name}
                 </Link>
               </td>

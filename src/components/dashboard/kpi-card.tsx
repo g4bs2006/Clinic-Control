@@ -23,7 +23,12 @@ interface KpiCardProps {
 }
 
 const accentStyle: Record<AccentColor, React.CSSProperties> = {
-  teal: { color: "var(--primary)" }, // purple brand accent
+  teal: {
+    background: "var(--brand)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    display: "inline-block",
+  }, // brand gradient accent
   purple: { color: "oklch(0.76 0.13 195)" }, // cyan
   rose: { color: "oklch(0.74 0.15 165)" }, // emerald
 }

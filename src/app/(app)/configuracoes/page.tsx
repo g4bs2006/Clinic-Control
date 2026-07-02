@@ -53,7 +53,7 @@ export default async function ConfiguracoesPage() {
               </span>
               <span className="flex-1 text-sm text-foreground">{step.name}</span>
               {step.counts_as_scheduling && (
-                <span className="rounded-full bg-brand-solid/15 px-2 py-0.5 text-[0.65rem] font-semibold text-brand-text">
+                <span className="rounded-full bg-brand px-2 py-0.5 text-[0.65rem] font-semibold text-white shadow-sm">
                   Agendamento
                 </span>
               )}

@@ -26,7 +26,7 @@ const modeLabels: Record<Clinic["mode"], string> = {
 }
 
 const modeColors: Record<Clinic["mode"], string> = {
-  auto: "bg-brand-solid/15 text-brand-text border border-brand-solid/25",
+  auto: "bg-brand text-white border-transparent shadow-sm",
   manual: "bg-zinc-500/20 text-zinc-300 border border-zinc-500/30",
 }
 
@@ -214,7 +214,7 @@ export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps
                   <TableCell className="font-medium">
                     <Link
                       href={`/clinicas/${clinic.id}`}
-                      className="text-primary hover:underline"
+                      className="text-brand-gradient hover:opacity-85 font-medium transition-opacity"
                     >
                       {clinic.name}
                     </Link>

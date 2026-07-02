@@ -250,18 +250,9 @@ export function RankingTable({ rows }: RankingTableProps) {
                 <td style={tdStyle}>
                   <Link
                     href={`/clinicas/${row.clinicId}`}
+                    className="text-brand-gradient hover:opacity-85 font-medium transition-opacity"
                     style={{
-                      color: "var(--primary)",
                       textDecoration: "none",
-                      fontWeight: 500,
-                    }}
-                    onMouseEnter={(e) => {
-                      ;(e.currentTarget as HTMLAnchorElement).style.textDecoration =
-                        "underline"
-                    }}
-                    onMouseLeave={(e) => {
-                      ;(e.currentTarget as HTMLAnchorElement).style.textDecoration =
-                        "none"
                     }}
                   >
                     {row.name}

@@ -172,7 +172,7 @@ export default async function WhatsappPage({
                   {rows.map((r) => (
                     <tr key={r.clinic_id} className="border-b border-border/30 hover:bg-accent/40">
                       <td className="py-2 pr-3">
-                        <Link href={`/clinicas/${r.clinic_id}`} className="text-primary hover:underline">
+                        <Link href={`/clinicas/${r.clinic_id}`} className="text-brand-gradient hover:opacity-85 font-medium transition-opacity">
                           {r.name}
                         </Link>
                       </td>
@@ -238,7 +238,7 @@ export default async function WhatsappPage({
                     <div className="flex items-center justify-between gap-2">
                       <Link
                         href={`/clinicas/${s.clinic_id}`}
-                        className="text-sm font-semibold text-foreground hover:underline truncate"
+                        className="text-sm font-bold text-brand-gradient hover:opacity-85 transition-opacity truncate"
                       >
                         {nameById.get(s.clinic_id) ?? "Clínica"}
                       </Link>
