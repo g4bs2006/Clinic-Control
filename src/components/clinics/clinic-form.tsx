@@ -25,7 +25,8 @@ type Mode = "manual" | "auto";
 interface ClinicFormProps {
   defaultValues?: Clinic;
   onSubmit: (
-    input: ClinicInput
+    input: ClinicInput,
+    opts?: { provisionHelena?: boolean }
   ) => Promise<{ ok: true; id?: string } | { ok: true } | { ok: false; error: string }>;
 }
 
@@ -39,7 +40,15 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
     defaultValues?.contract_status ?? "active"
   );
   const [system, setSystem] = useState<string>(defaultValues?.system ?? "");
+  const [ownerName, setOwnerName] = useState(defaultValues?.owner_name ?? "");
+  const [ownerEmail, setOwnerEmail] = useState(defaultValues?.owner_email ?? "");
+  const [ownerPhone, setOwnerPhone] = useState(defaultValues?.owner_phone ?? "");
+  const [legalName, setLegalName] = useState(defaultValues?.legal_name ?? "");
+  const [documentId, setDocumentId] = useState(defaultValues?.document_id ?? "");
+  const [provisionHelena, setProvisionHelena] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const isCreate = !defaultValues;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,10 +61,15 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
       mode,
       contract_status: contractStatus,
       system: system || undefined,
+      owner_name: ownerName || undefined,
+      owner_email: ownerEmail || undefined,
+      owner_phone: ownerPhone || undefined,
+      legal_name: legalName || undefined,
+      document_id: documentId ? documentId.replace(/\D/g, "") : undefined,
     };
 
     startTransition(async () => {
-      const result = await onSubmit(input);
+      const result = await onSubmit(input, { provisionHelena: isCreate && provisionHelena });
       if (!result.ok) {
         toast.error(result.error);
       }
@@ -150,6 +164,75 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
             </SelectContent>
           </Select>
         </div>
+
+        {/* ── Dados do dono / documento (usados no provisionamento Helena) ── */}
+        <div className="rounded-lg border border-border/60 p-4 space-y-3">
+          <p className="text-sm font-medium">Dono e documento</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="owner_name">Nome do dono</Label>
+              <Input
+                id="owner_name"
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                placeholder="Dr(a). Nome"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="owner_email">E-mail do dono</Label>
+              <Input
+                id="owner_email"
+                type="email"
+                value={ownerEmail}
+                onChange={(e) => setOwnerEmail(e.target.value)}
+                placeholder="dono@clinica.com.br"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="owner_phone">Telefone do dono</Label>
+              <Input
+                id="owner_phone"
+                value={ownerPhone}
+                onChange={(e) => setOwnerPhone(e.target.value)}
+                placeholder="(00) 00000-0000"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="document_id">CNPJ / CPF</Label>
+              <Input
+                id="document_id"
+                value={documentId}
+                onChange={(e) => setDocumentId(e.target.value)}
+                placeholder="00.000.000/0000-00"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="legal_name">Razão social</Label>
+            <Input
+              id="legal_name"
+              value={legalName}
+              onChange={(e) => setLegalName(e.target.value)}
+              placeholder="Razão social (opcional)"
+            />
+          </div>
+        </div>
+
+        {isCreate && (
+          <div className="flex items-center gap-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4">
+            <Switch
+              id="provision_helena"
+              checked={provisionHelena}
+              onCheckedChange={(checked) => setProvisionHelena(checked)}
+            />
+            <Label htmlFor="provision_helena" className="cursor-pointer">
+              <span className="font-medium">Criar automaticamente na Helena</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                conta, token, usuário do dono (Admin), equipes Atendimento Humano + CRC e etiquetas padrão
+              </span>
+            </Label>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <Switch

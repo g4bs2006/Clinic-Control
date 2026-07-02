@@ -24,6 +24,21 @@ async function get(token: string, path: string, query: Record<string, string>, o
   return res.json();
 }
 
+async function post(token: string, path: string, body: unknown, opts?: Opts) {
+  const fetchImpl = opts?.fetchImpl ?? fetch;
+  const base = opts?.baseUrl ?? DEFAULT_BASE;
+  const res = await fetchImpl(`${base}${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Helena API ${res.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
+  }
+  return res.json().catch(() => ({}));
+}
+
 export async function listPanels(token: string, opts?: Opts): Promise<HelenaPanel[]> {
   const data = await get(token, "/crm/v1/panel", { PageSize: "100" }, opts);
   return (data.items ?? []).map((p: HelenaPanel) => ({ id: p.id, title: p.title, key: p.key, companyId: p.companyId }));
@@ -123,6 +138,36 @@ export async function listUsers(token: string, opts?: Opts): Promise<HelenaAgent
     email: a.email ?? null,
     active: a.active ?? true,
   }));
+}
+
+// ── Provisionamento (escrita com o token da própria clínica) ────────────────
+
+/** Cria um usuário/agente na conta. profile: Admin | Agent | RestrictedAgent */
+export async function createAgent(
+  token: string,
+  input: { name: string; email?: string | null; phoneNumber?: string | null; profile: "Admin" | "Agent" | "RestrictedAgent" },
+  opts?: Opts,
+) {
+  return post(token, "/core/v1/agent", input, opts);
+}
+
+/** Cria uma equipe (department) na conta. */
+export async function createDepartment(
+  token: string,
+  input: { name: string; isDefault?: boolean },
+  opts?: Opts,
+) {
+  return post(token, "/core/v1/department", input, opts);
+}
+
+/** Cria um contato — usado como semente para materializar as tags padrão
+ *  (a API não tem endpoint direto de criação de etiqueta; tagNames cria on-use). */
+export async function createContact(
+  token: string,
+  input: { name: string; phoneNumber?: string | null; tagNames?: string[]; annotation?: string | null },
+  opts?: Opts,
+) {
+  return post(token, "/core/v1/contact", input, opts);
 }
 
 export async function listChannels(token: string, opts?: Opts): Promise<HelenaChannel[]> {

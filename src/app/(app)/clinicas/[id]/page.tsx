@@ -12,6 +12,8 @@ import { listClinicFiles } from "@/lib/clinics/files-actions"
 import { listClinicChecks } from "@/lib/clinics/check-items-actions"
 import { listFormCredentials } from "@/lib/clinics/form-credentials-actions"
 import { getClinicResponseStats, listClinicSummaries } from "@/lib/whatsapp/actions"
+import { listProvisioning } from "@/lib/clinics/provision-actions"
+import { ClinicProvisioning } from "@/components/clinics/clinic-provisioning"
 import { fmtDuration } from "@/lib/whatsapp/format"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -100,7 +102,7 @@ export default async function ClinicDetailPage({
   const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
   const nextClinic = currentIndex < allClinics.length - 1 ? allClinics[currentIndex + 1] : null
 
-  const [agents, files, clinicChecks, formCredentials, responseStats, summaries] =
+  const [agents, files, clinicChecks, formCredentials, responseStats, summaries, provisioning] =
     await Promise.all([
       listClinicAgents(id),
       listClinicFiles(id),
@@ -108,6 +110,7 @@ export default async function ClinicDetailPage({
       listFormCredentials(id),
       getClinicResponseStats(id),
       listClinicSummaries(id),
+      listProvisioning(id),
     ])
 
   const liveFunnel = funnelRes && funnelRes.ok ? funnelRes.funnel : null
@@ -218,6 +221,16 @@ export default async function ClinicDetailPage({
           </div>
         </div>
       </div>
+
+      {/* ── Provisionamento Helena ─────────────────────────────── */}
+      {provisioning.length > 0 && (
+        <Panel
+          title="Provisionamento Helena"
+          subtitle="conta, token, usuário, equipes e painel criados automaticamente"
+        >
+          <ClinicProvisioning clinicId={id} rows={provisioning} />
+        </Panel>
+      )}
 
       {/* ── Sistema utilizado ──────────────────────────────────── */}
       <Panel title="Sistema" subtitle="prontuário / agenda utilizado pela clínica">

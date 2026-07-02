@@ -8,6 +8,12 @@ export const clinicInputSchema = z.object({
   mode: z.enum(["auto", "manual"]).default("manual"),
   contract_status: z.enum(["active", "suspended", "archived"]).default("active"),
   system: z.string().optional(),
+  // Dados do dono/documento — usados no provisionamento automático da Helena.
+  owner_name: z.string().optional(),
+  owner_email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+  owner_phone: z.string().optional(),
+  legal_name: z.string().optional(),
+  document_id: z.string().optional(),
 });
 
 export type ClinicInput = z.infer<typeof clinicInputSchema>;
