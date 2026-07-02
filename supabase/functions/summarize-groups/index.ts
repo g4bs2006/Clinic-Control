@@ -69,7 +69,9 @@ Deno.serve(async (req) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("date") ?? "")
     ? url.searchParams.get("date")!
     : todaySaoPaulo();
-  const force = url.searchParams.get("force") === "1";
+  // O dia CORRENTE sempre re-gera (upsert) — a conversa ainda está acontecendo;
+  // dias passados só com ?force=1.
+  const force = url.searchParams.get("force") === "1" || date === todaySaoPaulo();
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
     db: { schema: SCHEMA },
