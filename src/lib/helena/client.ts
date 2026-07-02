@@ -34,7 +34,7 @@ async function post(token: string, path: string, body: unknown, opts?: Opts) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Helena API ${res.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
+    throw new Error(`Helena API ${res.status}${text ? `: ${text.slice(0, 600)}` : ""}`);
   }
   return res.json().catch(() => ({}));
 }

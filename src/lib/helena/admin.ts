@@ -24,7 +24,7 @@ async function post(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Helena API ${res.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
+    throw new Error(`Helena API ${res.status}${text ? `: ${text.slice(0, 600)}` : ""}`);
   }
   return res.json();
 }
@@ -44,19 +44,27 @@ export async function createCompany(
   input: CreateCompanyInput,
   opts?: Opts,
 ): Promise<{ id: string }> {
-  const documentId = input.documentId?.replace(/\D/g, "") || null;
-  const body = {
-    name: input.name,
-    legalName: input.legalName || null,
-    documentType: documentId ? (documentId.length === 14 ? "CNPJ" : "CPF") : undefined,
-    documentId,
-    owner: input.owner,
-    status: "ONBOARDING",
-    address:
-      input.city || input.state
-        ? { country: "Brasil", state: input.state ?? null, city: input.city ?? null }
-        : undefined,
-  };
+  // Monta o corpo só com o que tem valor — nulls explícitos derrubam a API (500).
+  const documentId = input.documentId?.replace(/\D/g, "") || undefined;
+  const owner: Record<string, string> = {};
+  if (input.owner?.name) owner.name = input.owner.name;
+  if (input.owner?.email) owner.email = input.owner.email;
+  if (input.owner?.phoneNumber) owner.phoneNumber = input.owner.phoneNumber;
+
+  const address: Record<string, string> = {};
+  if (input.city) address.city = input.city;
+  if (input.state) address.state = input.state;
+  if (input.city || input.state) address.country = "Brasil";
+
+  const body: Record<string, unknown> = { name: input.name, status: "ONBOARDING" };
+  if (input.legalName) body.legalName = input.legalName;
+  if (documentId) {
+    body.documentId = documentId;
+    body.documentType = documentId.length === 14 ? "CNPJ" : "CPF";
+  }
+  if (Object.keys(owner).length > 0) body.owner = owner;
+  if (Object.keys(address).length > 0) body.address = address;
+
   const data = await post(masterToken, "/core/v1/company", body, opts);
   const id = (data.id ?? (data as { company?: { id?: string } }).company?.id) as string | undefined;
   if (!id) throw new Error("Resposta da Helena sem id da conta criada");
