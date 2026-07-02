@@ -328,7 +328,7 @@ export default async function WhatsappPage({
                         <span className="text-xs text-muted-foreground">Nenhum canal ativo</span>
                       ) : (
                         channels.map((c: any) => {
-                          const isOnline = c.status?.toLowerCase() === "connected" || c.status?.toLowerCase() === "active" || c.status?.toLowerCase() === "online"
+                          const isOnline = ["connected", "active", "online", "stable", "paired", "authenticated"].includes(c.status?.toLowerCase())
                           return (
                             <span 
                               key={c.id} 

@@ -227,10 +227,8 @@ export function RankingTable({ rows }: RankingTableProps) {
 
             const offlineChannels = row.channels?.filter(
               (c) =>
-                !(
-                  c.status?.toLowerCase() === "connected" ||
-                  c.status?.toLowerCase() === "active" ||
-                  c.status?.toLowerCase() === "online"
+                !["connected", "active", "online", "stable", "paired", "authenticated"].includes(
+                  c.status?.toLowerCase()
                 )
             ) ?? []
             const isSuspended =
