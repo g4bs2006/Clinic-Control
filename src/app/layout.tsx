@@ -9,6 +9,18 @@ const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 export const metadata: Metadata = {
   title: "Gestão de Clínicas — Contact.IA",
   description: "Carteira de clínicas, funil e performance",
+  icons: {
+    icon: [
+      {
+        url: "/icon.png",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/icon-dark.png",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
