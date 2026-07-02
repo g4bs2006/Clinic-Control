@@ -138,6 +138,40 @@ export async function getLastCollectedAt(): Promise<string | null> {
   return (data?.[0]?.created_at as string | undefined) ?? null;
 }
 
+// ── Health check da conexão Evolution ────────────────────────────────────────
+
+export type EvolutionHealth = {
+  checked_at: string;
+  state: string | null;
+  ok: boolean;
+  /** desde quando está fora do ar (primeiro check ruim da sequência atual) */
+  down_since: string | null;
+};
+
+/** Último health check + início da indisponibilidade atual (se houver). */
+export async function getEvolutionHealth(): Promise<EvolutionHealth | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("evolution_health_checks")
+    .select("checked_at, state, ok")
+    .order("checked_at", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  const checks = (data ?? []) as { checked_at: string; state: string | null; ok: boolean }[];
+  if (checks.length === 0) return null;
+
+  const latest = checks[0];
+  let downSince: string | null = null;
+  if (!latest.ok) {
+    downSince = latest.checked_at;
+    for (const c of checks.slice(1)) {
+      if (c.ok) break;
+      downSince = c.checked_at;
+    }
+  }
+  return { ...latest, down_since: downSince };
+}
+
 // ── Grupos ───────────────────────────────────────────────────────────────────
 
 export async function listWhatsappGroups(): Promise<WhatsappGroupRow[]> {

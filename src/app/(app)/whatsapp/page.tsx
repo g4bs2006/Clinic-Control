@@ -7,6 +7,7 @@ import {
   listSummaryDates,
   listWhatsappGroups,
   getLastCollectedAt,
+  getEvolutionHealth,
 } from "@/lib/whatsapp/actions"
 import { fmtDuration } from "@/lib/whatsapp/format"
 import { Panel } from "@/components/dashboard/panel"
@@ -65,12 +66,13 @@ export default async function WhatsappPage({
   const rawMonth = params.month ?? ""
   const month = /^\d{4}-\d{2}$/.test(rawMonth) ? rawMonth : currentMonth
 
-  const [clinics, stats, groups, summaryDates, lastCollectedAt] = await Promise.all([
+  const [clinics, stats, groups, summaryDates, lastCollectedAt, health] = await Promise.all([
     listClinics(),
     listResponseStats(month),
     listWhatsappGroups(),
     listSummaryDates(),
     getLastCollectedAt(),
+    getEvolutionHealth(),
   ])
 
   // Fetch Helena account overview, users and teams for automatic clinics
@@ -161,6 +163,35 @@ export default async function WhatsappPage({
         />
       </div>
 
+      {/* ── Alerta de conexão da instância ─────────────────────── */}
+      {health && !health.ok && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3">
+          <span className="size-2 shrink-0 rounded-full bg-red-400 animate-pulse" />
+          <div className="text-sm">
+            <span className="font-semibold text-red-400">
+              Instância do WhatsApp fora do ar
+            </span>{" "}
+            <span className="text-muted-foreground">
+              (estado: {health.state ?? "desconhecido"}
+              {health.down_since && (
+                <>
+                  {" "}desde{" "}
+                  {new Date(health.down_since).toLocaleString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: "America/Sao_Paulo",
+                  })}
+                </>
+              )}
+              ). Reconecte no painel da Evolution — mensagens enviadas durante a
+              queda podem ser perdidas.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* ── KPI strip ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <KpiCard
@@ -174,7 +205,9 @@ export default async function WhatsappPage({
         <KpiCard
           label="Última coleta"
           value={lastCollectedLabel}
-          hint={`${mappedGroups}/${groups.length} grupos mapeados · diária às 18h`}
+          hint={`${mappedGroups}/${groups.length} grupos mapeados · coleta 4x/dia · conexão ${
+            health ? (health.ok ? "ativa" : "CAÍDA") : "—"
+          }`}
         />
       </div>
 
