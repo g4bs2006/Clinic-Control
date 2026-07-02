@@ -18,7 +18,9 @@ import {
 
 const SCHEMA = "clinic_control";
 const PAGE_SIZE = 1000;
-const MAX_PAGES = 10; // teto de segurança por grupo (10k msgs)
+// Teto de segurança por grupo (40k msgs). A paginação é ASC (antigas primeiro):
+// as mensagens NOVAS estão nas ÚLTIMAS páginas — um teto baixo corta o presente.
+const MAX_PAGES = 40;
 const CONCURRENCY = 5;
 
 // .trim() defende contra espaços acidentais ao colar os secrets.
