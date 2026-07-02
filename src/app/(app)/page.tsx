@@ -276,7 +276,7 @@ export default async function HomePage({
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                    className="h-full rounded-full bg-brand transition-all duration-300"
                     style={{ width: `${overallOnboardingProgress}%` }}
                   />
                 </div>
@@ -293,7 +293,7 @@ export default async function HomePage({
                   <ul className="space-y-1.5">
                     {topPendingClinics.map((p) => (
                       <li key={p.id} className="flex items-center justify-between text-xs">
-                        <Link href={`/clinicas/${p.id}`} className="text-primary hover:underline truncate max-w-[170px]">
+                        <Link href={`/clinicas/${p.id}`} className="text-brand-gradient hover:opacity-85 font-medium transition-opacity truncate max-w-[170px]">
                           {p.name}
                         </Link>
                         <span className="text-[0.68rem] text-muted-foreground tabular-nums shrink-0">
@@ -374,7 +374,7 @@ export default async function HomePage({
                       <li key={r.clinicId} className="flex items-center justify-between text-xs">
                         <Link
                           href={`/clinicas/${r.clinicId}`}
-                          className="text-primary hover:underline truncate max-w-[170px]"
+                          className="text-brand-gradient hover:opacity-85 font-medium transition-opacity truncate max-w-[170px]"
                         >
                           {r.name}
                         </Link>
@@ -425,14 +425,14 @@ export default async function HomePage({
                             </span>
                           )}
                         </span>
-                        <span className="font-semibold tabular-nums text-primary">
+                        <span className="font-semibold tabular-nums text-brand-gradient">
                           {fmtRate(r.avgRate)}
                         </span>
                       </div>
                       <div className="mt-1 flex items-center justify-between gap-2">
                         <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
                           <div
-                            className="h-full rounded-full bg-primary/70"
+                            className="h-full rounded-full bg-brand"
                             style={{ width: `${(r.avgRate / maxRegionRate) * 100}%` }}
                           />
                         </div>

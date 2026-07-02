@@ -215,14 +215,14 @@ export default async function MapaPage({
                             </span>
                           )}
                         </span>
-                        <span className="font-semibold tabular-nums text-primary">
+                        <span className="font-semibold tabular-nums text-brand-gradient">
                           {fmtPct(r.avgRate)}
                         </span>
                       </div>
                       <div className="mt-1 flex items-center justify-between gap-2">
                         <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
                           <div
-                            className="h-full rounded-full bg-primary/70"
+                            className="h-full rounded-full bg-brand"
                             style={{ width: `${(r.avgRate / maxRegionRate) * 100}%` }}
                           />
                         </div>
@@ -260,7 +260,7 @@ export default async function MapaPage({
                   <li key={r.clinicId} className="flex items-center justify-between gap-2">
                     <Link
                       href={`/clinicas/${r.clinicId}`}
-                      className="text-foreground/90 hover:text-primary"
+                      className="text-brand-gradient hover:opacity-85 font-medium transition-opacity"
                     >
                       {r.name}
                     </Link>
