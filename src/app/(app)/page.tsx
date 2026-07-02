@@ -8,6 +8,8 @@ import { RankingTable } from "@/components/dashboard/ranking-table"
 import { PortfolioFilters } from "@/components/dashboard/portfolio-filters"
 import { listCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
+import { listResponseStats } from "@/lib/whatsapp/actions"
+import { fmtDuration } from "@/lib/whatsapp/format"
 import { ExportButton } from "@/components/dashboard/export-button"
 import { CheckCircle2 } from "lucide-react"
 
@@ -52,12 +54,13 @@ export default async function HomePage({
   // Region filter (raw string; will be validated against distinct regions from rows)
   const rawRegion = params.region ?? ""
 
-  // Fetch portfolio data, check items, all checks, and raw clinics
-  const [portfolioData, checkItems, allChecksMap, rawClinics] = await Promise.all([
+  // Fetch portfolio data, check items, all checks, raw clinics and WhatsApp stats
+  const [portfolioData, checkItems, allChecksMap, rawClinics, responseStats] = await Promise.all([
     getPortfolioForMonth(month),
     listCheckItems(),
     listAllClinicChecks(),
     listClinics(),
+    listResponseStats(month),
   ])
   const { rows: allRows, summary } = portfolioData
 
@@ -151,6 +154,24 @@ export default async function HomePage({
     })
     .sort((a, b) => a.rate - b.rate)
     .slice(0, 4)
+
+  // ── WhatsApp response time (per-clinic medians for the month) ──
+  const nameByClinicId = new Map(allRows.map((r) => [r.clinicId, r.name]))
+  const responseRows = responseStats
+    .filter((s) => s.median_seconds != null && nameByClinicId.has(s.clinic_id))
+    .map((s) => ({
+      clinicId: s.clinic_id,
+      name: nameByClinicId.get(s.clinic_id)!,
+      medianSeconds: s.median_seconds!,
+      episodes: s.episodes,
+      unanswered: s.unanswered,
+    }))
+    .sort((a, b) => b.medianSeconds - a.medianSeconds)
+  const medianValues = responseRows.map((r) => r.medianSeconds).sort((a, b) => a - b)
+  const portfolioMedian =
+    medianValues.length > 0 ? medianValues[Math.floor(medianValues.length / 2)] : null
+  const totalUnanswered = responseRows.reduce((sum, r) => sum + r.unanswered, 0)
+  const slowestClinics = responseRows.slice(0, 4)
 
   // ── Prepare CSV Export Data ─────────────────────────────────
   const exportData = filteredRows.map((row) => {
@@ -325,6 +346,46 @@ export default async function HomePage({
                   </li>
                 ))}
               </ul>
+            )}
+          </Panel>
+
+          {/* ── WhatsApp response time ───────────────────────────── */}
+          <Panel title="Tempo de resposta · WhatsApp" subtitle="mediana por clínica no mês">
+            {responseRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sem conversas no período.</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Mediana da carteira</span>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {fmtDuration(portfolioMedian)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-t border-border/40 pt-3 text-xs">
+                  <span className="text-muted-foreground">Conversas sem resposta:</span>
+                  <span className="font-semibold text-foreground tabular-nums">{totalUnanswered}</span>
+                </div>
+                <div className="border-t border-border/40 pt-3">
+                  <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Respostas mais lentas
+                  </div>
+                  <ul className="space-y-1.5">
+                    {slowestClinics.map((r) => (
+                      <li key={r.clinicId} className="flex items-center justify-between text-xs">
+                        <Link
+                          href={`/clinicas/${r.clinicId}`}
+                          className="text-primary hover:underline truncate max-w-[170px]"
+                        >
+                          {r.name}
+                        </Link>
+                        <span className="text-[0.68rem] text-muted-foreground tabular-nums shrink-0">
+                          {fmtDuration(r.medianSeconds)} · {r.episodes} conv.
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             )}
           </Panel>
 

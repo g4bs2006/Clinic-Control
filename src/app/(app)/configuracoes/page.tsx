@@ -1,16 +1,23 @@
 import { listStatusRules, listFunnelSteps } from "@/lib/snapshots/rules-actions"
 import { listCheckItems } from "@/lib/clinics/check-items-actions"
+import { listClinics } from "@/lib/clinics/actions"
+import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
 import { Panel } from "@/components/dashboard/panel"
 import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
 import { CheckItemsEditor } from "@/components/settings/check-items-editor"
+import { WhatsappGroupsEditor } from "@/components/settings/whatsapp-groups-editor"
+import { WhatsappTeamEditor } from "@/components/settings/whatsapp-team-editor"
 
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems] = await Promise.all([
+  const [rules, steps, checkItems, clinics, groups, teamMembers] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
+    listClinics(),
+    listWhatsappGroups(),
+    listTeamMembers(),
   ])
 
   return (
@@ -69,6 +76,25 @@ export default async function ConfiguracoesPage() {
         subtitle="itens que aparecem como checkboxes em cada clínica"
       >
         <CheckItemsEditor initialItems={checkItems} />
+      </Panel>
+
+      {/* ── WhatsApp: grupos → clínicas ────────────────────────── */}
+      <Panel
+        title="Grupos de WhatsApp"
+        subtitle="mapeie cada grupo coletado à clínica dona — base do tempo de resposta"
+      >
+        <WhatsappGroupsEditor
+          groups={groups}
+          clinics={clinics.map((c) => ({ id: c.id, name: c.name }))}
+        />
+      </Panel>
+
+      {/* ── WhatsApp: equipe / bot ─────────────────────────────── */}
+      <Panel
+        title="Equipe no WhatsApp"
+        subtitle="quem conta como resposta humana nos grupos (e quais IDs são bot)"
+      >
+        <WhatsappTeamEditor initialMembers={teamMembers} />
       </Panel>
     </main>
   )

@@ -11,6 +11,8 @@ import { listClinicAgents } from "@/lib/agents/actions"
 import { listClinicFiles } from "@/lib/clinics/files-actions"
 import { listClinicChecks } from "@/lib/clinics/check-items-actions"
 import { listFormCredentials } from "@/lib/clinics/form-credentials-actions"
+import { getClinicResponseStats } from "@/lib/whatsapp/actions"
+import { fmtDuration } from "@/lib/whatsapp/format"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { FunnelView } from "@/components/dashboard/funnel-view"
@@ -91,11 +93,12 @@ export default async function ClinicDetailPage({
   const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
   const nextClinic = currentIndex < allClinics.length - 1 ? allClinics[currentIndex + 1] : null
 
-  const [agents, files, clinicChecks, formCredentials] = await Promise.all([
+  const [agents, files, clinicChecks, formCredentials, responseStats] = await Promise.all([
     listClinicAgents(id),
     listClinicFiles(id),
     listClinicChecks(id),
     listFormCredentials(id),
+    getClinicResponseStats(id),
   ])
 
   const liveFunnel = funnelRes && funnelRes.ok ? funnelRes.funnel : null
@@ -264,6 +267,63 @@ export default async function ClinicDetailPage({
           <TrendChart data={chartData} series={series} />
         </Panel>
       </div>
+
+      {/* ── Tempo de resposta no grupo de WhatsApp ─────────────── */}
+      {(() => {
+        const current = responseStats.find((s) => s.year_month === currentMonth)
+        const recent = responseStats
+          .filter((s) => s.year_month >= DATA_START_MONTH)
+          .slice(0, 6)
+        if (recent.length === 0) return null
+        return (
+          <Panel
+            title="Tempo de resposta · WhatsApp"
+            subtitle="quanto a equipe demora para responder o cliente no grupo · bot ignorado"
+          >
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <KpiCard
+                label="Mediana (mês)"
+                value={fmtDuration(current?.median_seconds)}
+                accent="teal"
+                hint="metade das conversas foi respondida mais rápido"
+              />
+              <KpiCard
+                label="Média (mês)"
+                value={fmtDuration(current?.avg_seconds)}
+                hint="inflada por episódios fora do expediente"
+              />
+              <KpiCard
+                label="Conversas (mês)"
+                value={(current?.episodes ?? 0).toLocaleString("pt-BR")}
+                accent="purple"
+              />
+              <KpiCard
+                label="Sem resposta"
+                value={(current?.unanswered ?? 0).toLocaleString("pt-BR")}
+                accent="rose"
+              />
+            </div>
+            <ul className="flex flex-col gap-1">
+              {recent.map((s) => (
+                <li
+                  key={s.year_month}
+                  className="flex items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-accent/60"
+                >
+                  <span className="text-muted-foreground">{shortMonthLabel(s.year_month)}</span>
+                  <span className="flex items-center gap-4 tabular-nums">
+                    <span className="text-foreground">
+                      mediana <strong>{fmtDuration(s.median_seconds)}</strong>
+                    </span>
+                    <span className="text-muted-foreground">
+                      {s.answered}/{s.episodes} respondidas
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )
+      })()}
 
       {/* ── Checklist ──────────────────────────────────────────── */}
       <Panel
