@@ -111,6 +111,22 @@ export async function listSummaryDates(limit = 30): Promise<string[]> {
   return [...seen];
 }
 
+/** Resumos de uma clínica (mais recentes primeiro) — para o dia-a-dia no perfil. */
+export async function listClinicSummaries(
+  clinicId: string,
+  limit = 30,
+): Promise<DailySummaryRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("whatsapp_daily_summaries")
+    .select("clinic_id, summary_date, summary_md, highlights, model, message_count")
+    .eq("clinic_id", clinicId)
+    .order("summary_date", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DailySummaryRow[];
+}
+
 /** Timestamp da última mensagem coletada (proxy do status do cron). */
 export async function getLastCollectedAt(): Promise<string | null> {
   const supabase = await createClient();

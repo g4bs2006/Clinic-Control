@@ -11,8 +11,10 @@ import { listClinicAgents } from "@/lib/agents/actions"
 import { listClinicFiles } from "@/lib/clinics/files-actions"
 import { listClinicChecks } from "@/lib/clinics/check-items-actions"
 import { listFormCredentials } from "@/lib/clinics/form-credentials-actions"
-import { getClinicResponseStats } from "@/lib/whatsapp/actions"
+import { getClinicResponseStats, listClinicSummaries } from "@/lib/whatsapp/actions"
 import { fmtDuration } from "@/lib/whatsapp/format"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { FunnelView } from "@/components/dashboard/funnel-view"
@@ -71,10 +73,13 @@ const CONTRACT_LABEL: Record<string, string> = {
 
 export default async function ClinicDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ resumo?: string }>
 }) {
   const { id } = await params
+  const { resumo } = await searchParams
   const clinic = await getClinic(id)
   if (!clinic) notFound()
 
@@ -95,13 +100,15 @@ export default async function ClinicDetailPage({
   const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
   const nextClinic = currentIndex < allClinics.length - 1 ? allClinics[currentIndex + 1] : null
 
-  const [agents, files, clinicChecks, formCredentials, responseStats] = await Promise.all([
-    listClinicAgents(id),
-    listClinicFiles(id),
-    listClinicChecks(id),
-    listFormCredentials(id),
-    getClinicResponseStats(id),
-  ])
+  const [agents, files, clinicChecks, formCredentials, responseStats, summaries] =
+    await Promise.all([
+      listClinicAgents(id),
+      listClinicFiles(id),
+      listClinicChecks(id),
+      listFormCredentials(id),
+      getClinicResponseStats(id),
+      listClinicSummaries(id),
+    ])
 
   const liveFunnel = funnelRes && funnelRes.ok ? funnelRes.funnel : null
 
@@ -386,6 +393,105 @@ export default async function ClinicDetailPage({
           </div>
         </Panel>
       )}
+
+      {/* ── Resumo diário do grupo (IA) ────────────────────────── */}
+      {summaries.length > 0 && (() => {
+        const selected =
+          summaries.find((s) => s.summary_date === resumo) ?? summaries[0]
+        const sentimentStyle: Record<string, { label: string; cls: string }> = {
+          positivo: { label: "Positivo", cls: "bg-emerald-500/15 text-emerald-400" },
+          neutro: { label: "Neutro", cls: "bg-zinc-500/15 text-zinc-400" },
+          negativo: { label: "Negativo", cls: "bg-red-500/15 text-red-400" },
+        }
+        const sentiment = sentimentStyle[selected.highlights?.sentimento ?? "neutro"]
+        const dayLabel = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`
+        const fullDayLabel = (() => {
+          const [y, m, d] = selected.summary_date.split("-").map(Number)
+          return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("pt-BR", {
+            weekday: "long",
+            day: "2-digit",
+            month: "long",
+            timeZone: "UTC",
+          })
+        })()
+        return (
+          <Panel
+            title="Resumo diário · WhatsApp"
+            subtitle="o que aconteceu no grupo, resumido por IA · troque o dia nos botões"
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {summaries.slice(0, 14).map((s) => (
+                <Link
+                  key={s.summary_date}
+                  href={`/clinicas/${id}?resumo=${s.summary_date}`}
+                  scroll={false}
+                  className={`rounded-full border px-2.5 py-1 text-[0.68rem] font-medium tabular-nums transition-colors ${
+                    s.summary_date === selected.summary_date
+                      ? "border-primary/60 bg-primary/15 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {dayLabel(s.summary_date)}
+                </Link>
+              ))}
+            </div>
+
+            <div className="rounded-md border border-border/60 bg-accent/20 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold capitalize text-foreground">
+                  {fullDayLabel}
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  {selected.highlights?.risco_churn && (
+                    <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[0.62rem] font-bold uppercase tracking-wide text-red-400">
+                      Risco churn
+                    </span>
+                  )}
+                  <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-semibold ${sentiment.cls}`}>
+                    {sentiment.label}
+                  </span>
+                </span>
+              </div>
+
+              <div className="md-prose text-sm text-muted-foreground [&_p]:my-1.5 [&_ul]:my-1.5">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{selected.summary_md}</ReactMarkdown>
+              </div>
+
+              {(selected.highlights?.temas?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selected.highlights!.temas!.map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-full bg-[oklch(0.62_0.17_255)]/12 px-2 py-0.5 text-[0.65rem] font-medium text-[oklch(0.70_0.16_255)]"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {(selected.highlights?.pendencias?.length ?? 0) > 0 && (
+                <div className="text-xs">
+                  <span className="font-semibold text-amber-400/90">Pendências: </span>
+                  <span className="text-muted-foreground">
+                    {selected.highlights!.pendencias!.join(" · ")}
+                  </span>
+                </div>
+              )}
+              {(selected.highlights?.reclamacoes?.length ?? 0) > 0 && (
+                <div className="text-xs">
+                  <span className="font-semibold text-red-400/90">Reclamações: </span>
+                  <span className="text-muted-foreground">
+                    {selected.highlights!.reclamacoes!.join(" · ")}
+                  </span>
+                </div>
+              )}
+              <div className="text-[0.62rem] text-muted-foreground/60 tabular-nums">
+                {selected.message_count} mensagens analisadas · {selected.model ?? "—"}
+              </div>
+            </div>
+          </Panel>
+        )
+      })()}
 
       {/* ── Checklist ──────────────────────────────────────────── */}
       <Panel
