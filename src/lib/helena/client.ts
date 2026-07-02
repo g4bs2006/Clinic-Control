@@ -130,8 +130,8 @@ export async function listChannels(token: string, opts?: Opts): Promise<HelenaCh
   const items = Array.isArray(data) ? data : (data.items ?? []);
   return items.map((c: any) => ({
     id: c.id,
-    name: c.name,
+    name: c.identity?.displayName || c.numberFormatted || c.number || c.type,
     type: c.type,
-    status: c.status,
+    status: c.active ? "active" : "inactive",
   }));
 }
