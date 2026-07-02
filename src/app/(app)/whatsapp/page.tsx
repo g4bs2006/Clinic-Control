@@ -102,25 +102,25 @@ export default async function WhatsappPage({
   const mappedClinicIds = [...new Set(
     groups.map((g) => g.clinic_id).filter((id): id is string => !!id && nameById.has(id)),
   )]
-  const rows = mappedClinicIds
-    .map((clinicId) => {
-      const s = statByClinic.get(clinicId)
-      return {
-        clinic_id: clinicId,
-        name: nameById.get(clinicId)!,
-        episodes: s?.episodes ?? 0,
-        answered: s?.answered ?? 0,
-        unanswered: s?.unanswered ?? 0,
-        avg_seconds: s?.avg_seconds ?? null,
-        median_seconds: s?.median_seconds ?? null,
-        hasData: !!s,
-      }
-    })
-    .sort((a, b) => {
-      if (a.hasData !== b.hasData) return a.hasData ? -1 : 1
-      if (a.hasData) return (b.median_seconds ?? -1) - (a.median_seconds ?? -1)
-      return a.name.localeCompare(b.name, "pt-BR")
-    })
+  const allMapped = mappedClinicIds.map((clinicId) => {
+    const s = statByClinic.get(clinicId)
+    return {
+      clinic_id: clinicId,
+      name: nameById.get(clinicId)!,
+      episodes: s?.episodes ?? 0,
+      answered: s?.answered ?? 0,
+      unanswered: s?.unanswered ?? 0,
+      avg_seconds: s?.avg_seconds ?? null,
+      median_seconds: s?.median_seconds ?? null,
+      hasData: !!s,
+    }
+  })
+  const rows = allMapped
+    .filter((r) => r.hasData)
+    .sort((a, b) => (b.median_seconds ?? -1) - (a.median_seconds ?? -1))
+  const idleClinics = allMapped
+    .filter((r) => !r.hasData)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
 
   const medians = rows
     .map((r) => r.median_seconds)
@@ -149,9 +149,9 @@ export default async function WhatsappPage({
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold brand-header">WhatsApp</h1>
+          <h1 className="text-2xl font-bold brand-header">Gerenciador de grupos</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {monthLabel(month)} · tempo de resposta e resumos diários dos grupos
+            {monthLabel(month)} · tempo de resposta e resumos diários dos grupos de WhatsApp
           </p>
         </div>
         <PortfolioFilters
@@ -233,44 +233,50 @@ export default async function WhatsappPage({
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr
-                      key={r.clinic_id}
-                      className={`border-b border-border/30 hover:bg-accent/40 ${
-                        r.hasData ? "" : "opacity-50"
-                      }`}
-                    >
+                    <tr key={r.clinic_id} className="border-b border-border/30 hover:bg-accent/40">
                       <td className="py-2 pr-3">
                         <Link href={`/clinicas/${r.clinic_id}`} className="text-brand-gradient hover:opacity-85 font-medium transition-opacity">
                           {r.name}
                         </Link>
                       </td>
-                      {r.hasData ? (
-                        <>
-                          <td className="py-2 px-3 text-right font-semibold tabular-nums">
-                            {fmtDuration(r.median_seconds)}
-                          </td>
-                          <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
-                            {fmtDuration(r.avg_seconds)}
-                          </td>
-                          <td className="py-2 px-3 text-right tabular-nums">{r.episodes}</td>
-                          <td className="py-2 pl-3 text-right tabular-nums">
-                            {r.unanswered > 0 ? (
-                              <span className="text-red-400">{r.unanswered}</span>
-                            ) : (
-                              <span className="text-muted-foreground">0</span>
-                            )}
-                          </td>
-                        </>
-                      ) : (
-                        <td colSpan={4} className="py-2 px-3 text-right text-xs text-muted-foreground">
-                          sem conversa no mês
-                        </td>
-                      )}
+                      <td className="py-2 px-3 text-right font-semibold tabular-nums">
+                        {fmtDuration(r.median_seconds)}
+                      </td>
+                      <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
+                        {fmtDuration(r.avg_seconds)}
+                      </td>
+                      <td className="py-2 px-3 text-right tabular-nums">{r.episodes}</td>
+                      <td className="py-2 pl-3 text-right tabular-nums">
+                        {r.unanswered > 0 ? (
+                          <span className="text-red-400">{r.unanswered}</span>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          )}
+
+          {idleClinics.length > 0 && (
+            <p className="border-t border-border/40 pt-3 text-xs leading-relaxed text-muted-foreground">
+              <span className="font-semibold uppercase tracking-wider text-[0.65rem]">
+                Sem conversa no mês ({idleClinics.length}):
+              </span>{" "}
+              {idleClinics.map((r, i) => (
+                <span key={r.clinic_id}>
+                  {i > 0 && " · "}
+                  <Link
+                    href={`/clinicas/${r.clinic_id}`}
+                    className="hover:text-foreground transition-colors"
+                  >
+                    {r.name}
+                  </Link>
+                </span>
+              ))}
+            </p>
           )}
         </Panel>
 
@@ -366,10 +372,10 @@ export default async function WhatsappPage({
       {/* ── Canais e Equipe (Helena) ───────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel 
-          title="Status de Conexão dos Canais" 
+          title="Status de Conexão dos Canais"
           subtitle="canais de comunicação ativos na Helena e conectividade em tempo real"
         >
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[560px] overflow-y-auto pr-1">
             {overviewsAndTeams.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma clínica configurada em modo automático.</p>
             ) : (
@@ -377,8 +383,8 @@ export default async function WhatsappPage({
                 if (!overview.ok) return null
                 const channels = overview.channels ?? []
                 return (
-                  <div key={clinicId} className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border/30 pb-3 last:border-b-0 last:pb-0 gap-2">
-                    <div>
+                  <div key={clinicId} className="grid gap-2 border-b border-border/30 pb-3 last:border-b-0 last:pb-0 sm:grid-cols-[230px_1fr] sm:items-start">
+                    <div className="min-w-0">
                       <Link href={`/clinicas/${clinicId}`} className="text-sm font-semibold text-brand-gradient hover:opacity-85 transition-opacity">
                         {name}
                       </Link>
@@ -386,7 +392,7 @@ export default async function WhatsappPage({
                         Base: {overview.contactCount ? overview.contactCount.toLocaleString("pt-BR") : "0"} pacientes · Conta: {overview.company?.status ?? "Ativa"}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap content-start gap-1.5">
                       {channels.length === 0 ? (
                         <span className="text-xs text-muted-foreground">Nenhum canal ativo</span>
                       ) : (
@@ -419,7 +425,7 @@ export default async function WhatsappPage({
           title="Operadores e Setores"
           subtitle="agentes e equipes configuradas no atendimento de cada unidade"
         >
-          <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+          <div className="space-y-4 max-h-[560px] overflow-y-auto pr-1">
             {overviewsAndTeams.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma clínica configurada em modo automático.</p>
             ) : (
@@ -428,8 +434,8 @@ export default async function WhatsappPage({
                 const { departments, users } = teamsAndUsers
                 const activeUsers = users.filter(u => u.active)
                 return (
-                  <div key={clinicId} className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border/30 pb-3 last:border-b-0 last:pb-0 gap-2">
-                    <div>
+                  <div key={clinicId} className="grid gap-2 border-b border-border/30 pb-3 last:border-b-0 last:pb-0 sm:grid-cols-[230px_1fr] sm:items-start">
+                    <div className="min-w-0">
                       <Link href={`/clinicas/${clinicId}`} className="text-sm font-semibold text-brand-gradient hover:opacity-85 transition-opacity">
                         {name}
                       </Link>
@@ -438,7 +444,7 @@ export default async function WhatsappPage({
                         {departments.length === 0 ? "Geral" : departments.map((d) => d.name).join(", ")}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                    <div className="flex flex-wrap content-start gap-1.5">
                       {activeUsers.length === 0 ? (
                         <span className="text-xs text-muted-foreground">Nenhum operador ativo</span>
                       ) : (

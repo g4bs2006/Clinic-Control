@@ -26,7 +26,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/mensal", label: "Mensal", icon: CalendarDays },
   { href: "/comparativo", label: "Comparativo", icon: BarChart3 },
   { href: "/mapa", label: "Mapa", icon: MapIcon },
-  { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { href: "/whatsapp", label: "Gerenciador de grupos", icon: MessageCircle },
   { href: "/churns", label: "Churns", icon: UserMinus },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
