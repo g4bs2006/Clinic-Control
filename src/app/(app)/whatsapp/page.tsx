@@ -12,6 +12,7 @@ import { fmtDuration } from "@/lib/whatsapp/format"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { PortfolioFilters } from "@/components/dashboard/portfolio-filters"
+import { getHelenaAccountOverview, listHelenaTeamsAndUsers } from "@/lib/clinics/integration-actions"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
@@ -71,6 +72,18 @@ export default async function WhatsappPage({
     listSummaryDates(),
     getLastCollectedAt(),
   ])
+
+  // Fetch Helena account overview, users and teams for automatic clinics
+  const autoClinics = clinics.filter((c) => c.mode === "auto")
+  const overviewsAndTeams = await Promise.all(
+    autoClinics.map(async (c) => {
+      const [overview, teamsAndUsers] = await Promise.all([
+        getHelenaAccountOverview(c.id),
+        listHelenaTeamsAndUsers(c.id),
+      ])
+      return { clinicId: c.id, name: c.name, overview, teamsAndUsers }
+    })
+  )
 
   // Dia dos resumos: param válido, senão o mais recente com resumo
   const rawDate = params.date ?? ""
@@ -284,6 +297,118 @@ export default async function WhatsappPage({
               })}
             </ul>
           )}
+        </Panel>
+      </div>
+
+      {/* ── Canais e Equipe (Helena) ───────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Panel 
+          title="Status de Conexão dos Canais" 
+          subtitle="canais de comunicação ativos na Helena e conectividade em tempo real"
+        >
+          <div className="space-y-4">
+            {overviewsAndTeams.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma clínica configurada em modo automático.</p>
+            ) : (
+              overviewsAndTeams.map(({ clinicId, name, overview }) => {
+                if (!overview.ok) return null
+                const channels = overview.channels ?? []
+                return (
+                  <div key={clinicId} className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border/30 pb-3 last:border-b-0 last:pb-0 gap-2">
+                    <div>
+                      <Link href={`/clinicas/${clinicId}`} className="text-sm font-semibold text-brand-gradient hover:opacity-85 transition-opacity">
+                        {name}
+                      </Link>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Base: {overview.contactCount ? overview.contactCount.toLocaleString("pt-BR") : "0"} pacientes · Conta: {overview.company?.status ?? "Ativa"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {channels.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">Nenhum canal ativo</span>
+                      ) : (
+                        channels.map((c: any) => {
+                          const isOnline = c.status?.toLowerCase() === "connected" || c.status?.toLowerCase() === "active" || c.status?.toLowerCase() === "online"
+                          return (
+                            <span 
+                              key={c.id} 
+                              className={`rounded px-2 py-0.5 text-[0.7rem] font-medium flex items-center gap-1 ${
+                                isOnline 
+                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                                  : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-rose-400 animate-pulse"}`} />
+                              {c.name} ({c.type})
+                            </span>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </Panel>
+
+        <Panel 
+          title="Operadores e Setores" 
+          subtitle="agentes e equipes configuradas no atendimento de cada unidade"
+        >
+          <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+            {overviewsAndTeams.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma clínica configurada em modo automático.</p>
+            ) : (
+              overviewsAndTeams.map(({ clinicId, name, teamsAndUsers }) => {
+                if (!teamsAndUsers.ok) return null
+                const { departments, users } = teamsAndUsers
+                const activeUsers = users.filter(u => u.active)
+                return (
+                  <div key={clinicId} className="border-b border-border/30 pb-3 last:border-b-0 last:pb-0 space-y-2">
+                    <div className="flex justify-between items-baseline">
+                      <Link href={`/clinicas/${clinicId}`} className="text-sm font-semibold text-brand-gradient hover:opacity-85 transition-opacity">
+                        {name}
+                      </Link>
+                      <span className="text-[0.7rem] text-muted-foreground">
+                        {activeUsers.length} operador(es) ativo(s)
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground font-medium block mb-1">Setores / Equipes:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {departments.length === 0 ? (
+                            <span className="text-muted-foreground italic">Geral</span>
+                          ) : (
+                            departments.map(d => (
+                              <span key={d.id} className="rounded bg-accent/20 px-1.5 py-0.5 text-foreground">
+                                {d.name}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground font-medium block mb-1">Atendentes:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {activeUsers.length === 0 ? (
+                            <span className="text-muted-foreground italic">Nenhum</span>
+                          ) : (
+                            activeUsers.map(u => (
+                              <span key={u.id} className="rounded bg-brand-solid/10 text-brand-text px-1.5 py-0.5 font-medium border border-brand-border" title={u.email ?? undefined}>
+                                {u.name}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </Panel>
       </div>
     </main>

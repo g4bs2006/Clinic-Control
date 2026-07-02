@@ -218,12 +218,23 @@ export function RankingTable({ rows }: RankingTableProps) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((row, i) => {
+           {sorted.map((row, i) => {
             const isNone = row.source === "none"
             const cityUf =
               row.city || row.state
                 ? [row.city, row.state].filter(Boolean).join("/")
                 : null
+
+            const offlineChannels = row.channels?.filter(
+              (c) =>
+                !(
+                  c.status?.toLowerCase() === "connected" ||
+                  c.status?.toLowerCase() === "active" ||
+                  c.status?.toLowerCase() === "online"
+                )
+            ) ?? []
+            const isSuspended =
+              row.helenaStatus === "SUSPENDED" || row.helenaStatus === "CANCELED"
 
             return (
               <tr
@@ -248,15 +259,38 @@ export function RankingTable({ rows }: RankingTableProps) {
               >
                 {/* Clinic name — links to detail */}
                 <td style={tdStyle}>
-                  <Link
-                    href={`/clinicas/${row.clinicId}`}
-                    className="text-brand-gradient hover:opacity-85 font-medium transition-opacity"
-                    style={{
-                      textDecoration: "none",
-                    }}
-                  >
-                    {row.name}
-                  </Link>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", flexWrap: "wrap" }}>
+                    <Link
+                      href={`/clinicas/${row.clinicId}`}
+                      className="text-brand-gradient hover:opacity-85 font-medium transition-opacity"
+                      style={{
+                        textDecoration: "none",
+                      }}
+                    >
+                      {row.name}
+                    </Link>
+                    {row.mode === "auto" && (
+                      <>
+                        {isSuspended && (
+                          <span
+                            className="rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1 py-0.5 text-[0.6rem] font-semibold uppercase"
+                            style={{ display: "inline-block" }}
+                          >
+                            Suspenso (Helena)
+                          </span>
+                        )}
+                        {offlineChannels.length > 0 && !isSuspended && (
+                          <span
+                            className="rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 text-[0.6rem] font-semibold uppercase"
+                            style={{ display: "inline-block" }}
+                            title={`Canais offline: ${offlineChannels.map((c) => c.name).join(", ")}`}
+                          >
+                            Offline
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </td>
 
                 {/* City / UF */}

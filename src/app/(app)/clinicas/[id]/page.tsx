@@ -2,7 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getClinic, listClinics } from "@/lib/clinics/actions"
 import { getClinicHistory } from "@/lib/portfolio/data"
-import { getLiveFunnel } from "@/lib/clinics/integration-actions"
+import { getLiveFunnel, getHelenaAccountOverview, getHelenaCustomFieldsAggregation } from "@/lib/clinics/integration-actions"
 import { derivedMetrics } from "@/lib/portfolio/metrics"
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status"
 import { createClient } from "@/lib/supabase/server"
@@ -82,11 +82,13 @@ export default async function ClinicDetailPage({
   const currentMonth = monthKey(new Date())
 
   // Fetch all clinics to determine previous/next clinic in order
-  const [allClinics, history, rules, funnelRes] = await Promise.all([
+  const [allClinics, history, rules, funnelRes, helenaOverviewRes, helenaCustomFieldsRes] = await Promise.all([
     listClinics(),
     getClinicHistory(id, 6),
     loadStatusRules(),
     isAuto ? getLiveFunnel(id) : Promise.resolve(null),
+    isAuto ? getHelenaAccountOverview(id) : Promise.resolve(null),
+    isAuto ? getHelenaCustomFieldsAggregation(id, currentMonth) : Promise.resolve(null),
   ])
 
   const currentIndex = allClinics.findIndex((c) => c.id === id)
@@ -175,6 +177,26 @@ export default async function ClinicDetailPage({
             <span className="rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
               {isAuto ? "Automática" : "Manual"}
             </span>
+            {isAuto && helenaOverviewRes?.ok && helenaOverviewRes.channels && (
+              <>
+                {helenaOverviewRes.channels.map((c: any) => {
+                  const isOnline = c.status?.toLowerCase() === "connected" || c.status?.toLowerCase() === "active" || c.status?.toLowerCase() === "online"
+                  return (
+                    <span 
+                      key={c.id} 
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold flex items-center gap-1 ${
+                        isOnline 
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                          : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                      }`}
+                    >
+                      <span className={`w-1 h-1 rounded-full ${isOnline ? "bg-emerald-400" : "bg-rose-400 animate-pulse"}`} />
+                      {c.name}: {isOnline ? "Conectado" : "Offline"}
+                    </span>
+                  )
+                })}
+              </>
+            )}
             <span className="rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
               {CONTRACT_LABEL[clinic.contract_status] ?? clinic.contract_status}
             </span>
@@ -231,6 +253,14 @@ export default async function ClinicDetailPage({
         <KpiCard label="Taxa" value={fmtPct(rate)} accent="purple" hint="agendados / leads" />
         {liveFunnel && (
           <KpiCard label="Faturamento" value={fmtBRL(liveFunnel.revenue)} accent="rose" />
+        )}
+        {isAuto && helenaOverviewRes?.ok && helenaOverviewRes.contactCount !== null && (
+          <KpiCard 
+            label="Pacientes Helena" 
+            value={helenaOverviewRes.contactCount.toLocaleString("pt-BR")} 
+            accent="purple" 
+            hint="base ativa de contatos"
+          />
         )}
         {derived && (
           <>
@@ -324,6 +354,38 @@ export default async function ClinicDetailPage({
           </Panel>
         )
       })()}
+
+      {/* ── Custom Fields Aggregation (CRM Helena) ──────────────── */}
+      {isAuto && helenaCustomFieldsRes?.ok && Object.keys(helenaCustomFieldsRes.counts).length > 0 && (
+        <Panel 
+          title="Atributos de Leads (Campos Personalizados)" 
+          subtitle="informações extras preenchidas nos cards do CRM Helena"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Object.entries(helenaCustomFieldsRes.counts).map(([fieldName, values]) => (
+              <div key={fieldName} className="bg-accent/10 border border-border/40 rounded-lg p-4 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
+                  {fieldName}
+                </h3>
+                <ul className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                  {Object.entries(values)
+                    .sort((a, b) => b[1] - a[1]) // highest count first
+                    .map(([valName, count]) => (
+                      <li key={valName} className="flex justify-between items-center text-sm">
+                        <span className="text-foreground font-medium truncate max-w-[80%]" title={valName}>
+                          {valName}
+                        </span>
+                        <span className="text-xs bg-brand-solid/10 text-brand-text border border-brand-border/40 rounded px-1.5 py-0.2 font-mono font-semibold">
+                          {count}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
 
       {/* ── Checklist ──────────────────────────────────────────── */}
       <Panel

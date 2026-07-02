@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { listClinics } from "@/lib/clinics/actions";
 import { listSnapshotsForMonth, ensureFrozen, freezeAllPastMonths } from "@/lib/snapshots/actions";
-import { getLiveFunnel } from "@/lib/clinics/integration-actions";
+import { getLiveFunnel, getHelenaAccountOverview } from "@/lib/clinics/integration-actions";
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status";
 import { monthKey, prevMonth } from "@/lib/snapshots/month";
 import { summarize, type PortfolioRow } from "./aggregate";
@@ -51,9 +51,12 @@ export async function getPortfolioForMonth(
     ? clinics.filter((c) => c.mode === "auto" && !snapshotByClinic.has(c.id))
     : [];
 
-  const liveFunnelResults = await Promise.allSettled(
-    autoClinicsWithoutSnapshot.map((c) => getLiveFunnel(c.id)),
-  );
+  const autoClinics = clinics.filter((c) => c.mode === "auto");
+
+  const [liveFunnelResults, accountOverviewResults] = await Promise.all([
+    Promise.allSettled(autoClinicsWithoutSnapshot.map((c) => getLiveFunnel(c.id))),
+    Promise.allSettled(autoClinics.map((c) => getHelenaAccountOverview(c.id))),
+  ]);
 
   const liveFunnelByClinicId = new Map<
     string,
@@ -66,8 +69,35 @@ export async function getPortfolioForMonth(
     }
   });
 
+  const overviewByClinicId = new Map<
+    string,
+    { contactCount: number; channels: any[]; company: any }
+  >();
+  autoClinics.forEach((c, idx) => {
+    const result = accountOverviewResults[idx];
+    if (result.status === "fulfilled" && result.value.ok) {
+      overviewByClinicId.set(c.id, {
+        contactCount: result.value.contactCount,
+        channels: result.value.channels,
+        company: result.value.company,
+      });
+    }
+  });
+
   const rows: PortfolioRow[] = clinics.map((clinic) => {
     const snap = snapshotByClinic.get(clinic.id);
+    const overview = overviewByClinicId.get(clinic.id);
+    const helenaFields = overview ? {
+      totalContacts: overview.contactCount,
+      helenaStatus: overview.company?.status ?? null,
+      helenaSetupStatus: overview.company?.setupStatus ?? null,
+      channels: overview.channels ?? [],
+    } : {
+      totalContacts: null,
+      helenaStatus: null,
+      helenaSetupStatus: null,
+      channels: null,
+    };
 
     if (snap) {
       // Snapshot exists for this clinic+month
@@ -92,6 +122,7 @@ export async function getPortfolioForMonth(
         revenue: snap.revenue ?? 0,
         lat: clinic.lat ?? null,
         lng: clinic.lng ?? null,
+        ...helenaFields,
       };
     }
 
@@ -117,6 +148,7 @@ export async function getPortfolioForMonth(
           revenue: f.revenue,
           lat: clinic.lat ?? null,
           lng: clinic.lng ?? null,
+          ...helenaFields,
         };
       }
     }
@@ -138,6 +170,7 @@ export async function getPortfolioForMonth(
       revenue: 0,
       lat: clinic.lat ?? null,
       lng: clinic.lng ?? null,
+      ...helenaFields,
     };
   });
 

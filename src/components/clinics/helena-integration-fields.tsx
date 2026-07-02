@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { listPanelsForToken, getLiveFunnel, saveIntegration } from "@/lib/clinics/integration-actions";
+import { getHelenaSetupOverview, getLiveFunnel, saveIntegration } from "@/lib/clinics/integration-actions";
 
 interface Panel {
   id: string;
@@ -51,13 +51,18 @@ export function HelenaIntegrationFields({
   const [isFetchingFunnel, startFetchFunnel] = useTransition();
   const [isSavingIntegration, startSaveIntegration] = useTransition();
 
+  // Overview status fields
+  const [contactCount, setContactCount] = useState<number | null>(null);
+  const [channels, setChannels] = useState<any[]>([]);
+  const [companyInfo, setCompanyInfo] = useState<any | null>(null);
+
   function handleFetchPanels() {
     if (!token.trim()) {
       toast.error("Informe o token Helena antes de buscar os painéis.");
       return;
     }
     startFetchPanels(async () => {
-      const result = await listPanelsForToken(token);
+      const result = await getHelenaSetupOverview(token);
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -68,6 +73,9 @@ export function HelenaIntegrationFields({
       }
       setPanels(result.panels);
       setSelectedPanelId("");
+      setContactCount(result.contactCount);
+      setChannels(result.channels);
+      setCompanyInfo(result.company);
       toast.success(`${result.panels.length} painel(is) encontrado(s).`);
     });
   }
@@ -134,6 +142,63 @@ export function HelenaIntegrationFields({
         </div>
       </div>
 
+      {/* Account Overview Status Card */}
+      {(companyInfo || contactCount !== null || channels.length > 0) && (
+        <div className="rounded-lg border border-border/80 bg-accent/5 p-4 space-y-3 shadow-md">
+          <div className="flex items-center justify-between border-b border-border/40 pb-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Visão Geral da Conta Helena
+            </h4>
+            {companyInfo?.status && (
+              <span className="rounded bg-brand px-1.5 py-0.5 text-[0.6rem] font-bold text-white uppercase tracking-wide shadow-sm">
+                {companyInfo.status}
+              </span>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="space-y-0.5">
+              <span className="text-xs text-muted-foreground">Nome da Conta</span>
+              <p className="font-semibold text-foreground truncate">{companyInfo?.name ?? "—"}</p>
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-xs text-muted-foreground">Base de Pacientes</span>
+              <p className="font-semibold text-brand-gradient tabular-nums">
+                {contactCount !== null ? contactCount.toLocaleString("pt-BR") : "0"} contatos
+              </p>
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-xs text-muted-foreground">Status de Setup</span>
+              <p className="font-medium text-foreground truncate">{companyInfo?.setupStatus ?? "—"}</p>
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-xs text-muted-foreground">Canais Ativos</span>
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {channels.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">Nenhum canal</span>
+                ) : (
+                  channels.map((c: any) => {
+                    const isOnline = c.status?.toLowerCase() === "connected" || c.status?.toLowerCase() === "active" || c.status?.toLowerCase() === "online";
+                    return (
+                      <span
+                        key={c.id}
+                        className={`rounded px-1.5 py-0.5 text-[0.62rem] font-semibold ${
+                          isOnline
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        }`}
+                      >
+                        {c.name} ({isOnline ? "Online" : "Offline"})
+                      </span>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Panel select — shown only after panels are loaded */}
       {panels.length > 0 && (
         <div className="space-y-1.5">
@@ -179,7 +244,7 @@ export function HelenaIntegrationFields({
 
       {/* Funnel preview */}
       {funnelPreview && (
-        <div className="rounded-lg border border-border p-4 space-y-3">
+        <div className="rounded-lg border border-border p-4 space-y-3 bg-muted/20">
           <p className="text-sm font-medium">Funil do mês atual</p>
           <ul className="space-y-1">
             {funnelPreview.steps.map((step) => (
@@ -192,7 +257,7 @@ export function HelenaIntegrationFields({
           <div className="border-t border-border pt-2 flex flex-wrap gap-4 text-sm">
             <span>
               Taxa de agendamento:{" "}
-              <strong>{(funnelPreview.rate * 100).toFixed(1)}%</strong>
+              <strong className="text-brand-gradient">{(funnelPreview.rate * 100).toFixed(1)}%</strong>
             </span>
             <span>
               Faturamento:{" "}

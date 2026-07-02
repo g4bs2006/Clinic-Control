@@ -18,6 +18,10 @@ export type PortfolioRow = {
   revenue: number;
   lat: number | null;
   lng: number | null;
+  totalContacts?: number | null;
+  helenaStatus?: string | null;
+  helenaSetupStatus?: string | null;
+  channels?: { name: string; type: string; status: string }[] | null;
 };
 
 export function summarize(rows: PortfolioRow[]): {

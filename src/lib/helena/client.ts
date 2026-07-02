@@ -1,4 +1,12 @@
-import type { HelenaPanel, HelenaStep, HelenaCard } from "./types";
+import type {
+  HelenaPanel,
+  HelenaStep,
+  HelenaCard,
+  HelenaCompany,
+  HelenaDepartment,
+  HelenaAgent,
+  HelenaChannel,
+} from "./types";
 
 const DEFAULT_BASE = "https://api.wts.chat";
 const MAX_PAGES = 500;
@@ -43,11 +51,87 @@ export async function listCards(
     if (range.before) query["CreatedAt.Before"] = range.before;
     const data = await get(token, "/crm/v1/panel/card", query, opts);
     for (const c of data.items ?? []) {
-      out.push({ id: c.id, stepId: c.stepId, title: c.title, monetaryAmount: c.monetaryAmount ?? null, createdAt: c.createdAt });
+      out.push({
+        id: c.id,
+        stepId: c.stepId,
+        title: c.title,
+        monetaryAmount: c.monetaryAmount ?? null,
+        createdAt: c.createdAt,
+        customFields: c.customFields ?? undefined,
+      });
     }
     if (!data.hasMorePages) break;
     page += 1;
     if (page > MAX_PAGES) throw new Error("Helena API: paginação excedeu o limite de páginas");
   }
   return out;
+}
+
+export async function getContactCount(token: string, opts?: Opts): Promise<number> {
+  const data = await get(token, "/core/v1/contact", { PageSize: "1" }, opts);
+  return data.totalItems ?? 0;
+}
+
+export async function getChatCounts(
+  token: string,
+  range: { after?: string; before?: string },
+  opts?: Opts,
+): Promise<{ open: number; closed: number }> {
+  const query: Record<string, string> = { PageSize: "1" };
+  if (range.after) query["CreatedAt.After"] = range.after;
+  if (range.before) query["CreatedAt.Before"] = range.before;
+
+  const totalData = await get(token, "/chat/v2/session", query, opts);
+  const total = totalData.totalItems ?? 0;
+
+  const closedData = await get(token, "/chat/v2/session", { ...query, Status: "COMPLETED" }, opts);
+  const closed = closedData.totalItems ?? 0;
+
+  return { open: Math.max(0, total - closed), closed };
+}
+
+export async function getCompanyInfo(
+  token: string,
+  companyId: string,
+  opts?: Opts,
+): Promise<HelenaCompany> {
+  const data = await get(token, `/core/v1/company/${companyId}`, {}, { baseUrl: "https://api.helena.run", ...opts });
+  return {
+    id: data.id,
+    name: data.name ?? null,
+    legalName: data.legalName ?? null,
+    status: data.status,
+    setupStatus: data.setupStatus,
+  };
+}
+
+export async function listDepartments(token: string, opts?: Opts): Promise<HelenaDepartment[]> {
+  const data = await get(token, "/core/v2/department", {}, opts);
+  const items = Array.isArray(data) ? data : (data.items ?? []);
+  return items.map((d: any) => ({
+    id: d.id,
+    name: d.name,
+  }));
+}
+
+export async function listUsers(token: string, opts?: Opts): Promise<HelenaAgent[]> {
+  const data = await get(token, "/core/v1/agent", {}, opts);
+  const items = Array.isArray(data) ? data : (data.items ?? []);
+  return items.map((a: any) => ({
+    id: a.id,
+    name: a.name,
+    email: a.email ?? null,
+    active: a.active ?? true,
+  }));
+}
+
+export async function listChannels(token: string, opts?: Opts): Promise<HelenaChannel[]> {
+  const data = await get(token, "/chat/v1/channel", {}, opts);
+  const items = Array.isArray(data) ? data : (data.items ?? []);
+  return items.map((c: any) => ({
+    id: c.id,
+    name: c.name,
+    type: c.type,
+    status: c.status,
+  }));
 }
