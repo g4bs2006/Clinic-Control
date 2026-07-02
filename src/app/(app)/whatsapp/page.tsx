@@ -95,13 +95,30 @@ export default async function WhatsappPage({
   const nameById = new Map(clinics.map((c) => [c.id, c.name]))
   const mappedGroups = groups.filter((g) => g.clinic_id).length
 
-  const rows = stats
-    .filter((s) => nameById.has(s.clinic_id))
-    .map((s) => ({
-      ...s,
-      name: nameById.get(s.clinic_id)!,
-    }))
-    .sort((a, b) => (b.median_seconds ?? -1) - (a.median_seconds ?? -1))
+  // Todas as clínicas com grupo mapeado entram na tabela; sem conversa no mês = "—"
+  const statByClinic = new Map(stats.map((s) => [s.clinic_id, s]))
+  const mappedClinicIds = [...new Set(
+    groups.map((g) => g.clinic_id).filter((id): id is string => !!id && nameById.has(id)),
+  )]
+  const rows = mappedClinicIds
+    .map((clinicId) => {
+      const s = statByClinic.get(clinicId)
+      return {
+        clinic_id: clinicId,
+        name: nameById.get(clinicId)!,
+        episodes: s?.episodes ?? 0,
+        answered: s?.answered ?? 0,
+        unanswered: s?.unanswered ?? 0,
+        avg_seconds: s?.avg_seconds ?? null,
+        median_seconds: s?.median_seconds ?? null,
+        hasData: !!s,
+      }
+    })
+    .sort((a, b) => {
+      if (a.hasData !== b.hasData) return a.hasData ? -1 : 1
+      if (a.hasData) return (b.median_seconds ?? -1) - (a.median_seconds ?? -1)
+      return a.name.localeCompare(b.name, "pt-BR")
+    })
 
   const medians = rows
     .map((r) => r.median_seconds)
@@ -183,26 +200,39 @@ export default async function WhatsappPage({
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={r.clinic_id} className="border-b border-border/30 hover:bg-accent/40">
+                    <tr
+                      key={r.clinic_id}
+                      className={`border-b border-border/30 hover:bg-accent/40 ${
+                        r.hasData ? "" : "opacity-50"
+                      }`}
+                    >
                       <td className="py-2 pr-3">
                         <Link href={`/clinicas/${r.clinic_id}`} className="text-brand-gradient hover:opacity-85 font-medium transition-opacity">
                           {r.name}
                         </Link>
                       </td>
-                      <td className="py-2 px-3 text-right font-semibold tabular-nums">
-                        {fmtDuration(r.median_seconds)}
-                      </td>
-                      <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
-                        {fmtDuration(r.avg_seconds)}
-                      </td>
-                      <td className="py-2 px-3 text-right tabular-nums">{r.episodes}</td>
-                      <td className="py-2 pl-3 text-right tabular-nums">
-                        {r.unanswered > 0 ? (
-                          <span className="text-red-400">{r.unanswered}</span>
-                        ) : (
-                          <span className="text-muted-foreground">0</span>
-                        )}
-                      </td>
+                      {r.hasData ? (
+                        <>
+                          <td className="py-2 px-3 text-right font-semibold tabular-nums">
+                            {fmtDuration(r.median_seconds)}
+                          </td>
+                          <td className="py-2 px-3 text-right tabular-nums text-muted-foreground">
+                            {fmtDuration(r.avg_seconds)}
+                          </td>
+                          <td className="py-2 px-3 text-right tabular-nums">{r.episodes}</td>
+                          <td className="py-2 pl-3 text-right tabular-nums">
+                            {r.unanswered > 0 ? (
+                              <span className="text-red-400">{r.unanswered}</span>
+                            ) : (
+                              <span className="text-muted-foreground">0</span>
+                            )}
+                          </td>
+                        </>
+                      ) : (
+                        <td colSpan={4} className="py-2 px-3 text-right text-xs text-muted-foreground">
+                          sem conversa no mês
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -352,8 +382,8 @@ export default async function WhatsappPage({
           </div>
         </Panel>
 
-        <Panel 
-          title="Operadores e Setores" 
+        <Panel
+          title="Operadores e Setores"
           subtitle="agentes e equipes configuradas no atendimento de cada unidade"
         >
           <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
@@ -365,44 +395,31 @@ export default async function WhatsappPage({
                 const { departments, users } = teamsAndUsers
                 const activeUsers = users.filter(u => u.active)
                 return (
-                  <div key={clinicId} className="border-b border-border/30 pb-3 last:border-b-0 last:pb-0 space-y-2">
-                    <div className="flex justify-between items-baseline">
+                  <div key={clinicId} className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border/30 pb-3 last:border-b-0 last:pb-0 gap-2">
+                    <div>
                       <Link href={`/clinicas/${clinicId}`} className="text-sm font-semibold text-brand-gradient hover:opacity-85 transition-opacity">
                         {name}
                       </Link>
-                      <span className="text-[0.7rem] text-muted-foreground">
-                        {activeUsers.length} operador(es) ativo(s)
-                      </span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {activeUsers.length} operador{activeUsers.length === 1 ? "" : "es"} ativo{activeUsers.length === 1 ? "" : "s"} · Setores:{" "}
+                        {departments.length === 0 ? "Geral" : departments.map((d) => d.name).join(", ")}
+                      </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground font-medium block mb-1">Setores / Equipes:</span>
-                        <div className="flex flex-wrap gap-1">
-                          {departments.length === 0 ? (
-                            <span className="text-muted-foreground italic">Geral</span>
-                          ) : (
-                            departments.map(d => (
-                              <span key={d.id} className="rounded bg-accent/20 px-1.5 py-0.5 text-foreground">
-                                {d.name}
-                              </span>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground font-medium block mb-1">Atendentes:</span>
-                        <div className="flex flex-wrap gap-1">
-                          {activeUsers.length === 0 ? (
-                            <span className="text-muted-foreground italic">Nenhum</span>
-                          ) : (
-                            activeUsers.map(u => (
-                              <span key={u.id} className="rounded bg-brand-solid/10 text-brand-text px-1.5 py-0.5 font-medium border border-brand-border" title={u.email ?? undefined}>
-                                {u.name}
-                              </span>
-                            ))
-                          )}
-                        </div>
-                      </div>
+                    <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                      {activeUsers.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">Nenhum operador ativo</span>
+                      ) : (
+                        activeUsers.map((u) => (
+                          <span
+                            key={u.id}
+                            title={u.email ?? undefined}
+                            className="rounded px-2 py-0.5 text-[0.7rem] font-medium flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            {u.name}
+                          </span>
+                        ))
+                      )}
                     </div>
                   </div>
                 )
