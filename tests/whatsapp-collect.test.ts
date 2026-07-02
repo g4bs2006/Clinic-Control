@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractGroups,
+  extractPagesCount,
   extractText,
   normalizeMessages,
 } from "../supabase/functions/collect-groups/normalize";
@@ -54,6 +55,20 @@ const messagesPayload = {
     },
   },
 };
+
+describe("extractPagesCount", () => {
+  it("lê pages com e sem envelope data", () => {
+    expect(extractPagesCount({ messages: { total: 2206, pages: 3, records: [] } })).toBe(3);
+    expect(extractPagesCount({ data: { messages: { pages: 2, records: [] } } })).toBe(2);
+  });
+
+  it("default 1 quando ausente/inválido", () => {
+    expect(extractPagesCount({})).toBe(1);
+    expect(extractPagesCount(null)).toBe(1);
+    expect(extractPagesCount({ messages: { pages: 0 } })).toBe(1);
+    expect(extractPagesCount({ messages: { pages: "x" } })).toBe(1);
+  });
+});
 
 describe("normalizeMessages", () => {
   it("mapeia records e usa pushName como remetente (sem key.participant)", () => {

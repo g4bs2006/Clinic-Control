@@ -39,6 +39,16 @@ export function extractText(message: unknown): string | null {
   return t.length > MAX_TEXT_LEN ? t.slice(0, MAX_TEXT_LEN) : t;
 }
 
+// Nº de páginas do findMessages ({messages:{pages}}, com ou sem envelope data).
+// A ordenação dos records NÃO é cronológica confiável → é preciso varrer todas
+// as páginas mesmo na coleta diária (o filtro de lookback descarta as antigas).
+export function extractPagesCount(payload: unknown): number {
+  const j = (payload ?? {}) as Record<string, any>;
+  const d = (j.data ?? j) as Record<string, any>;
+  const p = d?.messages?.pages;
+  return typeof p === "number" && Number.isFinite(p) && p > 0 ? Math.floor(p) : 1;
+}
+
 // A Evolution devolve { success, data: [ ...grupos... ] } no fetchAllGroups.
 export function extractGroups(payload: unknown, instance: string): GroupRow[] {
   const j = (payload ?? {}) as Record<string, any>;

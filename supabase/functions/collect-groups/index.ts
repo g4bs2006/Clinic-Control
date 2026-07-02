@@ -8,10 +8,17 @@
 //   (use lookbackHours=0 no primeiro backfill).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { extractGroups, normalizeMessages, type GroupRow, type MessageRow } from "./normalize.ts";
+import {
+  extractGroups,
+  extractPagesCount,
+  normalizeMessages,
+  type GroupRow,
+  type MessageRow,
+} from "./normalize.ts";
 
 const SCHEMA = "clinic_control";
 const PAGE_SIZE = 1000;
+const MAX_PAGES = 10; // teto de segurança por grupo (10k msgs)
 const CONCURRENCY = 5;
 
 // .trim() defende contra espaços acidentais ao colar os secrets.
@@ -66,24 +73,39 @@ Deno.serve(async (req) => {
   for (const g of fetched) byJid.set(g.group_jid, g);
   const groups = [...byJid.values()];
 
-  // 2) mensagens por grupo (concorrência limitada)
+  // 2) mensagens por grupo (concorrência limitada), varrendo TODAS as páginas —
+  // a ordenação do findMessages não é cronológica; sem varrer, msgs recentes
+  // de grupos grandes ficam fora (bug corrigido em 2026-07-02).
+  async function fetchPage(groupJid: string, page: number): Promise<unknown> {
+    const r = await fetch(`${EVO_URL}/chat/findMessages/${INST}`, {
+      method: "POST",
+      headers: evoHeaders(true),
+      body: JSON.stringify({
+        where: { key: { remoteJid: groupJid } },
+        page,
+        offset: PAGE_SIZE,
+      }),
+    });
+    return r.json();
+  }
+
   const allRows: MessageRow[] = [];
   let fetchErrors = 0;
+  let pagesFetched = 0;
   for (let i = 0; i < groups.length; i += CONCURRENCY) {
     const batch = groups.slice(i, i + CONCURRENCY);
     const results = await Promise.all(
       batch.map(async (g) => {
         try {
-          const r = await fetch(`${EVO_URL}/chat/findMessages/${INST}`, {
-            method: "POST",
-            headers: evoHeaders(true),
-            body: JSON.stringify({
-              where: { key: { remoteJid: g.group_jid } },
-              page: 1,
-              offset: PAGE_SIZE,
-            }),
-          });
-          return normalizeMessages(await r.json(), EVO_INSTANCE, lookbackHours);
+          const first = await fetchPage(g.group_jid, 1);
+          const rows = normalizeMessages(first, EVO_INSTANCE, lookbackHours);
+          const pages = Math.min(extractPagesCount(first), MAX_PAGES);
+          pagesFetched++;
+          for (let p = 2; p <= pages; p++) {
+            rows.push(...normalizeMessages(await fetchPage(g.group_jid, p), EVO_INSTANCE, lookbackHours));
+            pagesFetched++;
+          }
+          return rows;
         } catch (_e) {
           fetchErrors++;
           return [] as MessageRow[];
@@ -122,6 +144,7 @@ Deno.serve(async (req) => {
     groupsFetched: fetched.length,
     groupsUsed: groups.length,
     fetchAllGroupsStatus: gStatus,
+    pagesFetched,
     messages_seen: allRows.length,
     messages_unique: rows.length,
     inserted,
