@@ -34,9 +34,14 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // /auth/* fica acessível sem sessão: é onde o link de convite/recuperação
-  // troca o token por sessão (a própria rota valida o token).
-  if (!user && !pathname.startsWith("/login") && !pathname.startsWith("/auth")) {
+  // Sem sessão, além do /login: /auth/* (links de e-mail trocam token por
+  // sessão) e /ativar-conta (e-mail pré-aprovado define a senha).
+  if (
+    !user &&
+    !pathname.startsWith("/login") &&
+    !pathname.startsWith("/auth") &&
+    !pathname.startsWith("/ativar-conta")
+  ) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.search = "";

@@ -60,6 +60,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               Entrar
             </Button>
           </form>
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            Novo por aqui?{" "}
+            <a href="/ativar-conta" className="text-primary hover:underline">
+              Ativar minha conta
+            </a>
+          </p>
         </CardContent>
       </Card>
     </main>

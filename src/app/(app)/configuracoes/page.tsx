@@ -3,6 +3,8 @@ import { listCheckItems } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
 import { listUserProfiles } from "@/lib/users/actions"
+import { listInvites } from "@/lib/users/invites-actions"
+import { InvitesEditor } from "@/components/settings/invites-editor"
 import { Panel } from "@/components/dashboard/panel"
 import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
 import { CheckItemsEditor } from "@/components/settings/check-items-editor"
@@ -13,7 +15,7 @@ import { UsersEditor } from "@/components/settings/users-editor"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles] = await Promise.all([
+  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, invites] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
@@ -21,6 +23,7 @@ export default async function ConfiguracoesPage() {
     listWhatsappGroups(),
     listTeamMembers(),
     listUserProfiles(),
+    listInvites(),
   ])
 
   const clinicCountByDeveloper: Record<string, number> = {}
@@ -48,6 +51,7 @@ export default async function ConfiguracoesPage() {
           initialProfiles={profiles}
           clinicCountByDeveloper={clinicCountByDeveloper}
         />
+        <InvitesEditor initialInvites={invites} />
       </Panel>
 
       {/* ── Status rules ───────────────────────────────────────── */}
