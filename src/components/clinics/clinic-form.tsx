@@ -21,6 +21,7 @@ import {
   HELENA_APPS,
   HELENA_RESOURCERS,
   HELENA_CONFIG_FIELDS,
+  HELENA_COMPANY_TYPES,
   DEFAULT_PROVISION_OPTIONS,
   type HelenaProvisionOptions,
 } from "@/lib/helena/provision-options";
@@ -43,6 +44,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
   const [address, setAddress] = useState(defaultValues?.address ?? "");
   const [city, setCity] = useState(defaultValues?.city ?? "");
   const [state, setState] = useState(defaultValues?.state ?? "");
+  const [zipcode, setZipcode] = useState(defaultValues?.zipcode ?? "");
   const [mode, setMode] = useState<Mode>(defaultValues?.mode ?? "manual");
   const [contractStatus, setContractStatus] = useState<ContractStatus>(
     defaultValues?.contract_status ?? "active"
@@ -61,6 +63,9 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
   const [helenaConfig, setHelenaConfig] = useState<Record<string, number>>({
     ...DEFAULT_PROVISION_OPTIONS.config,
   });
+  const [helenaCompanyType, setHelenaCompanyType] = useState<string>(
+    DEFAULT_PROVISION_OPTIONS.companyType,
+  );
   const [isPending, startTransition] = useTransition();
 
   function toggleIn(list: string[], value: string, checked: boolean) {
@@ -82,6 +87,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
       address: address || undefined,
       city: city || undefined,
       state: state || undefined,
+      zipcode: zipcode || undefined,
       mode,
       contract_status: contractStatus,
       system: system || undefined,
@@ -97,7 +103,12 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
       const result = await onSubmit(input, {
         provisionHelena: wantsProvision,
         helenaOptions: wantsProvision
-          ? { apps: helenaApps, resourcers: helenaResourcers, config: helenaConfig }
+          ? {
+              apps: helenaApps,
+              resourcers: helenaResourcers,
+              config: helenaConfig,
+              companyType: helenaCompanyType,
+            }
           : undefined,
       });
       if (!result.ok) {
@@ -131,7 +142,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="city">Cidade</Label>
             <Input
@@ -139,6 +150,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="Cidade"
+              required={isCreate && provisionHelena}
             />
           </div>
 
@@ -150,6 +162,18 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
               onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
               placeholder="SP"
               maxLength={2}
+              required={isCreate && provisionHelena}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="zipcode">CEP</Label>
+            <Input
+              id="zipcode"
+              value={zipcode}
+              onChange={(e) => setZipcode(e.target.value.replace(/[^\d-]/g, "").slice(0, 9))}
+              placeholder="00000-000"
+              required={isCreate && provisionHelena}
             />
           </div>
         </div>
@@ -278,6 +302,31 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
 
             {provisionHelena && (
               <div className="space-y-4 border-t border-primary/20 pt-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="helena_company_type">Tipo da empresa</Label>
+                  <Select
+                    value={helenaCompanyType}
+                    onValueChange={(val) => {
+                      if (val) setHelenaCompanyType(val);
+                    }}
+                  >
+                    <SelectTrigger id="helena_company_type" className="w-full">
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HELENA_COMPANY_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Pessoa Física × Jurídica é definido pelo documento: informe o CNPJ da clínica
+                    para a conta nascer como PJ.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Apps habilitados na conta</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">

@@ -85,7 +85,7 @@ export async function runProvisioning(
   const { data: clinic, error: clinicError } = await db
     .from("clinics")
     .select(
-      "id, name, legal_name, document_id, owner_name, owner_email, owner_phone, mode, helena_provision_options",
+      "id, name, legal_name, document_id, owner_name, owner_email, owner_phone, mode, helena_provision_options, address, city, state, zipcode",
     )
     .eq("id", clinicId)
     .single();
@@ -128,6 +128,9 @@ export async function runProvisioning(
       [clinic.owner_name, "nome do dono"],
       [clinic.owner_email, "e-mail do dono"],
       [clinic.owner_phone, "telefone do dono"],
+      [clinic.zipcode, "CEP"],
+      [clinic.city, "cidade"],
+      [clinic.state, "UF"],
     ]
       .filter(([value]) => !value)
       .map(([, label]) => label);
@@ -155,6 +158,13 @@ export async function runProvisioning(
         apps: provisionOptions.apps,
         resourcers: provisionOptions.resourcers,
         config: provisionOptions.config,
+        type: provisionOptions.companyType,
+        address: {
+          zipcode: clinic.zipcode,
+          city: clinic.city,
+          state: clinic.state,
+          address1: clinic.address,
+        },
       });
       companyId = company.id;
       await record(db, clinicId, "account", "done", companyId);

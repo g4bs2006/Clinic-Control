@@ -19,10 +19,12 @@ describe("normalizeProvisionOptions", () => {
       apps: ["PANEL", "HACKED", "AI_AGENT"],
       resourcers: ["WEBHOOK_API", "NOPE"],
       config: { whatsAppChannels: "2", panels: -1, invented: 5, session: 1000.9 },
+      companyType: "PIRATA",
     });
     expect(opts.apps).toEqual(["PANEL", "AI_AGENT"]);
     expect(opts.resourcers).toEqual(["WEBHOOK_API"]);
     expect(opts.config).toEqual({ whatsAppChannels: 2, session: 1000 });
+    expect(opts.companyType).toBe("LIMITED"); // inválido cai no default
   });
 
   it("preserva escolhas válidas do usuário sem alterar", () => {
@@ -30,6 +32,7 @@ describe("normalizeProvisionOptions", () => {
       apps: ["PANEL"],
       resourcers: [],
       config: { whatsAppChannels: 5, panels: 2 },
+      companyType: "MEI",
     };
     expect(normalizeProvisionOptions(chosen)).toEqual(chosen);
   });

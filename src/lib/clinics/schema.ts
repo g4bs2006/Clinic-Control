@@ -5,6 +5,11 @@ export const clinicInputSchema = z.object({
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().length(2, "Use a UF com 2 letras").optional(),
+  zipcode: z
+    .string()
+    .regex(/^\d{5}-?\d{3}$/, "CEP inválido — use 8 dígitos")
+    .optional()
+    .or(z.literal("")),
   mode: z.enum(["auto", "manual"]).default("manual"),
   contract_status: z.enum(["active", "suspended", "archived"]).default("active"),
   system: z.string().optional(),

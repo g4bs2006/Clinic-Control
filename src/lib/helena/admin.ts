@@ -5,8 +5,9 @@
 // ATENÇÃO (sondado em 2026-07-03, a doc marca tudo como opcional — não é):
 // o POST /company exige apps (não-vazio), resourcers, owner (com email E
 // telefone), legalName e documentId/documentType; responde 500 genérico
-// quando faltam. `address`, se enviado, exige CEP — como não coletamos CEP,
-// nunca enviamos endereço.
+// quando faltam. `address` exige CEP VÁLIDO (validado contra base real de
+// CEPs) — só enviamos endereço quando há CEP; country/state em minúsculo
+// ("br"/"ms"), como nas contas reais.
 
 const ADMIN_BASE = "https://api.helena.run";
 
@@ -59,6 +60,15 @@ export interface CreateCompanyInput {
   resourcers: string[];
   /** Limites de recursos (canais, painéis, usuários…). */
   config?: Record<string, number>;
+  /** Tipo da empresa (LIMITED, MEI, INDIVIDUAL, ASSOCIATION, UNDEFINED). */
+  type?: string | null;
+  /** Endereço — enviado só se houver CEP (a Helena valida o CEP e o exige). */
+  address?: {
+    zipcode?: string | null;
+    city?: string | null;
+    state?: string | null;
+    address1?: string | null;
+  };
 }
 
 /** Cria a conta (company) da clínica na Helena. Retorna o id da conta. */
@@ -87,6 +97,16 @@ export async function createCompany(
   }
   if (Object.keys(owner).length > 0) body.owner = owner;
   if (input.config && Object.keys(input.config).length > 0) body.config = input.config;
+  if (input.type && input.type !== "UNDEFINED") body.type = input.type;
+
+  const zipcode = input.address?.zipcode?.replace(/\D/g, "") || undefined;
+  if (zipcode) {
+    const address: Record<string, string> = { country: "br", zipcode };
+    if (input.address?.city) address.city = input.address.city;
+    if (input.address?.state) address.state = input.address.state.toLowerCase();
+    if (input.address?.address1) address.address1 = input.address.address1;
+    body.address = address;
+  }
 
   const data = await post(masterToken, "/core/v1/company", body, opts);
   const id = (data.id ?? (data as { company?: { id?: string } }).company?.id) as string | undefined;

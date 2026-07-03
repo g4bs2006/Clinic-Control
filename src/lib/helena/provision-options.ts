@@ -22,6 +22,15 @@ export const HELENA_APPS = [
   { value: "CONTACT_PORTFOLIO", label: "Carteira de contatos" },
 ] as const;
 
+/** Tipos de empresa aceitos pela Helena (enum `type`). */
+export const HELENA_COMPANY_TYPES = [
+  { value: "LIMITED", label: "Sociedade Limitada (Ltda.)" },
+  { value: "MEI", label: "MEI" },
+  { value: "INDIVIDUAL", label: "Empresa Individual" },
+  { value: "ASSOCIATION", label: "Associação" },
+  { value: "UNDEFINED", label: "Não definido" },
+] as const;
+
 /** Recursos avançados (enum `resourcers` da Helena). */
 export const HELENA_RESOURCERS = [
   { value: "WEBHOOK_API", label: "API de Webhooks" },
@@ -54,12 +63,15 @@ export interface HelenaProvisionOptions {
   apps: string[];
   resourcers: string[];
   config: Record<string, number>;
+  /** Tipo da empresa na Helena (enum HELENA_COMPANY_TYPES). */
+  companyType: string;
 }
 
 export const DEFAULT_PROVISION_OPTIONS: HelenaProvisionOptions = {
   apps: ["PANEL", "WEBHOOK", "AI_AGENT", "DIALOG", "CAMPAIGN", "SEQUENCE", "SCHEDULED_MESSAGE", "GROUP"],
   resourcers: ["WEBHOOK_API", "CUSTOM_FIELDS"],
   config: Object.fromEntries(HELENA_CONFIG_FIELDS.map((f) => [f.key, f.default])),
+  companyType: "LIMITED",
 };
 
 /**
@@ -71,6 +83,7 @@ export function normalizeProvisionOptions(raw: unknown): HelenaProvisionOptions 
   const validApps = new Set<string>(HELENA_APPS.map((a) => a.value));
   const validRes = new Set<string>(HELENA_RESOURCERS.map((r) => r.value));
   const validKeys = new Set<string>(HELENA_CONFIG_FIELDS.map((f) => f.key));
+  const validTypes = new Set<string>(HELENA_COMPANY_TYPES.map((t) => t.value));
 
   const apps = Array.isArray(o.apps) ? o.apps.filter((a) => validApps.has(a)) : [];
   const resourcers = Array.isArray(o.resourcers) ? o.resourcers.filter((r) => validRes.has(r)) : [];
@@ -86,5 +99,9 @@ export function normalizeProvisionOptions(raw: unknown): HelenaProvisionOptions 
     apps: apps.length > 0 ? apps : [...DEFAULT_PROVISION_OPTIONS.apps],
     resourcers,
     config: Object.keys(config).length > 0 ? config : { ...DEFAULT_PROVISION_OPTIONS.config },
+    companyType:
+      typeof o.companyType === "string" && validTypes.has(o.companyType)
+        ? o.companyType
+        : DEFAULT_PROVISION_OPTIONS.companyType,
   };
 }

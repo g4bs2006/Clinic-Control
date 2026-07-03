@@ -18,10 +18,12 @@ const BASE_INPUT = {
   apps: ["PANEL", "WEBHOOK"],
   resourcers: ["WEBHOOK_API"],
   config: { whatsAppChannels: 2, panels: 1 },
+  type: "LIMITED",
+  address: { zipcode: "74.000-000", city: "Goiânia", state: "GO", address1: "Rua 1, 100" },
 };
 
 describe("createCompany", () => {
-  it("monta o payload com documentType inferido, apps/resourcers/config e sem address", async () => {
+  it("monta o payload com documentType inferido, apps/resourcers/config, type e address normalizado", async () => {
     const fetchImpl = mockFetch(200, { id: "comp-1" });
     const result = await createCompany("master", BASE_INPUT, { fetchImpl });
     expect(result.id).toBe("comp-1");
@@ -35,9 +37,36 @@ describe("createCompany", () => {
     expect(body.apps).toEqual(["PANEL", "WEBHOOK"]);
     expect(body.resourcers).toEqual(["WEBHOOK_API"]);
     expect(body.config).toEqual({ whatsAppChannels: 2, panels: 1 });
-    // address exige CEP na Helena — nunca enviamos
-    expect(body.address).toBeUndefined();
+    expect(body.type).toBe("LIMITED");
+    // country fixo "br", UF minúscula, CEP só dígitos — formato aceito pela Helena
+    expect(body.address).toEqual({
+      country: "br",
+      zipcode: "74000000",
+      city: "Goiânia",
+      state: "go",
+      address1: "Rua 1, 100",
+    });
     expect(init.headers.Authorization).toBe("Bearer master");
+  });
+
+  it("sem CEP não envia address; type UNDEFINED é omitido", async () => {
+    const fetchImpl = mockFetch(200, { id: "comp-3" });
+    await createCompany(
+      "m",
+      {
+        name: "X",
+        apps: ["PANEL"],
+        resourcers: [],
+        type: "UNDEFINED",
+        address: { city: "Goiânia", state: "GO" },
+      },
+      { fetchImpl },
+    );
+    const body = JSON.parse(
+      (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+    );
+    expect(body.address).toBeUndefined();
+    expect(body.type).toBeUndefined();
   });
 
   it("CPF com 11 dígitos e config omitido quando vazio", async () => {
