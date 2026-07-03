@@ -6,6 +6,7 @@ import type {
   HelenaDepartment,
   HelenaAgent,
   HelenaChannel,
+  HelenaWebhookSubscription,
 } from "./types";
 
 const DEFAULT_BASE = "https://api.wts.chat";
@@ -168,6 +169,30 @@ export async function createContact(
   opts?: Opts,
 ) {
   return post(token, "/core/v1/contact", input, opts);
+}
+
+/** Assinaturas de webhook da conta — requer token da própria conta com permissão
+ *  (alguns tokens respondem 401 "Acesso negado"; trate no chamador). */
+export async function listWebhookSubscriptions(
+  token: string,
+  opts?: Opts,
+): Promise<HelenaWebhookSubscription[]> {
+  type RawSubscription = {
+    id: string;
+    name?: string | null;
+    url: string;
+    enabled?: boolean;
+    events?: (string | { event: string })[];
+  };
+  const data = await get(token, "/core/v1/webhook/subscription", {}, opts);
+  const items: RawSubscription[] = Array.isArray(data) ? data : (data.items ?? []);
+  return items.map((w) => ({
+    id: w.id,
+    name: w.name ?? null,
+    url: w.url,
+    enabled: w.enabled === true,
+    events: (w.events ?? []).map((e) => (typeof e === "string" ? e : e.event)),
+  }));
 }
 
 export async function listChannels(token: string, opts?: Opts): Promise<HelenaChannel[]> {

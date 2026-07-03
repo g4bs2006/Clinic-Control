@@ -48,3 +48,32 @@ export interface HelenaChannel {
   type: string;
   status: string;
 }
+
+/** Conta completa como vem de GET /core/v1/company (token master/parceiro). */
+export interface HelenaCompanyFull {
+  id: string;
+  name: string | null;
+  legalName: string | null;
+  documentId: string | null;
+  email: string | null;
+  phoneNumberFormatted: string | null;
+  setupStatus: string | null;
+  active: boolean;
+  createdAt: string | null;
+  config: Record<string, unknown> | null;
+}
+
+/** Metadados de um token de integração — o VALOR nunca é persistido. */
+export interface HelenaTokenMeta {
+  id: string;
+  name: string | null;
+  createdAt: string | null;
+}
+
+export interface HelenaWebhookSubscription {
+  id: string;
+  name: string | null;
+  url: string;
+  enabled: boolean;
+  events: string[];
+}

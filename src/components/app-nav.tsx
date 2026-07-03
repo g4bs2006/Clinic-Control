@@ -11,6 +11,7 @@ import {
   Map as MapIcon,
   MessageCircle,
   UserMinus,
+  Plug,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -28,6 +29,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/mapa", label: "Mapa", icon: MapIcon },
   { href: "/whatsapp", label: "Gerenciador de grupos", icon: MessageCircle },
   { href: "/churns", label: "Churns", icon: UserMinus },
+  { href: "/helena", label: "Contas Helena", icon: Plug },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 

@@ -9,6 +9,8 @@
 // CEPs) — só enviamos endereço quando há CEP; country/state em minúsculo
 // ("br"/"ms"), como nas contas reais.
 
+import type { HelenaCompanyFull } from "./types";
+
 const ADMIN_BASE = "https://api.helena.run";
 
 type Opts = { fetchImpl?: typeof fetch; baseUrl?: string };
@@ -47,6 +49,75 @@ async function post(
     throw new Error(helenaErrorMessage(res.status, text));
   }
   return res.json();
+}
+
+async function get(
+  token: string,
+  path: string,
+  query: Record<string, string> = {},
+  opts?: Opts,
+): Promise<unknown> {
+  const fetchImpl = opts?.fetchImpl ?? fetch;
+  const base = opts?.baseUrl ?? ADMIN_BASE;
+  const qs = new URLSearchParams(query).toString();
+  const res = await fetchImpl(`${base}${path}${qs ? `?${qs}` : ""}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(helenaErrorMessage(res.status, text));
+  }
+  return res.json();
+}
+
+/** Lista TODAS as contas do parceiro (paginado), com config/plano incluído. */
+export async function listCompanies(masterToken: string, opts?: Opts): Promise<HelenaCompanyFull[]> {
+  const out: HelenaCompanyFull[] = [];
+  let page = 1;
+  for (;;) {
+    const data = (await get(
+      masterToken,
+      "/core/v1/company",
+      { PageSize: "100", PageNumber: String(page), IncludeDetails: "Config" },
+      opts,
+    )) as { items?: Record<string, unknown>[]; hasMorePages?: boolean };
+    for (const c of data.items ?? []) {
+      out.push({
+        id: c.id as string,
+        name: (c.name as string) ?? null,
+        legalName: (c.legalName as string) ?? null,
+        documentId: (c.documentId as string) ?? null,
+        email: (c.email as string) ?? null,
+        phoneNumberFormatted: (c.phoneNumberFormatted as string) ?? null,
+        setupStatus: (c.setupStatus as string) ?? null,
+        active: c.active !== false,
+        createdAt: (c.createdAt as string) ?? null,
+        config: (c.config as Record<string, unknown>) ?? null,
+      });
+    }
+    if (!data.hasMorePages) break;
+    page += 1;
+    if (page > 50) throw new Error("Helena API: paginação de contas excedeu o limite");
+  }
+  return out;
+}
+
+/** Tokens de integração de uma conta (GET não documentado, sondado em 2026-07-03).
+ *  Retorna também o VALOR do token — use só em memória, nunca persista em claro. */
+export async function listCompanyTokens(
+  masterToken: string,
+  companyId: string,
+  opts?: Opts,
+): Promise<{ id: string; name: string | null; createdAt: string | null; token: string }[]> {
+  const data = (await get(masterToken, `/core/v1/company/${companyId}/tokens`, {}, opts)) as
+    | Record<string, unknown>[]
+    | null;
+  return (Array.isArray(data) ? data : []).map((t) => ({
+    id: t.id as string,
+    name: (t.name as string) ?? null,
+    createdAt: (t.createdAt as string) ?? null,
+    token: (t.token as string) ?? "",
+  }));
 }
 
 export interface CreateCompanyInput {
