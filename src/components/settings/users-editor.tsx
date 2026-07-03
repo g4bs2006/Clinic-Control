@@ -59,12 +59,10 @@ export function UsersEditor({
               </div>
               <div className="text-xs text-muted-foreground truncate">{p.email}</div>
             </div>
-            {p.role === "desenvolvedor" && (
-              <span className="text-[0.68rem] text-muted-foreground tabular-nums shrink-0">
-                {clinicCountByDeveloper[p.id] ?? 0} clínica
-                {(clinicCountByDeveloper[p.id] ?? 0) !== 1 ? "s" : ""} na carteira
-              </span>
-            )}
+            <span className="text-[0.68rem] text-muted-foreground tabular-nums shrink-0">
+              {clinicCountByDeveloper[p.id] ?? 0} clínica
+              {(clinicCountByDeveloper[p.id] ?? 0) !== 1 ? "s" : ""} na carteira
+            </span>
             <Select
               value={p.role}
               items={ROLE_LABEL}
