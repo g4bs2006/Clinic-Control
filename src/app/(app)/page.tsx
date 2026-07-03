@@ -290,7 +290,7 @@ export default async function HomePage({
           </Panel>
 
           {/* ── Onboarding / Implementation Status ───────────────── */}
-          <Panel title="Status de implantação" subtitle="progresso geral do onboarding">
+          <Panel title="Status de implantação" subtitle="progresso do seu checklist na carteira">
             <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">

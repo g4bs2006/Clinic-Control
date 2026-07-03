@@ -91,10 +91,10 @@ export default async function ConfiguracoesPage() {
         </p>
       </Panel>
 
-      {/* ── Checklist items ────────────────────────────────────── */}
+      {/* ── Checklist items (pessoais do usuário logado) ───────── */}
       <Panel
-        title="Checklist de clínicas"
-        subtitle="itens que aparecem como checkboxes em cada clínica"
+        title="Meu checklist de clínicas"
+        subtitle="itens pessoais — cada usuário tem os seus; aparecem em todas as clínicas só para você"
       >
         <CheckItemsEditor initialItems={checkItems} />
       </Panel>

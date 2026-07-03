@@ -14,7 +14,7 @@ import { listFormCredentials } from "@/lib/clinics/form-credentials-actions"
 import { getClinicResponseStats, listClinicSummaries } from "@/lib/whatsapp/actions"
 import { getClinicHelenaIntegration } from "@/lib/helena/accounts-actions"
 import { ClinicHelenaIntegration } from "@/components/clinics/clinic-helena-integration"
-import { listUserProfiles } from "@/lib/users/actions"
+import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
 import { ClinicDeveloperSelect } from "@/components/clinics/clinic-developer-select"
 import { listProvisioning } from "@/lib/clinics/provision-actions"
 import { ClinicProvisioning } from "@/components/clinics/clinic-provisioning"
@@ -107,7 +107,7 @@ export default async function ClinicDetailPage({
   const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
   const nextClinic = currentIndex < allClinics.length - 1 ? allClinics[currentIndex + 1] : null
 
-  const [agents, files, clinicChecks, formCredentials, responseStats, summaries, provisioning, helenaIntegration, profiles] =
+  const [agents, files, clinicChecks, formCredentials, responseStats, summaries, provisioning, helenaIntegration, profiles, currentProfile] =
     await Promise.all([
       listClinicAgents(id),
       listClinicFiles(id),
@@ -118,7 +118,20 @@ export default async function ClinicDetailPage({
       listProvisioning(id),
       getClinicHelenaIntegration(id),
       listUserProfiles(),
+      getCurrentProfile(),
     ])
+
+  // Gestor vê (leitura) o checklist do desenvolvedor responsável pela clínica.
+  const responsibleDevId =
+    currentProfile?.role === "gestor" &&
+    clinic.developer_id &&
+    clinic.developer_id !== currentProfile.id
+      ? clinic.developer_id
+      : null
+  const devChecklist = responsibleDevId ? await listClinicChecks(id, responsibleDevId) : null
+  const responsibleDevName = responsibleDevId
+    ? profiles.find((p) => p.id === responsibleDevId)?.name ?? "desenvolvedor"
+    : null
 
   const liveFunnel = funnelRes && funnelRes.ok ? funnelRes.funnel : null
 
@@ -638,13 +651,52 @@ export default async function ClinicDetailPage({
         )
       })()}
 
-      {/* ── Checklist ──────────────────────────────────────────── */}
+      {/* ── Checklist (pessoal do usuário logado) ──────────────── */}
       <Panel
-        title="Checklist"
-        subtitle="itens configuráveis · clique para marcar"
+        title="Meu checklist"
+        subtitle="seus itens para esta clínica · edite-os em Configurações"
       >
-        <ClinicChecks clinicId={id} checks={clinicChecks} />
+        {clinicChecks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Você ainda não tem itens de checklist — crie os seus em Configurações.
+          </p>
+        ) : (
+          <ClinicChecks clinicId={id} checks={clinicChecks} />
+        )}
       </Panel>
+
+      {/* ── Checklist do dev responsável (leitura, só p/ gestor) ── */}
+      {devChecklist && devChecklist.length > 0 && (
+        <Panel
+          title={`Checklist de ${responsibleDevName}`}
+          subtitle="somente leitura · progresso do desenvolvedor responsável"
+        >
+          <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {devChecklist.map((c) => (
+              <li
+                key={c.check_item_id}
+                className="flex items-center gap-2 rounded-md border border-border/50 bg-accent/20 px-3 py-2 text-sm"
+              >
+                <span
+                  className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                    c.checked
+                      ? "border-emerald-500/60 bg-emerald-500/20 text-emerald-400"
+                      : "border-border text-transparent"
+                  }`}
+                >
+                  ✓
+                </span>
+                <span className={c.checked ? "text-foreground" : "text-muted-foreground"}>
+                  {c.label}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted-foreground">
+            {devChecklist.filter((c) => c.checked).length} de {devChecklist.length} concluídos
+          </p>
+        </Panel>
+      )}
 
       {/* ── Agentes de IA ──────────────────────────────────────── */}
       <Panel
