@@ -10,21 +10,20 @@ function mockFetch(status: number, body: unknown) {
   })) as unknown as typeof fetch;
 }
 
+const BASE_INPUT = {
+  name: "Clínica Teste",
+  legalName: "Teste LTDA",
+  documentId: "12.345.678/0001-90",
+  owner: { name: "Dr. Teste", email: "dr@teste.com", phoneNumber: "62999" },
+  apps: ["PANEL", "WEBHOOK"],
+  resourcers: ["WEBHOOK_API"],
+  config: { whatsAppChannels: 2, panels: 1 },
+};
+
 describe("createCompany", () => {
-  it("monta o payload com documentType inferido do documento (CNPJ = 14 dígitos)", async () => {
+  it("monta o payload com documentType inferido, apps/resourcers/config e sem address", async () => {
     const fetchImpl = mockFetch(200, { id: "comp-1" });
-    const result = await createCompany(
-      "master",
-      {
-        name: "Clínica Teste",
-        legalName: "Teste LTDA",
-        documentId: "12.345.678/0001-90",
-        owner: { name: "Dr. Teste", email: "dr@teste.com", phoneNumber: "62999" },
-        city: "Goiânia",
-        state: "GO",
-      },
-      { fetchImpl },
-    );
+    const result = await createCompany("master", BASE_INPUT, { fetchImpl });
     expect(result.id).toBe("comp-1");
 
     const [url, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -33,28 +32,52 @@ describe("createCompany", () => {
     expect(body.documentType).toBe("CNPJ");
     expect(body.documentId).toBe("12345678000190"); // só dígitos
     expect(body.status).toBe("ONBOARDING");
-    expect(body.address.city).toBe("Goiânia");
+    expect(body.apps).toEqual(["PANEL", "WEBHOOK"]);
+    expect(body.resourcers).toEqual(["WEBHOOK_API"]);
+    expect(body.config).toEqual({ whatsAppChannels: 2, panels: 1 });
+    // address exige CEP na Helena — nunca enviamos
+    expect(body.address).toBeUndefined();
     expect(init.headers.Authorization).toBe("Bearer master");
   });
 
-  it("CPF com 11 dígitos e sem endereço quando cidade/UF ausentes", async () => {
+  it("CPF com 11 dígitos e config omitido quando vazio", async () => {
     const fetchImpl = mockFetch(200, { id: "comp-2" });
-    await createCompany("m", { name: "X", documentId: "123.456.789-09" }, { fetchImpl });
+    await createCompany(
+      "m",
+      { name: "X", documentId: "123.456.789-09", apps: ["PANEL"], resourcers: [], config: {} },
+      { fetchImpl },
+    );
     const body = JSON.parse(
       (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
     );
     expect(body.documentType).toBe("CPF");
-    expect(body.address).toBeUndefined();
+    expect(body.config).toBeUndefined();
+    expect(body.resourcers).toEqual([]);
   });
 
   it("erro quando a resposta não traz id", async () => {
     const fetchImpl = mockFetch(200, { ok: true });
-    await expect(createCompany("m", { name: "X" }, { fetchImpl })).rejects.toThrow(/sem id/);
+    await expect(
+      createCompany("m", { name: "X", apps: ["PANEL"], resourcers: [] }, { fetchImpl }),
+    ).rejects.toThrow(/sem id/);
   });
 
-  it("erro HTTP propaga status e corpo", async () => {
+  it("erro da Helena vira mensagem legível a partir do envelope {key, text}", async () => {
+    const fetchImpl = mockFetch(500, {
+      key: "FORM_ERROR",
+      text: "CEP não pode ser vazio",
+      httpStatusCode: "INTERNALSERVERERROR",
+    });
+    await expect(
+      createCompany("m", { name: "X", apps: ["PANEL"], resourcers: [] }, { fetchImpl }),
+    ).rejects.toThrow(/500 \[FORM_ERROR\]: CEP não pode ser vazio/);
+  });
+
+  it("erro HTTP sem envelope propaga status e corpo cru", async () => {
     const fetchImpl = mockFetch(500, { message: "boom" });
-    await expect(createCompany("m", { name: "X" }, { fetchImpl })).rejects.toThrow(/500/);
+    await expect(
+      createCompany("m", { name: "X", apps: ["PANEL"], resourcers: [] }, { fetchImpl }),
+    ).rejects.toThrow(/500/);
   });
 });
 

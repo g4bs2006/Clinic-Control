@@ -13,9 +13,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Clinic, ClinicInput } from "@/lib/clinics/schema";
 import { CLINIC_SYSTEMS } from "@/lib/clinics/systems";
 import { HelenaIntegrationFields } from "@/components/clinics/helena-integration-fields";
+import {
+  HELENA_APPS,
+  HELENA_RESOURCERS,
+  HELENA_CONFIG_FIELDS,
+  DEFAULT_PROVISION_OPTIONS,
+  type HelenaProvisionOptions,
+} from "@/lib/helena/provision-options";
 
 const SYSTEM_NONE = "__none__";
 
@@ -26,7 +34,7 @@ interface ClinicFormProps {
   defaultValues?: Clinic;
   onSubmit: (
     input: ClinicInput,
-    opts?: { provisionHelena?: boolean }
+    opts?: { provisionHelena?: boolean; helenaOptions?: HelenaProvisionOptions }
   ) => Promise<{ ok: true; id?: string } | { ok: true } | { ok: false; error: string }>;
 }
 
@@ -46,12 +54,28 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
   const [legalName, setLegalName] = useState(defaultValues?.legal_name ?? "");
   const [documentId, setDocumentId] = useState(defaultValues?.document_id ?? "");
   const [provisionHelena, setProvisionHelena] = useState(false);
+  const [helenaApps, setHelenaApps] = useState<string[]>([...DEFAULT_PROVISION_OPTIONS.apps]);
+  const [helenaResourcers, setHelenaResourcers] = useState<string[]>([
+    ...DEFAULT_PROVISION_OPTIONS.resourcers,
+  ]);
+  const [helenaConfig, setHelenaConfig] = useState<Record<string, number>>({
+    ...DEFAULT_PROVISION_OPTIONS.config,
+  });
   const [isPending, startTransition] = useTransition();
+
+  function toggleIn(list: string[], value: string, checked: boolean) {
+    return checked ? [...list, value] : list.filter((v) => v !== value);
+  }
 
   const isCreate = !defaultValues;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    if (isCreate && provisionHelena && helenaApps.length === 0) {
+      toast.error("Selecione pelo menos um app da Helena — a API exige.");
+      return;
+    }
 
     const input: ClinicInput = {
       name,
@@ -69,7 +93,13 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
     };
 
     startTransition(async () => {
-      const result = await onSubmit(input, { provisionHelena: isCreate && provisionHelena });
+      const wantsProvision = isCreate && provisionHelena;
+      const result = await onSubmit(input, {
+        provisionHelena: wantsProvision,
+        helenaOptions: wantsProvision
+          ? { apps: helenaApps, resourcers: helenaResourcers, config: helenaConfig }
+          : undefined,
+      });
       if (!result.ok) {
         toast.error(result.error);
       }
@@ -167,7 +197,14 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
 
         {/* ── Dados do dono / documento (usados no provisionamento Helena) ── */}
         <div className="rounded-lg border border-border/60 p-4 space-y-3">
-          <p className="text-sm font-medium">Dono e documento</p>
+          <p className="text-sm font-medium">
+            Dono e documento
+            {isCreate && provisionHelena && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                (obrigatórios para criar na Helena)
+              </span>
+            )}
+          </p>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="owner_name">Nome do dono</Label>
@@ -176,6 +213,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
                 value={ownerName}
                 onChange={(e) => setOwnerName(e.target.value)}
                 placeholder="Dr(a). Nome"
+                required={isCreate && provisionHelena}
               />
             </div>
             <div className="space-y-1.5">
@@ -186,6 +224,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
                 value={ownerEmail}
                 onChange={(e) => setOwnerEmail(e.target.value)}
                 placeholder="dono@clinica.com.br"
+                required={isCreate && provisionHelena}
               />
             </div>
             <div className="space-y-1.5">
@@ -195,6 +234,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
                 value={ownerPhone}
                 onChange={(e) => setOwnerPhone(e.target.value)}
                 placeholder="(00) 00000-0000"
+                required={isCreate && provisionHelena}
               />
             </div>
             <div className="space-y-1.5">
@@ -204,6 +244,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
                 value={documentId}
                 onChange={(e) => setDocumentId(e.target.value)}
                 placeholder="00.000.000/0000-00"
+                required={isCreate && provisionHelena}
               />
             </div>
           </div>
@@ -213,24 +254,96 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
               id="legal_name"
               value={legalName}
               onChange={(e) => setLegalName(e.target.value)}
-              placeholder="Razão social (opcional)"
+              placeholder={isCreate && provisionHelena ? "Razão social" : "Razão social (opcional)"}
+              required={isCreate && provisionHelena}
             />
           </div>
         </div>
 
         {isCreate && (
-          <div className="flex items-center gap-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4">
-            <Switch
-              id="provision_helena"
-              checked={provisionHelena}
-              onCheckedChange={(checked) => setProvisionHelena(checked)}
-            />
-            <Label htmlFor="provision_helena" className="cursor-pointer">
-              <span className="font-medium">Criar automaticamente na Helena</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">
-                conta, token, usuário do dono (Admin), equipes Atendimento Humano + CRC e etiquetas padrão
-              </span>
-            </Label>
+          <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <Switch
+                id="provision_helena"
+                checked={provisionHelena}
+                onCheckedChange={(checked) => setProvisionHelena(checked)}
+              />
+              <Label htmlFor="provision_helena" className="cursor-pointer">
+                <span className="font-medium">Criar automaticamente na Helena</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  conta, token, usuário do dono (Admin), equipes Atendimento Humano + CRC e etiquetas padrão
+                </span>
+              </Label>
+            </div>
+
+            {provisionHelena && (
+              <div className="space-y-4 border-t border-primary/20 pt-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Apps habilitados na conta</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {HELENA_APPS.map((app) => (
+                      <label key={app.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={helenaApps.includes(app.value)}
+                          onCheckedChange={(checked) =>
+                            setHelenaApps((prev) => toggleIn(prev, app.value, checked === true))
+                          }
+                        />
+                        {app.label}
+                      </label>
+                    ))}
+                  </div>
+                  {helenaApps.length === 0 && (
+                    <p className="text-xs text-red-400">Selecione pelo menos um app — a Helena exige.</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Recursos avançados</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {HELENA_RESOURCERS.map((r) => (
+                      <label key={r.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={helenaResourcers.includes(r.value)}
+                          onCheckedChange={(checked) =>
+                            setHelenaResourcers((prev) => toggleIn(prev, r.value, checked === true))
+                          }
+                        />
+                        {r.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Limites do plano</p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {HELENA_CONFIG_FIELDS.map((f) => (
+                      <div key={f.key} className="space-y-1">
+                        <Label htmlFor={`helena_cfg_${f.key}`} className="text-xs text-muted-foreground">
+                          {f.label}
+                        </Label>
+                        <Input
+                          id={`helena_cfg_${f.key}`}
+                          type="number"
+                          min={0}
+                          value={helenaConfig[f.key] ?? f.default}
+                          onChange={(e) =>
+                            setHelenaConfig((prev) => ({
+                              ...prev,
+                              [f.key]: Math.max(0, Math.floor(Number(e.target.value) || 0)),
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Sessões têm mínimo de 1000 na Helena — valores menores são elevados automaticamente.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

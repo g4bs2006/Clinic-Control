@@ -42,6 +42,24 @@ export async function createClinic(input: ClinicInput) {
   const parsed = clinicInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0].message };
   const supabase = await createClient();
+
+  // Evita duplicatas (inclusive arquivadas) — retry de provisionamento deve
+  // ser feito pelo "Reprocessar" no perfil, não criando a clínica de novo.
+  const namePattern = parsed.data.name.replace(/[\\%_]/g, (m) => `\\${m}`);
+  const { data: existing } = await supabase
+    .from("clinics")
+    .select("id, contract_status")
+    .ilike("name", namePattern)
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    const suffix = existing.contract_status === "archived" ? " (arquivada)" : "";
+    return {
+      ok: false as const,
+      error: `Já existe uma clínica chamada "${parsed.data.name}"${suffix}. Para reprovisionar na Helena, use o botão Reprocessar no perfil dela.`,
+    };
+  }
+
   const { data, error } = await supabase
     .from("clinics")
     .insert({ ...parsed.data, ...(await geoFields(parsed.data)) })

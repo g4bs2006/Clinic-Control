@@ -7,6 +7,10 @@ import { encryptToken, decryptToken } from "@/lib/crypto/token";
 import { createCompany, createCompanyToken } from "@/lib/helena/admin";
 import { createAgent, createDepartment, createContact, listPanels } from "@/lib/helena/client";
 import { DEFAULT_TEAMS, DEFAULT_TAGS, SEED_CONTACT_NAME } from "@/lib/helena/provision-defaults";
+import {
+  normalizeProvisionOptions,
+  type HelenaProvisionOptions,
+} from "@/lib/helena/provision-options";
 import { PROVISION_STEPS, type ProvisionStep, type ProvisionRow } from "./provision-schema";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -63,18 +67,31 @@ export async function listProvisioning(clinicId: string): Promise<ProvisionRow[]
  */
 export async function runProvisioning(
   clinicId: string,
+  options?: HelenaProvisionOptions,
 ): Promise<{ ok: true; rows: ProvisionRow[] } | { ok: false; error: string }> {
   const auth = await requireUser();
   if (!auth) return { ok: false, error: "Não autenticado" };
 
   const db = createServiceClient();
 
+  // Opções vindas do form (criação) são persistidas para o Reprocessar reutilizar.
+  if (options) {
+    await db
+      .from("clinics")
+      .update({ helena_provision_options: normalizeProvisionOptions(options) })
+      .eq("id", clinicId);
+  }
+
   const { data: clinic, error: clinicError } = await db
     .from("clinics")
-    .select("id, name, city, state, legal_name, document_id, owner_name, owner_email, owner_phone, mode")
+    .select(
+      "id, name, legal_name, document_id, owner_name, owner_email, owner_phone, mode, helena_provision_options",
+    )
     .eq("id", clinicId)
     .single();
   if (clinicError || !clinic) return { ok: false, error: "Clínica não encontrada" };
+
+  const provisionOptions = normalizeProvisionOptions(options ?? clinic.helena_provision_options);
 
   const { data: existingRows } = await db
     .from("clinic_provisioning")
@@ -103,6 +120,28 @@ export async function runProvisioning(
       revalidatePath(`/clinicas/${clinicId}`);
       return { ok: true, rows: await listProvisioning(clinicId) };
     }
+    // A Helena exige estes campos (responde 500 genérico quando faltam) —
+    // barra aqui com mensagem acionável em vez de queimar a chamada.
+    const missing = [
+      [clinic.legal_name, "razão social"],
+      [clinic.document_id, "CNPJ/CPF"],
+      [clinic.owner_name, "nome do dono"],
+      [clinic.owner_email, "e-mail do dono"],
+      [clinic.owner_phone, "telefone do dono"],
+    ]
+      .filter(([value]) => !value)
+      .map(([, label]) => label);
+    if (missing.length > 0) {
+      await record(
+        db,
+        clinicId,
+        "account",
+        "error",
+        `Cadastro incompleto — a Helena exige: ${missing.join(", ")}. Preencha em Editar clínica e reprocesse.`,
+      );
+      revalidatePath(`/clinicas/${clinicId}`);
+      return { ok: true, rows: await listProvisioning(clinicId) };
+    }
     try {
       const company = await createCompany(masterToken, {
         name: clinic.name,
@@ -113,8 +152,9 @@ export async function runProvisioning(
           email: clinic.owner_email,
           phoneNumber: clinic.owner_phone,
         },
-        city: clinic.city,
-        state: clinic.state,
+        apps: provisionOptions.apps,
+        resourcers: provisionOptions.resourcers,
+        config: provisionOptions.config,
       });
       companyId = company.id;
       await record(db, clinicId, "account", "done", companyId);

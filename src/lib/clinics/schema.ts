@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const clinicInputSchema = z.object({
-  name: z.string().min(2, "Nome muito curto"),
+  name: z.string().trim().min(2, "Nome muito curto"),
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().length(2, "Use a UF com 2 letras").optional(),
