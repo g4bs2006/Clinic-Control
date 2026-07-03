@@ -418,7 +418,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
             <p className="text-sm font-medium">Integração Helena</p>
             <HelenaIntegrationFields
               clinicId={defaultValues?.id}
-              onPanelSelected={(_token, _panelId) => {
+              onPanelSelected={() => {
                 // token/panelId tracked inside sub-component;
                 // edit mode: use "Salvar integração" inside the sub-component.
                 // create mode: redirect happens server-side, so integration is

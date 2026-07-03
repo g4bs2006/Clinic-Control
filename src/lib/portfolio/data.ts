@@ -71,7 +71,11 @@ export async function getPortfolioForMonth(
 
   const overviewByClinicId = new Map<
     string,
-    { contactCount: number; channels: any[]; company: any }
+    {
+      contactCount: number;
+      channels: import("@/lib/helena/types").HelenaChannel[];
+      company: import("@/lib/helena/types").HelenaCompany | null;
+    }
   >();
   autoClinics.forEach((c, idx) => {
     const result = accountOverviewResults[idx];

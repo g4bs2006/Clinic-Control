@@ -159,7 +159,16 @@ export async function listClinicLeads(
   }
 }
 
-const overviewCache = new Map<string, { value: any; expires: number }>();
+type AccountOverviewResult =
+  | {
+      ok: true;
+      contactCount: number;
+      channels: import("@/lib/helena/types").HelenaChannel[];
+      company: import("@/lib/helena/types").HelenaCompany | null;
+    }
+  | { ok: false; error: string };
+
+const overviewCache = new Map<string, { value: AccountOverviewResult; expires: number }>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
 export async function getHelenaAccountOverview(clinicId: string) {

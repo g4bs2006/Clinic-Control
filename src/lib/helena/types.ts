@@ -19,7 +19,7 @@ export interface HelenaCard {
   title: string;
   monetaryAmount: number | null;
   createdAt: string;
-  customFields?: Record<string, any>;
+  customFields?: Record<string, unknown>;
 }
 
 export interface HelenaCompany {

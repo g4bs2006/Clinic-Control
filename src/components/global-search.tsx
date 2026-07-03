@@ -10,18 +10,34 @@ import { cn } from "@/lib/utils";
 export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [clinics, setClinics] = useState<Clinic[]>([]);
-  const [loading, setLoading] = useState(false);
+  // null = ainda não carregado (loading derivado disso, sem estado extra)
+  const [clinics, setClinics] = useState<Clinic[] | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const router = useRouter();
   const backdropRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Espelho do isOpen para o atalho de teclado decidir abrir/fechar sem stale closure
+  const isOpenRef = useRef(false);
 
-  // Toggle modal open/close
-  const toggleOpen = useCallback(() => {
-    setIsOpen((prev) => !prev);
+  // O reset de busca/índice acontece no ato de abrir (handler), não em effect.
+  const open = useCallback(() => {
+    isOpenRef.current = true;
+    setIsOpen(true);
+    setQuery("");
+    setActiveIndex(0);
+    setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
+
+  const close = useCallback(() => {
+    isOpenRef.current = false;
+    setIsOpen(false);
+  }, []);
+
+  const toggleOpen = useCallback(() => {
+    if (isOpenRef.current) close();
+    else open();
+  }, [open, close]);
 
   // Listen to Ctrl+K or Cmd+K
   useEffect(() => {
@@ -37,33 +53,33 @@ export function GlobalSearch() {
 
   // Listen to custom sidebar click event
   useEffect(() => {
-    function handleCustomEvent() {
-      setIsOpen(true);
-    }
-    window.addEventListener("cc-open-search", handleCustomEvent);
-    return () => window.removeEventListener("cc-open-search", handleCustomEvent);
-  }, []);
+    window.addEventListener("cc-open-search", open);
+    return () => window.removeEventListener("cc-open-search", open);
+  }, [open]);
 
-  // Fetch clinics when modal opens
+  // Fetch clinics when modal opens (setState só no callback assíncrono)
   useEffect(() => {
-    if (isOpen) {
-      setQuery("");
-      setActiveIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+    if (!isOpen || clinics !== null) return;
+    let cancelled = false;
+    listClinics()
+      .then((data) => {
+        if (!cancelled) setClinics(data);
+      })
+      .catch((err) => {
+        console.error("Erro ao carregar lista de busca:", err);
+        if (!cancelled) setClinics([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, clinics]);
 
-      if (clinics.length === 0) {
-        setLoading(true);
-        listClinics()
-          .then((data) => setClinics(data))
-          .catch((err) => console.error("Erro ao carregar lista de busca:", err))
-          .finally(() => setLoading(false));
-      }
-    }
-  }, [isOpen, clinics.length]);
+  const loading = isOpen && clinics === null;
 
   // Filter clinics
+  const loaded = clinics ?? [];
   const filtered = query.trim()
-    ? clinics.filter((c) => {
+    ? loaded.filter((c) => {
         const term = query.toLowerCase();
         return (
           c.name.toLowerCase().includes(term) ||
@@ -73,18 +89,13 @@ export function GlobalSearch() {
           c.system?.toLowerCase().includes(term)
         );
       })
-    : clinics.slice(0, 5); // show top 5 when empty
-
-  // Reset active index when query changes
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
+    : loaded.slice(0, 5); // show top 5 when empty
 
   // Handle navigate
   const handleSelect = useCallback((clinicId: string) => {
-    setIsOpen(false);
+    close();
     router.push(`/clinicas/${clinicId}`);
-  }, [router]);
+  }, [router, close]);
 
   // Keyboard navigation inside list
   useEffect(() => {
@@ -104,13 +115,13 @@ export function GlobalSearch() {
         }
       } else if (e.key === "Escape") {
         e.preventDefault();
-        setIsOpen(false);
+        close();
       }
     }
 
     window.addEventListener("keydown", handleKeys);
     return () => window.removeEventListener("keydown", handleKeys);
-  }, [isOpen, filtered, activeIndex, handleSelect]);
+  }, [isOpen, filtered, activeIndex, handleSelect, close]);
 
   if (!isOpen) return null;
 
@@ -118,7 +129,7 @@ export function GlobalSearch() {
     <div
       ref={backdropRef}
       onClick={(e) => {
-        if (e.target === backdropRef.current) setIsOpen(false);
+        if (e.target === backdropRef.current) close();
       }}
       className="fixed inset-0 z-[2000] bg-black/75 backdrop-blur-xs flex items-start justify-center pt-[15vh] p-4"
     >
@@ -130,13 +141,19 @@ export function GlobalSearch() {
             ref={inputRef}
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setActiveIndex(0); // volta ao topo a cada mudança da busca
+            }}
             placeholder="Buscar clínica por nome, cidade ou sistema..."
             className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground placeholder:text-muted-foreground/60"
           />
           {query && (
             <button
-              onClick={() => setQuery("")}
+              onClick={() => {
+                setQuery("");
+                setActiveIndex(0);
+              }}
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="size-4" />

@@ -196,7 +196,7 @@ export default async function ClinicDetailPage({
             </span>
             {isAuto && helenaOverviewRes?.ok && helenaOverviewRes.channels && (
               <>
-                {helenaOverviewRes.channels.map((c: any) => {
+                {helenaOverviewRes.channels.map((c) => {
                   const isOnline = ["connected", "active", "online", "stable", "paired", "authenticated"].includes(c.status?.toLowerCase())
                   return (
                     <span 

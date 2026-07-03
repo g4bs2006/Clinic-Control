@@ -36,7 +36,7 @@ export type StoredFile = {
 // lista só um nível por chamada, então descemos nas subpastas).
 export async function listAllFiles(
   // schema-agnostic: só usa .storage (independe do schema do banco)
-  supabase: SupabaseClient<any, any, any>,
+  supabase: Pick<SupabaseClient, "storage">,
   clinicId: string,
 ): Promise<StoredFile[]> {
   const out: StoredFile[] = []

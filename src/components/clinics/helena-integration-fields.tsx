@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getHelenaSetupOverview, getLiveFunnel, saveIntegration } from "@/lib/clinics/integration-actions";
+import type { HelenaChannel, HelenaCompany } from "@/lib/helena/types";
 
 interface Panel {
   id: string;
@@ -53,8 +54,8 @@ export function HelenaIntegrationFields({
 
   // Overview status fields
   const [contactCount, setContactCount] = useState<number | null>(null);
-  const [channels, setChannels] = useState<any[]>([]);
-  const [companyInfo, setCompanyInfo] = useState<any | null>(null);
+  const [channels, setChannels] = useState<HelenaChannel[]>([]);
+  const [companyInfo, setCompanyInfo] = useState<HelenaCompany | null>(null);
 
   function handleFetchPanels() {
     if (!token.trim()) {
@@ -177,7 +178,7 @@ export function HelenaIntegrationFields({
                 {channels.length === 0 ? (
                   <span className="text-xs text-muted-foreground">Nenhum canal</span>
                 ) : (
-                  channels.map((c: any) => {
+                  channels.map((c) => {
                     const isOnline = ["connected", "active", "online", "stable", "paired", "authenticated"].includes(c.status?.toLowerCase());
                     return (
                       <span

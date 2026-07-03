@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -34,19 +34,27 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
 ];
 
 const STORAGE_KEY = "cc-sidebar-pinned";
+const PIN_EVENT = "cc-sidebar-pin-change";
 const RAIL = "w-[3.75rem]";
 const FULL = "w-60";
+
+// O estado "fixado" vive no localStorage — lido via useSyncExternalStore para
+// hidratar sem setState em effect (SSR renderiza destravado e o cliente corrige).
+function subscribePinned(onChange: () => void) {
+  window.addEventListener(PIN_EVENT, onChange);
+  return () => window.removeEventListener(PIN_EVENT, onChange);
+}
 
 export function AppNav() {
   const pathname = usePathname();
   // pinned: user locked it open (persisted). peek: transient hover/focus expand.
-  const [pinned, setPinned] = useState(false);
+  const pinned = useSyncExternalStore(
+    subscribePinned,
+    () => localStorage.getItem(STORAGE_KEY) === "1",
+    () => false,
+  );
   const [peek, setPeek] = useState(false);
   const navRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (localStorage.getItem(STORAGE_KEY) === "1") setPinned(true);
-  }, []);
 
   // Click outside collapses the transient peek (when not pinned)
   useEffect(() => {
@@ -61,12 +69,10 @@ export function AppNav() {
   }, [pinned]);
 
   function togglePin() {
-    setPinned((prev) => {
-      const next = !prev;
-      localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
-      if (next) setPeek(false);
-      return next;
-    });
+    const next = !pinned;
+    localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+    window.dispatchEvent(new Event(PIN_EVENT));
+    if (next) setPeek(false);
   }
 
   const open = pinned || peek;

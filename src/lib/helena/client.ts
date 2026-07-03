@@ -164,8 +164,8 @@ export async function getCompanyInfo(
 
 export async function listDepartments(token: string, opts?: Opts): Promise<HelenaDepartment[]> {
   const data = await get(token, "/core/v2/department", {}, opts);
-  const items = Array.isArray(data) ? data : (data.items ?? []);
-  return items.map((d: any) => ({
+  const items: { id: string; name: string }[] = Array.isArray(data) ? data : (data.items ?? []);
+  return items.map((d) => ({
     id: d.id,
     name: d.name,
   }));
@@ -173,8 +173,9 @@ export async function listDepartments(token: string, opts?: Opts): Promise<Helen
 
 export async function listUsers(token: string, opts?: Opts): Promise<HelenaAgent[]> {
   const data = await get(token, "/core/v1/agent", {}, opts);
-  const items = Array.isArray(data) ? data : (data.items ?? []);
-  return items.map((a: any) => ({
+  const items: { id: string; name: string; email?: string | null; active?: boolean }[] =
+    Array.isArray(data) ? data : (data.items ?? []);
+  return items.map((a) => ({
     id: a.id,
     name: a.name,
     email: a.email ?? null,
@@ -249,9 +250,17 @@ export async function listWebhookEvents(
 }
 
 export async function listChannels(token: string, opts?: Opts): Promise<HelenaChannel[]> {
+  type RawChannel = {
+    id: string;
+    type: string;
+    active?: boolean;
+    number?: string | null;
+    numberFormatted?: string | null;
+    identity?: { displayName?: string | null } | null;
+  };
   const data = await get(token, "/chat/v1/channel", {}, opts);
-  const items = Array.isArray(data) ? data : (data.items ?? []);
-  return items.map((c: any) => ({
+  const items: RawChannel[] = Array.isArray(data) ? data : (data.items ?? []);
+  return items.map((c) => ({
     id: c.id,
     name: c.identity?.displayName || c.numberFormatted || c.number || c.type,
     type: c.type,

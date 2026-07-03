@@ -73,7 +73,7 @@ export function ClinicFunnelSetup({
             <h4 className="text-sm font-semibold text-foreground">Configurar Integração CRM Helena</h4>
             <HelenaIntegrationFields
               clinicId={clinicId}
-              onPanelSelected={(_token, _panelId) => {}}
+              onPanelSelected={() => {}}
             />
           </div>
         ) : (
