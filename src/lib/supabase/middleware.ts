@@ -34,7 +34,9 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  if (!user && !pathname.startsWith("/login")) {
+  // /auth/* fica acessível sem sessão: é onde o link de convite/recuperação
+  // troca o token por sessão (a própria rota valida o token).
+  if (!user && !pathname.startsWith("/login") && !pathname.startsWith("/auth")) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.search = "";
