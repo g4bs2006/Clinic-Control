@@ -12,6 +12,10 @@ import { listClinicFiles } from "@/lib/clinics/files-actions"
 import { listClinicChecks } from "@/lib/clinics/check-items-actions"
 import { listFormCredentials } from "@/lib/clinics/form-credentials-actions"
 import { getClinicResponseStats, listClinicSummaries } from "@/lib/whatsapp/actions"
+import { getClinicHelenaIntegration } from "@/lib/helena/accounts-actions"
+import { ClinicHelenaIntegration } from "@/components/clinics/clinic-helena-integration"
+import { listUserProfiles } from "@/lib/users/actions"
+import { ClinicDeveloperSelect } from "@/components/clinics/clinic-developer-select"
 import { listProvisioning } from "@/lib/clinics/provision-actions"
 import { ClinicProvisioning } from "@/components/clinics/clinic-provisioning"
 import { fmtDuration } from "@/lib/whatsapp/format"
@@ -102,7 +106,7 @@ export default async function ClinicDetailPage({
   const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
   const nextClinic = currentIndex < allClinics.length - 1 ? allClinics[currentIndex + 1] : null
 
-  const [agents, files, clinicChecks, formCredentials, responseStats, summaries, provisioning] =
+  const [agents, files, clinicChecks, formCredentials, responseStats, summaries, provisioning, helenaIntegration, profiles] =
     await Promise.all([
       listClinicAgents(id),
       listClinicFiles(id),
@@ -111,6 +115,8 @@ export default async function ClinicDetailPage({
       getClinicResponseStats(id),
       listClinicSummaries(id),
       listProvisioning(id),
+      getClinicHelenaIntegration(id),
+      listUserProfiles(),
     ])
 
   const liveFunnel = funnelRes && funnelRes.ok ? funnelRes.funnel : null
@@ -232,10 +238,19 @@ export default async function ClinicDetailPage({
         </Panel>
       )}
 
-      {/* ── Sistema utilizado ──────────────────────────────────── */}
-      <Panel title="Sistema" subtitle="prontuário / agenda utilizado pela clínica">
-        <ClinicSystemSelect clinicId={id} current={clinic.system ?? null} />
-      </Panel>
+      {/* ── Sistema utilizado + carteira ───────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Panel title="Sistema" subtitle="prontuário / agenda utilizado pela clínica">
+          <ClinicSystemSelect clinicId={id} current={clinic.system ?? null} />
+        </Panel>
+        <Panel title="Desenvolvedor responsável" subtitle="carteira: quem cuida desta clínica">
+          <ClinicDeveloperSelect
+            clinicId={id}
+            current={clinic.developer_id ?? null}
+            profiles={profiles}
+          />
+        </Panel>
+      </div>
 
       {/* ── Credenciais do Formulário ──────────────────────────── */}
       {(clinic.system === "Google Agenda" || clinic.system === "Clinicorp") && (
@@ -405,6 +420,14 @@ export default async function ClinicDetailPage({
             ))}
           </div>
         </Panel>
+      )}
+
+      {/* ── Integração Helena (conta, tokens, webhooks, eventos) ── */}
+      {helenaIntegration.ok && helenaIntegration.account && (
+        <ClinicHelenaIntegration
+          account={helenaIntegration.account}
+          events={helenaIntegration.events}
+        />
       )}
 
       {/* ── Resumo diário do grupo (IA) ────────────────────────── */}

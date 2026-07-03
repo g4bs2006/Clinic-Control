@@ -2,23 +2,33 @@ import { listStatusRules, listFunnelSteps } from "@/lib/snapshots/rules-actions"
 import { listCheckItems } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
+import { listUserProfiles } from "@/lib/users/actions"
 import { Panel } from "@/components/dashboard/panel"
 import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
 import { CheckItemsEditor } from "@/components/settings/check-items-editor"
 import { WhatsappGroupsEditor } from "@/components/settings/whatsapp-groups-editor"
 import { WhatsappTeamEditor } from "@/components/settings/whatsapp-team-editor"
+import { UsersEditor } from "@/components/settings/users-editor"
 
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, clinics, groups, teamMembers] = await Promise.all([
+  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
     listClinics(),
     listWhatsappGroups(),
     listTeamMembers(),
+    listUserProfiles(),
   ])
+
+  const clinicCountByDeveloper: Record<string, number> = {}
+  for (const c of clinics) {
+    if (c.developer_id) {
+      clinicCountByDeveloper[c.developer_id] = (clinicCountByDeveloper[c.developer_id] ?? 0) + 1
+    }
+  }
 
   return (
     <main className="p-6 space-y-6 max-w-screen-lg mx-auto">
@@ -28,6 +38,17 @@ export default async function ConfiguracoesPage() {
           Faixas de status, definição do funil e checklist de clínicas
         </p>
       </div>
+
+      {/* ── Usuários e papéis ──────────────────────────────────── */}
+      <Panel
+        title="Usuários"
+        subtitle="gestor vê toda a carteira · desenvolvedor vê só as clínicas dele"
+      >
+        <UsersEditor
+          initialProfiles={profiles}
+          clinicCountByDeveloper={clinicCountByDeveloper}
+        />
+      </Panel>
 
       {/* ── Status rules ───────────────────────────────────────── */}
       <Panel

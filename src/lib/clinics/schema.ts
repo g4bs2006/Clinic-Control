@@ -28,5 +28,6 @@ export type Clinic = ClinicInput & {
   region: string | null;
   lat: number | null;
   lng: number | null;
+  developer_id: string | null; // carteira: usuário responsável pela clínica
   created_at: string;
 };

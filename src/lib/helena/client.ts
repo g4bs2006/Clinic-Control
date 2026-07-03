@@ -195,6 +195,18 @@ export async function listWebhookSubscriptions(
   }));
 }
 
+/** Catálogo de eventos de webhook assináveis (GET /core/v1/webhook/event). */
+export async function listWebhookEvents(
+  token: string,
+  opts?: Opts,
+): Promise<{ event: string; description: string | null }[]> {
+  const data = await get(token, "/core/v1/webhook/event", {}, opts);
+  const items: { event: string; description?: string | null }[] = Array.isArray(data)
+    ? data
+    : (data.items ?? []);
+  return items.map((e) => ({ event: e.event, description: e.description ?? null }));
+}
+
 export async function listChannels(token: string, opts?: Opts): Promise<HelenaChannel[]> {
   const data = await get(token, "/chat/v1/channel", {}, opts);
   const items = Array.isArray(data) ? data : (data.items ?? []);

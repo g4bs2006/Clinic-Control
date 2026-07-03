@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { decryptToken } from "@/lib/crypto/token";
 import { listCompanies, listCompanyTokens } from "@/lib/helena/admin";
-import { listWebhookSubscriptions } from "@/lib/helena/client";
+import { listWebhookSubscriptions, listWebhookEvents } from "@/lib/helena/client";
 import type { HelenaTokenMeta, HelenaWebhookSubscription } from "@/lib/helena/types";
 
 // Mesmo modelo de auth das demais integration-actions: qualquer usuário
@@ -41,6 +41,58 @@ export async function listHelenaAccounts(): Promise<HelenaAccountRow[]> {
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as HelenaAccountRow[];
+}
+
+export type HelenaEventCatalogItem = { event: string; description: string | null };
+
+// O catálogo de eventos é global da Helena (não varia por conta) — cache 1h.
+let eventsCache: { value: HelenaEventCatalogItem[]; expires: number } | null = null;
+
+/**
+ * Dados de integração Helena de UMA clínica para o perfil: a linha espelhada
+ * em helena_accounts (conta, tokens_meta, webhooks) + catálogo de eventos
+ * assináveis (ao vivo, com o token da clínica).
+ */
+export async function getClinicHelenaIntegration(clinicId: string): Promise<
+  | { ok: true; account: HelenaAccountRow | null; events: HelenaEventCatalogItem[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const auth = await createClient();
+    const { data: { user } } = await auth.auth.getUser();
+    if (!user) return { ok: false, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data: account } = await supabase
+      .from("helena_accounts")
+      .select("*")
+      .eq("clinic_id", clinicId)
+      .maybeSingle();
+
+    let events: HelenaEventCatalogItem[] = [];
+    if (eventsCache && eventsCache.expires > Date.now()) {
+      events = eventsCache.value;
+    } else {
+      const { data: integ } = await supabase
+        .from("clinic_integrations")
+        .select("helena_token_encrypted")
+        .eq("clinic_id", clinicId)
+        .maybeSingle();
+      if (integ) {
+        try {
+          const token = decryptToken(integ.helena_token_encrypted as string);
+          events = await listWebhookEvents(token);
+          eventsCache = { value: events, expires: Date.now() + 60 * 60 * 1000 };
+        } catch {
+          events = []; // catálogo é cosmético — não derruba o painel
+        }
+      }
+    }
+
+    return { ok: true, account: (account as HelenaAccountRow | null) ?? null, events };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Falha ao ler integração Helena" };
+  }
 }
 
 const PACE_MS = 80; // espaçamento entre contas (rate limit Helena: burst 200/5s)
