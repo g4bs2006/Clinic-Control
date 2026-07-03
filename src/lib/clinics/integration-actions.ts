@@ -98,6 +98,8 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+    if (!data.panel_id)
+      return { ok: false as const, error: "Painel ainda não vinculado — crie na Helena e reprocesse" };
 
     const token = decryptToken(data.helena_token_encrypted as string);
     const panelId = data.panel_id as string;
@@ -133,6 +135,8 @@ export async function listClinicLeads(
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+    if (!data.panel_id)
+      return { ok: false as const, error: "Painel ainda não vinculado — crie na Helena e reprocesse" };
 
     const token = decryptToken(data.helena_token_encrypted as string);
     const panelId = data.panel_id as string;
@@ -262,6 +266,8 @@ export async function getHelenaCustomFieldsAggregation(clinicId: string, yearMon
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+    if (!data.panel_id)
+      return { ok: false as const, error: "Painel ainda não vinculado — crie na Helena e reprocesse" };
 
     const token = decryptToken(data.helena_token_encrypted as string);
     const panelId = data.panel_id as string;
