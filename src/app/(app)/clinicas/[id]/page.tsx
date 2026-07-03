@@ -418,6 +418,21 @@ export default async function ClinicDetailPage({
         }
         const sentiment = sentimentStyle[selected.highlights?.sentimento ?? "neutro"]
         const dayLabel = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`
+
+        // Faixa dos últimos 30 dias (fuso SP): uma bolinha por dia, colorida pelo sentimento
+        const byDate = new Map(summaries.map((s) => [s.summary_date, s]))
+        const todaySp = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })
+        const [ty, tm, td] = todaySp.split("-").map(Number)
+        const stripDays: string[] = []
+        for (let i = 29; i >= 0; i--) {
+          stripDays.push(new Date(Date.UTC(ty, tm - 1, td - i)).toISOString().slice(0, 10))
+        }
+        const sentimentDot: Record<string, string> = {
+          positivo: "bg-emerald-500",
+          neutro: "bg-zinc-500",
+          negativo: "bg-red-500",
+        }
+
         const fullDayLabel = (() => {
           const [y, m, d] = selected.summary_date.split("-").map(Number)
           return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("pt-BR", {
@@ -430,23 +445,65 @@ export default async function ClinicDetailPage({
         return (
           <Panel
             title="Resumo diário · WhatsApp"
-            subtitle="o que aconteceu no grupo, resumido por IA · troque o dia nos botões"
+            subtitle="o que aconteceu no grupo, resumido por IA · clique num dia da faixa"
           >
-            <div className="flex flex-wrap gap-1.5">
-              {summaries.slice(0, 14).map((s) => (
-                <Link
-                  key={s.summary_date}
-                  href={`/clinicas/${id}?resumo=${s.summary_date}`}
-                  scroll={false}
-                  className={`rounded-full border px-2.5 py-1 text-[0.68rem] font-medium tabular-nums transition-colors ${
-                    s.summary_date === selected.summary_date
-                      ? "border-primary/60 bg-primary/15 text-primary"
-                      : "border-border text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {dayLabel(s.summary_date)}
-                </Link>
-              ))}
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-1">
+                {stripDays.map((d) => {
+                  const s = byDate.get(d)
+                  const isSelected = s && d === selected.summary_date
+                  const senti = s?.highlights?.sentimento ?? "neutro"
+                  const churn = s?.highlights?.risco_churn === true
+                  const title = s
+                    ? `${dayLabel(d)} · ${senti}${churn ? " · risco churn" : ""}`
+                    : `${dayLabel(d)} · sem resumo`
+                  const dot = (
+                    <span
+                      className={`block h-3.5 w-3.5 rounded-full transition-transform ${
+                        s ? sentimentDot[senti] : "border border-border/70 bg-transparent"
+                      } ${
+                        isSelected
+                          ? "ring-2 ring-primary scale-110"
+                          : churn
+                            ? "ring-2 ring-red-500/50"
+                            : ""
+                      }`}
+                    />
+                  )
+                  return s ? (
+                    <Link
+                      key={d}
+                      href={`/clinicas/${id}?resumo=${d}`}
+                      scroll={false}
+                      title={title}
+                      className="p-0.5 transition-transform hover:scale-110"
+                    >
+                      {dot}
+                    </Link>
+                  ) : (
+                    <span key={d} title={title} className="p-0.5">
+                      {dot}
+                    </span>
+                  )
+                })}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-[0.62rem] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> positivo
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-zinc-500" /> neutro
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-red-500" /> negativo
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-red-500 ring-2 ring-red-500/50" /> risco churn
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full border border-border/70" /> sem resumo
+                </span>
+              </div>
             </div>
 
             <div className="rounded-md border border-border/60 bg-accent/20 p-4 space-y-3">

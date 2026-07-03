@@ -8,7 +8,7 @@ import { RankingTable } from "@/components/dashboard/ranking-table"
 import { PortfolioFilters } from "@/components/dashboard/portfolio-filters"
 import { listCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
-import { listResponseStats } from "@/lib/whatsapp/actions"
+import { listResponseStats, listAttentionSummaries } from "@/lib/whatsapp/actions"
 import { fmtDuration } from "@/lib/whatsapp/format"
 import { ExportButton } from "@/components/dashboard/export-button"
 import { CheckCircle2 } from "lucide-react"
@@ -55,12 +55,13 @@ export default async function HomePage({
   const rawRegion = params.region ?? ""
 
   // Fetch portfolio data, check items, all checks, raw clinics and WhatsApp stats
-  const [portfolioData, checkItems, allChecksMap, rawClinics, responseStats] = await Promise.all([
+  const [portfolioData, checkItems, allChecksMap, rawClinics, responseStats, attentionSummaries] = await Promise.all([
     getPortfolioForMonth(month),
     listCheckItems(),
     listAllClinicChecks(),
     listClinics(),
     listResponseStats(month),
+    listAttentionSummaries(),
   ])
   const { rows: allRows, summary } = portfolioData
 
@@ -305,6 +306,73 @@ export default async function HomePage({
                 </div>
               )}
             </div>
+          </Panel>
+
+          {/* ── Atenção · Resumos IA (WhatsApp) ──────────────────── */}
+          <Panel
+            title="Atenção · Resumos IA"
+            subtitle="sinais negativos no grupo de WhatsApp (últimos 7 dias)"
+          >
+            {attentionSummaries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <CheckCircle2 className="size-8 text-emerald-500/80 mb-2" />
+                <p className="text-xs text-muted-foreground">
+                  Nenhum sinal de atenção nos resumos recentes.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                {attentionSummaries.map((s) => {
+                  const clinicName =
+                    nameByClinicId.get(s.clinic_id) ??
+                    rawClinics.find((c) => c.id === s.clinic_id)?.name ??
+                    "Clínica"
+                  const dayLabel = `${s.summary_date.slice(8, 10)}/${s.summary_date.slice(5, 7)}`
+                  return (
+                    <li
+                      key={s.clinic_id}
+                      className="flex flex-col gap-1.5 rounded-md border border-border/50 bg-accent/30 p-2.5 hover:bg-accent/60 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <Link
+                          href={`/clinicas/${s.clinic_id}?resumo=${s.summary_date}`}
+                          className="text-xs font-semibold text-foreground hover:underline truncate"
+                        >
+                          {clinicName}
+                        </Link>
+                        <span className="flex items-center gap-1 shrink-0">
+                          {s.highlights?.risco_churn && (
+                            <span className="rounded-full bg-red-500/15 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-red-400">
+                              Churn
+                            </span>
+                          )}
+                          {s.highlights?.sentimento === "negativo" && (
+                            <span className="rounded-full bg-red-500/15 px-1.5 py-0.5 text-[0.6rem] font-semibold text-red-400">
+                              Negativo
+                            </span>
+                          )}
+                          <span className="text-[0.62rem] text-muted-foreground tabular-nums">
+                            {dayLabel}
+                          </span>
+                        </span>
+                      </div>
+                      {(s.highlights?.reclamacoes?.length ?? 0) > 0 && (
+                        <p className="text-[0.7rem] leading-snug text-muted-foreground line-clamp-2">
+                          <span className="font-semibold text-red-400/90">Reclamações: </span>
+                          {s.highlights!.reclamacoes!.join(" · ")}
+                        </p>
+                      )}
+                      {(s.highlights?.pendencias?.length ?? 0) > 0 && (
+                        <p className="text-[0.7rem] leading-snug text-muted-foreground line-clamp-2">
+                          <span className="font-semibold text-amber-400/90">Pendências: </span>
+                          {s.highlights!.pendencias!.join(" · ")}
+                        </p>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </Panel>
 
           {/* ── Churn Risk Alerts ────────────────────────────────── */}

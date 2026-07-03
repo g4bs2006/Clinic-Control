@@ -127,6 +127,40 @@ export async function listClinicSummaries(
   return (data ?? []) as DailySummaryRow[];
 }
 
+/**
+ * Clínicas que pedem atenção segundo o último resumo diário (janela de `days`):
+ * sentimento negativo, risco de churn ou reclamações. Considera apenas o resumo
+ * mais recente de cada clínica, para o card "Atenção · Resumos IA" do dashboard.
+ */
+export async function listAttentionSummaries(days = 7): Promise<DailySummaryRow[]> {
+  const supabase = await createClient();
+  const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from("whatsapp_daily_summaries")
+    .select("clinic_id, summary_date, summary_md, highlights, model, message_count")
+    .gte("summary_date", since)
+    .order("summary_date", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const latestByClinic = new Map<string, DailySummaryRow>();
+  for (const row of (data ?? []) as DailySummaryRow[]) {
+    if (!latestByClinic.has(row.clinic_id)) latestByClinic.set(row.clinic_id, row);
+  }
+  return [...latestByClinic.values()]
+    .filter(
+      (s) =>
+        s.highlights?.risco_churn ||
+        s.highlights?.sentimento === "negativo" ||
+        (s.highlights?.reclamacoes?.length ?? 0) > 0,
+    )
+    .sort((a, b) => {
+      // risco de churn primeiro, depois mais recente
+      const churn = Number(b.highlights?.risco_churn ?? false) - Number(a.highlights?.risco_churn ?? false);
+      if (churn !== 0) return churn;
+      return b.summary_date.localeCompare(a.summary_date);
+    });
+}
+
 /** Timestamp da última mensagem coletada (proxy do status do cron). */
 export async function getLastCollectedAt(): Promise<string | null> {
   const supabase = await createClient();
