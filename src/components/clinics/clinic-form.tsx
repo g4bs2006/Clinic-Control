@@ -182,6 +182,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
           <Label htmlFor="contract_status">Status do contrato</Label>
           <Select
             value={contractStatus}
+            items={{ active: "Ativo", suspended: "Suspenso", archived: "Arquivado" }}
             onValueChange={(val) => {
               if (val) setContractStatus(val as ContractStatus);
             }}
@@ -201,6 +202,10 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
           <Label htmlFor="system">Sistema</Label>
           <Select
             value={system || SYSTEM_NONE}
+            items={{
+              [SYSTEM_NONE]: "— Não definido —",
+              ...Object.fromEntries(CLINIC_SYSTEMS.map((s) => [s, s])),
+            }}
             onValueChange={(val) => {
               if (val) setSystem(val === SYSTEM_NONE ? "" : val);
             }}
@@ -306,6 +311,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
                   <Label htmlFor="helena_company_type">Tipo da empresa</Label>
                   <Select
                     value={helenaCompanyType}
+                    items={Object.fromEntries(HELENA_COMPANY_TYPES.map((t) => [t.value, t.label]))}
                     onValueChange={(val) => {
                       if (val) setHelenaCompanyType(val);
                     }}

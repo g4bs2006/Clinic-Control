@@ -62,6 +62,10 @@ export function WhatsappGroupsEditor({ groups, clinics }: WhatsappGroupsEditorPr
             </span>
             <Select
               value={byJid[g.group_jid] ?? NONE}
+              items={{
+                [NONE]: "— Sem clínica —",
+                ...Object.fromEntries(clinics.map((c) => [c.id, c.name])),
+              }}
               onValueChange={(v) => onChange(g.group_jid, v)}
               disabled={pending}
             >

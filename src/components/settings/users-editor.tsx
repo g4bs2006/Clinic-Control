@@ -67,6 +67,7 @@ export function UsersEditor({
             )}
             <Select
               value={p.role}
+              items={ROLE_LABEL}
               onValueChange={(v) => v && onRoleChange(p.id, v as UserProfile["role"])}
               disabled={pending}
             >

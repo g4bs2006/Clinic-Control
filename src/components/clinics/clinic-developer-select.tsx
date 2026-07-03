@@ -41,7 +41,15 @@ export function ClinicDeveloperSelect({ clinicId, current, profiles }: ClinicDev
   }
 
   return (
-    <Select value={developer || NONE} onValueChange={onChange} disabled={pending}>
+    <Select
+      value={developer || NONE}
+      items={{
+        [NONE]: "— Sem responsável —",
+        ...Object.fromEntries(profiles.map((p) => [p.id, p.name || p.email || p.id.slice(0, 8)])),
+      }}
+      onValueChange={onChange}
+      disabled={pending}
+    >
       <SelectTrigger id="clinic-developer" className="w-full sm:w-56">
         <SelectValue placeholder="Selecione o desenvolvedor" />
       </SelectTrigger>

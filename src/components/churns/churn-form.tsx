@@ -61,7 +61,11 @@ export function ChurnForm({ clinics, currentMonth }: ChurnFormProps) {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="churn-clinic">Clínica</Label>
-          <Select value={clinicId ?? ""} onValueChange={(v) => v && setClinicId(v)}>
+          <Select
+            value={clinicId ?? ""}
+            items={Object.fromEntries(clinics.map((c) => [c.id, c.name]))}
+            onValueChange={(v) => v && setClinicId(v)}
+          >
             <SelectTrigger id="churn-clinic" className="h-9 w-full">
               <SelectValue placeholder="Selecione…" />
             </SelectTrigger>

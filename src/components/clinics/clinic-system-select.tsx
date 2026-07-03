@@ -41,7 +41,15 @@ export function ClinicSystemSelect({ clinicId, current }: ClinicSystemSelectProp
   }
 
   return (
-    <Select value={system || NONE} onValueChange={onChange} disabled={pending}>
+    <Select
+      value={system || NONE}
+      items={{
+        [NONE]: "— Não definido —",
+        ...Object.fromEntries(CLINIC_SYSTEMS.map((s) => [s, s])),
+      }}
+      onValueChange={onChange}
+      disabled={pending}
+    >
       <SelectTrigger id="clinic-system" className="w-full sm:w-56">
         <SelectValue placeholder="Selecione o sistema" />
       </SelectTrigger>

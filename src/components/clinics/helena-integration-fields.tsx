@@ -203,7 +203,11 @@ export function HelenaIntegrationFields({
       {panels.length > 0 && (
         <div className="space-y-1.5">
           <Label htmlFor="helena-panel">Painel</Label>
-          <Select value={selectedPanelId} onValueChange={handlePanelChange}>
+          <Select
+            value={selectedPanelId}
+            items={Object.fromEntries(panels.map((p) => [p.id, `${p.title} (${p.key})`]))}
+            onValueChange={handlePanelChange}
+          >
             <SelectTrigger id="helena-panel" className="w-full">
               <SelectValue placeholder="Selecione um painel" />
             </SelectTrigger>

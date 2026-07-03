@@ -106,7 +106,11 @@ export function WhatsappTeamEditor({ initialMembers }: WhatsappTeamEditorProps) 
           inputMode="numeric"
           className="h-8 tabular-nums"
         />
-        <Select value={kind} onValueChange={(v) => v && setKind(v as "human" | "bot")}>
+        <Select
+          value={kind}
+          items={{ human: "Equipe", bot: "Bot" }}
+          onValueChange={(v) => v && setKind(v as "human" | "bot")}
+        >
           <SelectTrigger className="h-8 w-full">
             <SelectValue />
           </SelectTrigger>
