@@ -8,6 +8,7 @@ function makeRow(overrides: Partial<PortfolioRow> = {}): PortfolioRow {
     city: "São Paulo",
     state: "SP",
     region: "Sudeste",
+    developerId: null,
     mode: "auto",
     source: "auto",
     leads: 100,

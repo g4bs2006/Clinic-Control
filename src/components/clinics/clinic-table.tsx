@@ -17,6 +17,13 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -47,13 +54,21 @@ interface ClinicTableProps {
   checkItems: CheckItemRow[]
   /** Map<clinicId, Map<checkItemId, checked>> */
   allChecks: Record<string, Record<string, boolean>>
+  /** Carteiras para filtro/coluna — vazio para desenvolvedor (já escopado) */
+  developers?: { id: string; name: string }[]
 }
 
-export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps) {
+const ALL_DEVS = "__all__"
+
+export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }: ClinicTableProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [filter, setFilter] = useState<"all" | "completed" | "pending">("all")
   const [query, setQuery] = useState("")
+  const [devFilter, setDevFilter] = useState<string>(ALL_DEVS)
+
+  const devNameById = new Map(developers.map((d) => [d.id, d.name]))
+  const showCarteira = developers.length > 0
 
   if (clinics.length === 0) {
     return (
@@ -95,7 +110,13 @@ export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps
       if (filter === "pending" && isCompleted) return false
     }
 
-    // 2. Search Query Filter
+    // 2. Carteira Filter
+    if (devFilter !== ALL_DEVS) {
+      if (devFilter === "__none__" ? c.developer_id != null : c.developer_id !== devFilter)
+        return false
+    }
+
+    // 3. Search Query Filter
     if (query.trim()) {
       const term = query.toLowerCase()
       const match =
@@ -171,16 +192,44 @@ export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps
           <div /> // spacing placeholder
         )}
 
-        {/* Input de busca local */}
-        <div className="relative w-full sm:w-64 shrink-0">
-          <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-          <Input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar clínica..."
-            className="pl-9 h-9 text-xs"
-          />
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Filtro de carteira (só gestor) */}
+          {showCarteira && (
+            <Select
+              value={devFilter}
+              items={{
+                [ALL_DEVS]: "Todas as carteiras",
+                __none__: "Sem responsável",
+                ...Object.fromEntries(developers.map((d) => [d.id, d.name])),
+              }}
+              onValueChange={(v) => v && setDevFilter(v)}
+            >
+              <SelectTrigger className="h-9 text-xs min-w-[10rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_DEVS}>Todas as carteiras</SelectItem>
+                <SelectItem value="__none__">Sem responsável</SelectItem>
+                {developers.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Input de busca local */}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar clínica..."
+              className="pl-9 h-9 text-xs"
+            />
+          </div>
         </div>
       </div>
 
@@ -196,6 +245,7 @@ export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps
               <TableHead>Nome</TableHead>
               <TableHead>Cidade/UF</TableHead>
               <TableHead>Região</TableHead>
+              {showCarteira && <TableHead>Carteira</TableHead>}
               <TableHead>Modo</TableHead>
               <TableHead>Status do contrato</TableHead>
               {hasCheckItems && <TableHead>Checklist</TableHead>}
@@ -225,6 +275,11 @@ export function ClinicTable({ clinics, checkItems, allChecks }: ClinicTableProps
                       : clinic.city ?? clinic.state ?? "—"}
                   </TableCell>
                   <TableCell>{clinic.region ?? "—"}</TableCell>
+                  {showCarteira && (
+                    <TableCell className="text-muted-foreground">
+                      {clinic.developer_id ? devNameById.get(clinic.developer_id) ?? "—" : "—"}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${modeColors[clinic.mode]}`}

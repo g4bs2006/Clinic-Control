@@ -1,5 +1,7 @@
 import Link from "next/link"
 import { getPortfolioForMonth } from "@/lib/portfolio/data"
+import { summarize } from "@/lib/portfolio/aggregate"
+import { getCarteiraScope } from "@/lib/users/actions"
 import { monthKey, prevMonth, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { Panel } from "@/components/dashboard/panel"
@@ -15,7 +17,7 @@ import { CheckCircle2 } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
-type SearchParams = Promise<{ month?: string; region?: string }>
+type SearchParams = Promise<{ month?: string; region?: string; dev?: string }>
 
 // Build a pt-BR month label from a YYYY-MM key
 function monthLabel(key: string): string {
@@ -55,15 +57,30 @@ export default async function HomePage({
   const rawRegion = params.region ?? ""
 
   // Fetch portfolio data, check items, all checks, raw clinics and WhatsApp stats
-  const [portfolioData, checkItems, allChecksMap, rawClinics, responseStats, attentionSummaries] = await Promise.all([
+  const [portfolioData, checkItems, allChecksMap, rawClinics, responseStats, rawAttentionSummaries, scope] = await Promise.all([
     getPortfolioForMonth(month),
     listCheckItems(),
     listAllClinicChecks(),
     listClinics(),
     listResponseStats(month),
     listAttentionSummaries(),
+    getCarteiraScope(params.dev),
   ])
-  const { rows: allRows, summary } = portfolioData
+
+  // Escopo por carteira: desenvolvedor vê só a sua; gestor pode filtrar (?dev=).
+  const allRows = scope.developerFilter
+    ? portfolioData.rows.filter((r) => r.developerId === scope.developerFilter)
+    : portfolioData.rows
+  const summary = scope.developerFilter ? summarize(allRows) : portfolioData.summary
+  const scopedClinicIds = new Set(allRows.map((r) => r.clinicId))
+  const attentionSummaries = scope.developerFilter
+    ? rawAttentionSummaries.filter((s) => scopedClinicIds.has(s.clinic_id))
+    : rawAttentionSummaries
+  const carteiraLabel = scope.developerFilter
+    ? (scope.developerOptions.find((d) => d.id === scope.developerFilter)?.name ??
+        scope.profile?.name ??
+        "minha carteira")
+    : null
 
   // Convert Map<string, Map<string, boolean>> to Record<string, Record<string, boolean>>
   const allChecks: Record<string, Record<string, boolean>> = {}
@@ -213,6 +230,9 @@ export default async function HomePage({
           <p className="text-sm text-muted-foreground mt-0.5">
             {displayMonthLabel} · {summary.clinicCount} clínica
             {summary.clinicCount !== 1 ? "s" : ""}
+            {carteiraLabel && (
+              <span className="ml-1 text-primary">· carteira {carteiraLabel}</span>
+            )}
             {region && (
               <span className="ml-1 text-primary">· {region}</span>
             )}
@@ -227,6 +247,8 @@ export default async function HomePage({
             region={region}
             regions={regions}
             monthOptions={monthOptions}
+            developer={scope.developerFilter}
+            developers={scope.developerOptions}
           />
         </div>
       </div>
@@ -515,7 +537,9 @@ export default async function HomePage({
                     <li key={r.name}>
                       {isReal ? (
                         <Link
-                          href={`/?month=${month}&region=${encodeURIComponent(r.name)}`}
+                          href={`/?month=${month}&region=${encodeURIComponent(r.name)}${
+                            scope.developerFilter ? `&dev=${scope.developerFilter}` : ""
+                          }`}
                           className={cls}
                         >
                           {body}

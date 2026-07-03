@@ -9,12 +9,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+const ALL = "__all__"
+
 interface PortfolioFiltersProps {
   month: string
   region: string | null
   regions: string[]
   /** All YYYY-MM keys to offer in the month selector (last 12 months) */
   monthOptions: { key: string; label: string }[]
+  /** Carteira selecionada (id do desenvolvedor) — null = todas */
+  developer?: string | null
+  /** Desenvolvedores para o filtro de carteira — só o gestor recebe a lista */
+  developers?: { id: string; name: string }[]
   /** Route the filters navigate to (so the same control works on / and /mapa) */
   basePath?: string
 }
@@ -24,16 +30,21 @@ export function PortfolioFilters({
   region,
   regions,
   monthOptions,
+  developer = null,
+  developers = [],
   basePath = "/",
 }: PortfolioFiltersProps) {
   const router = useRouter()
 
-  function navigate(newMonth: string, newRegion: string | null | undefined) {
+  function navigate(
+    newMonth: string,
+    newRegion: string | null | undefined,
+    newDeveloper: string | null | undefined,
+  ) {
     const params = new URLSearchParams()
     params.set("month", newMonth)
-    if (newRegion && newRegion !== "__all__") {
-      params.set("region", newRegion)
-    }
+    if (newRegion && newRegion !== ALL) params.set("region", newRegion)
+    if (newDeveloper && newDeveloper !== ALL) params.set("dev", newDeveloper)
     router.push(`${basePath}?${params.toString()}`)
   }
 
@@ -42,14 +53,11 @@ export function PortfolioFilters({
       {/* Month selector */}
       <Select
         value={month}
-        onValueChange={(val) => navigate(val ?? month, region)}
+        items={Object.fromEntries(monthOptions.map((o) => [o.key, o.label]))}
+        onValueChange={(val) => navigate(val ?? month, region, developer)}
       >
         <SelectTrigger className="h-8 text-sm min-w-[9rem]">
-          <SelectValue>
-            {(val) =>
-              monthOptions.find((o) => o.key === val)?.label ?? String(val ?? "")
-            }
-          </SelectValue>
+          <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {monthOptions.map((opt) => (
@@ -60,21 +68,45 @@ export function PortfolioFilters({
         </SelectContent>
       </Select>
 
+      {/* Carteira filter — only for gestores (developers list provided) */}
+      {developers.length > 0 && (
+        <Select
+          value={developer || ALL}
+          items={{
+            [ALL]: "Todas as carteiras",
+            ...Object.fromEntries(developers.map((d) => [d.id, d.name])),
+          }}
+          onValueChange={(val) => navigate(month, region, val)}
+        >
+          <SelectTrigger className="h-8 text-sm min-w-[10rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Todas as carteiras</SelectItem>
+            {developers.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       {/* Region filter — only show if there are distinct regions */}
       {regions.length > 0 && (
         <Select
-          value={region || "__all__"}
-          onValueChange={(val) => navigate(month, val)}
+          value={region || ALL}
+          items={{
+            [ALL]: "Todas as regiões",
+            ...Object.fromEntries(regions.map((r) => [r, r])),
+          }}
+          onValueChange={(val) => navigate(month, val, developer)}
         >
           <SelectTrigger className="h-8 text-sm min-w-[9rem]">
-            <SelectValue>
-              {(val) =>
-                !val || val === "__all__" ? "Todas as regiões" : String(val)
-              }
-            </SelectValue>
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Todas as regiões</SelectItem>
+            <SelectItem value={ALL}>Todas as regiões</SelectItem>
             {regions.map((r) => (
               <SelectItem key={r} value={r}>
                 {r}

@@ -8,6 +8,7 @@ export type PortfolioRow = {
   city: string | null;
   state: string | null;
   region: string | null;
+  developerId: string | null; // carteira: usuário responsável
   mode: "auto" | "manual";
   source: "auto" | "manual" | "none";
   leads: number;

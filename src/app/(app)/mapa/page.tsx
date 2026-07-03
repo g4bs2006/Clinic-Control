@@ -6,10 +6,11 @@ import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { PortfolioFilters } from "@/components/dashboard/portfolio-filters"
 import { PortfolioMap, type MapPoint } from "@/components/map/portfolio-map"
+import { getCarteiraScope } from "@/lib/users/actions"
 
 export const dynamic = "force-dynamic"
 
-type SearchParams = Promise<{ month?: string; region?: string }>
+type SearchParams = Promise<{ month?: string; region?: string; dev?: string }>
 
 function monthLabel(key: string): string {
   const [y, m] = key.split("-").map(Number)
@@ -47,7 +48,15 @@ export default async function MapaPage({
   const rawMonth = params.month ?? ""
   const month = /^\d{4}-\d{2}$/.test(rawMonth) ? rawMonth : currentMonth
 
-  const { rows } = await getPortfolioForMonth(month)
+  const [{ rows: unscopedRows }, scope] = await Promise.all([
+    getPortfolioForMonth(month),
+    getCarteiraScope(params.dev),
+  ])
+
+  // Escopo por carteira: desenvolvedor vê só a sua; gestor pode filtrar (?dev=).
+  const rows = scope.developerFilter
+    ? unscopedRows.filter((r) => r.developerId === scope.developerFilter)
+    : unscopedRows
 
   // Regions for the filter
   const regions = Array.from(
@@ -103,6 +112,8 @@ export default async function MapaPage({
     .filter((k) => k >= DATA_START_MONTH)
     .map((k) => ({ key: k, label: monthLabel(k) }))
 
+  const devQuery = scope.developerFilter ? `&dev=${scope.developerFilter}` : ""
+
   return (
     <main className="p-6 space-y-6 max-w-screen-2xl mx-auto">
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -122,6 +133,8 @@ export default async function MapaPage({
           region={region}
           regions={regions}
           monthOptions={monthOptions}
+          developer={scope.developerFilter}
+          developers={scope.developerOptions}
           basePath="/mapa"
         />
       </div>
@@ -174,7 +187,7 @@ export default async function MapaPage({
           <Panel title="Performance por região" subtitle="taxa média · clique para filtrar">
             {region && (
               <Link
-                href={`/mapa?month=${month}`}
+                href={`/mapa?month=${month}${devQuery}`}
                 className="-mt-1 mb-1 inline-block text-xs text-primary hover:underline"
               >
                 × limpar filtro de região
@@ -236,7 +249,7 @@ export default async function MapaPage({
                   return (
                     <li key={r.name}>
                       {isReal ? (
-                        <Link href={`/mapa?month=${month}&region=${encodeURIComponent(r.name)}`} className={cls}>
+                        <Link href={`/mapa?month=${month}&region=${encodeURIComponent(r.name)}${devQuery}`} className={cls}>
                           {body}
                         </Link>
                       ) : (

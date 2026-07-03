@@ -106,6 +106,47 @@ export async function getChatCounts(
   return { open: Math.max(0, total - closed), closed };
 }
 
+export type TakeoverStats = {
+  total: number;        // conversas individuais criadas no período
+  humanAssumed: number; // com atendente humano designado (userId preenchido)
+  botOnly: number;      // só o bot atuou (botId sem userId)
+  untouched: number;    // sem bot nem humano designado
+};
+
+/**
+ * Conta quantas conversas do período foram assumidas por humano.
+ * Sinal: `session.userId` preenchido = um usuário (atendente) assumiu a conversa;
+ * `botId` sem userId = a IA conduziu sozinha (validado na conta real em 2026-07-03).
+ */
+export async function getSessionTakeoverStats(
+  token: string,
+  range: { after?: string; before?: string },
+  opts?: Opts,
+): Promise<TakeoverStats> {
+  const stats: TakeoverStats = { total: 0, humanAssumed: 0, botOnly: 0, untouched: 0 };
+  let page = 1;
+  for (;;) {
+    const query: Record<string, string> = {
+      Type: "INDIVIDUAL",
+      PageSize: "100",
+      PageNumber: String(page),
+    };
+    if (range.after) query["CreatedAt.After"] = range.after;
+    if (range.before) query["CreatedAt.Before"] = range.before;
+    const data = await get(token, "/chat/v2/session", query, opts);
+    for (const s of data.items ?? []) {
+      stats.total += 1;
+      if (s.userId) stats.humanAssumed += 1;
+      else if (s.botId) stats.botOnly += 1;
+      else stats.untouched += 1;
+    }
+    if (!data.hasMorePages) break;
+    page += 1;
+    if (page > MAX_PAGES) throw new Error("Helena API: paginação excedeu o limite de páginas");
+  }
+  return stats;
+}
+
 export async function getCompanyInfo(
   token: string,
   companyId: string,

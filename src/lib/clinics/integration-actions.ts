@@ -9,6 +9,7 @@ import {
   listCards,
   getContactCount,
   getChatCounts,
+  getSessionTakeoverStats,
   getCompanyInfo,
   listDepartments,
   listUsers,
@@ -224,6 +225,44 @@ export async function getHelenaChatStatsForMonth(clinicId: string, yearMonth: st
     return { ok: true as const, stats };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao ler estatísticas de chat" };
+  }
+}
+
+// Cache do IA vs Humano por clínica+mês (a contagem pagina todas as sessões do mês).
+const takeoverCache = new Map<string, { value: unknown; expires: number }>();
+const TAKEOVER_CACHE_MS = 5 * 60 * 1000;
+
+/** % de atendimentos assumidos por humano no mês (sessões com atendente designado). */
+export async function getHelenaTakeoverStats(clinicId: string, yearMonth: string) {
+  try {
+    const cacheKey = `${clinicId}:${yearMonth}`;
+    const cached = takeoverCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) {
+      return cached.value as
+        | { ok: true; stats: import("@/lib/helena/client").TakeoverStats }
+        | { ok: false; error: string };
+    }
+
+    const auth = await createClient();
+    const { data: { user } } = await auth.auth.getUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("clinic_integrations")
+      .select("helena_token_encrypted")
+      .eq("clinic_id", clinicId)
+      .single();
+    if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+
+    const token = decryptToken(data.helena_token_encrypted as string);
+    const stats = await getSessionTakeoverStats(token, monthRangeUtc(yearMonth));
+
+    const result = { ok: true as const, stats };
+    takeoverCache.set(cacheKey, { value: result, expires: Date.now() + TAKEOVER_CACHE_MS });
+    return result;
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao ler IA vs Humano" };
   }
 }
 

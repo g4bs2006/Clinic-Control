@@ -2,7 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getClinic, listClinics } from "@/lib/clinics/actions"
 import { getClinicHistory } from "@/lib/portfolio/data"
-import { getLiveFunnel, getHelenaAccountOverview, getHelenaCustomFieldsAggregation } from "@/lib/clinics/integration-actions"
+import { getLiveFunnel, getHelenaAccountOverview, getHelenaCustomFieldsAggregation, getHelenaTakeoverStats } from "@/lib/clinics/integration-actions"
 import { derivedMetrics } from "@/lib/portfolio/metrics"
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status"
 import { createClient } from "@/lib/supabase/server"
@@ -93,13 +93,14 @@ export default async function ClinicDetailPage({
   const currentMonth = monthKey(new Date())
 
   // Fetch all clinics to determine previous/next clinic in order
-  const [allClinics, history, rules, funnelRes, helenaOverviewRes, helenaCustomFieldsRes] = await Promise.all([
+  const [allClinics, history, rules, funnelRes, helenaOverviewRes, helenaCustomFieldsRes, takeoverRes] = await Promise.all([
     listClinics(),
     getClinicHistory(id, 6),
     loadStatusRules(),
     isAuto ? getLiveFunnel(id) : Promise.resolve(null),
     isAuto ? getHelenaAccountOverview(id) : Promise.resolve(null),
     isAuto ? getHelenaCustomFieldsAggregation(id, currentMonth) : Promise.resolve(null),
+    isAuto ? getHelenaTakeoverStats(id, currentMonth) : Promise.resolve(null),
   ])
 
   const currentIndex = allClinics.findIndex((c) => c.id === id)
@@ -332,6 +333,57 @@ export default async function ClinicDetailPage({
           <TrendChart data={chartData} series={series} />
         </Panel>
       </div>
+
+      {/* ── Atendimento: IA vs Humano (mês corrente) ───────────── */}
+      {takeoverRes?.ok && takeoverRes.stats.total > 0 && (() => {
+        const t = takeoverRes.stats
+        const pctHuman = t.humanAssumed / t.total
+        const pctBot = t.botOnly / t.total
+        return (
+          <Panel
+            title="Atendimento · IA vs Humano"
+            subtitle="conversas do mês corrente · humano = conversa com atendente designado"
+          >
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <KpiCard label="Conversas (mês)" value={t.total.toLocaleString("pt-BR")} accent="teal" />
+              <KpiCard
+                label="Assumidas por humano"
+                value={fmtPct(pctHuman)}
+                accent="rose"
+                hint={`${t.humanAssumed.toLocaleString("pt-BR")} conversas`}
+              />
+              <KpiCard
+                label="IA sem intervenção"
+                value={fmtPct(pctBot)}
+                accent="purple"
+                hint={`${t.botOnly.toLocaleString("pt-BR")} conversas`}
+              />
+              <KpiCard
+                label="Sem atendimento"
+                value={t.untouched.toLocaleString("pt-BR")}
+                hint="sem bot nem humano"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full bg-red-400/80" style={{ width: `${pctHuman * 100}%` }} />
+                <div className="h-full bg-brand" style={{ width: `${pctBot * 100}%` }} />
+              </div>
+              <div className="flex flex-wrap gap-3 text-[0.65rem] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-red-400/80" /> humano assumiu
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-brand" /> IA sozinha
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground/30" /> sem atendimento
+                </span>
+              </div>
+            </div>
+          </Panel>
+        )
+      })()}
 
       {/* ── Tempo de resposta no grupo de WhatsApp ─────────────── */}
       {(() => {

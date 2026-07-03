@@ -37,6 +37,36 @@ export async function listUserProfiles(): Promise<UserProfile[]> {
   return (data ?? []) as UserProfile[];
 }
 
+export type CarteiraScope = {
+  profile: UserProfile | null;
+  /** Filtro efetivo de carteira: forçado ao próprio id p/ desenvolvedor; param validado p/ gestor. */
+  developerFilter: string | null;
+  /** Opções do select de carteira — vazio para desenvolvedor (não pode trocar). */
+  developerOptions: { id: string; name: string }[];
+};
+
+/**
+ * Resolve o escopo de carteira da página: desenvolvedor enxerga só a própria
+ * carteira (filtro forçado); gestor enxerga tudo e pode filtrar via ?dev=.
+ */
+export async function getCarteiraScope(devParam?: string): Promise<CarteiraScope> {
+  const [profile, profiles] = await Promise.all([getCurrentProfile(), listUserProfiles()]);
+
+  if (profile?.role === "desenvolvedor") {
+    return { profile, developerFilter: profile.id, developerOptions: [] };
+  }
+
+  const valid = devParam && profiles.some((p) => p.id === devParam) ? devParam : null;
+  return {
+    profile,
+    developerFilter: valid,
+    developerOptions: profiles.map((p) => ({
+      id: p.id,
+      name: p.name || p.email || p.id.slice(0, 8),
+    })),
+  };
+}
+
 async function requireGestor(): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
   const profile = await getCurrentProfile();
   if (!profile) return { ok: false, error: "Não autenticado" };
