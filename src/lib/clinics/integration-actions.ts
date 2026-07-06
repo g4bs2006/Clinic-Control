@@ -15,7 +15,7 @@ import {
   listUsers,
   listChannels,
 } from "@/lib/helena/client";
-import { buildLiveFunnel } from "@/lib/helena/funnel";
+import { buildLiveFunnel, buildDailyFunnel, type DailyFunnelPoint } from "@/lib/helena/funnel";
 import { monthKey, monthRangeUtc } from "@/lib/snapshots/month";
 
 // Auth design note: these actions gate on "is there an authenticated user?" only.
@@ -110,6 +110,38 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
 
 export async function getLiveFunnel(clinicId: string) {
   return getFunnelForMonth(clinicId, monthKey(new Date()));
+}
+
+/**
+ * Taxa de agendamento dia a dia, dentro do mês informado — bucketiza os
+ * mesmos cards do CRM usados no funil mensal, sem novo dado persistido.
+ */
+export async function getDailyFunnelForMonth(
+  clinicId: string,
+  yearMonth: string,
+): Promise<{ ok: true; days: DailyFunnelPoint[] } | { ok: false; error: string }> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("clinic_integrations")
+      .select("helena_token_encrypted, panel_id")
+      .eq("clinic_id", clinicId)
+      .single();
+    if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+    if (!data.panel_id)
+      return { ok: false as const, error: "Painel ainda não vinculado — crie na Helena e reprocesse" };
+
+    const token = decryptToken(data.helena_token_encrypted as string);
+    const panelId = data.panel_id as string;
+    const { steps } = await getPanelWithSteps(token, panelId);
+    const cards = await listCards(token, panelId, monthRangeUtc(yearMonth));
+    return { ok: true as const, days: buildDailyFunnel(steps, cards, yearMonth) };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao ler o funil diário" };
+  }
 }
 
 export type ClinicLead = { name: string; step: string; date: string };

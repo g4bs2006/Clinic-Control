@@ -6,7 +6,7 @@ import { getLiveFunnel, getHelenaAccountOverview, getHelenaCustomFieldsAggregati
 import { derivedMetrics } from "@/lib/portfolio/metrics"
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status"
 import { createClient } from "@/lib/supabase/server"
-import { monthKey, DATA_START_MONTH } from "@/lib/snapshots/month"
+import { monthKey, prevMonth, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { listClinicAgents } from "@/lib/agents/actions"
 import { listClinicFiles } from "@/lib/clinics/files-actions"
 import { listClinicChecks } from "@/lib/clinics/check-items-actions"
@@ -33,6 +33,8 @@ import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credenti
 import { ClinicFunnelSetup } from "@/components/clinics/clinic-funnel-setup"
 import { listReportJobs } from "@/lib/reports/actions"
 import { ReportPanel } from "@/components/reports/report-panel"
+import { getDailyFunnelForMonth } from "@/lib/clinics/integration-actions"
+import { DailyRateChart } from "@/components/clinics/daily-rate-chart"
 
 export const dynamic = "force-dynamic"
 
@@ -58,6 +60,25 @@ function shortMonthLabel(key: string): string {
     timeZone: "UTC",
   })
   return `${month.replace(".", "")}/${String(y).slice(2)}`
+}
+
+function monthLabel(key: string): string {
+  const [y, m] = key.split("-").map(Number)
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  })
+}
+
+function lastNMonths(current: string, n: number): string[] {
+  const keys: string[] = []
+  let key = current
+  for (let i = 0; i < n; i++) {
+    keys.unshift(key)
+    key = prevMonth(key)
+  }
+  return keys
 }
 
 async function loadStatusRules(): Promise<StatusRule[]> {
@@ -95,7 +116,7 @@ export default async function ClinicDetailPage({
   const currentMonth = monthKey(new Date())
 
   // Fetch all clinics to determine previous/next clinic in order
-  const [allClinics, history, rules, funnelRes, helenaOverviewRes, helenaCustomFieldsRes, takeoverRes] = await Promise.all([
+  const [allClinics, history, rules, funnelRes, helenaOverviewRes, helenaCustomFieldsRes, takeoverRes, dailyFunnelRes] = await Promise.all([
     listClinics(),
     getClinicHistory(id, 6),
     loadStatusRules(),
@@ -103,7 +124,12 @@ export default async function ClinicDetailPage({
     isAuto ? getHelenaAccountOverview(id) : Promise.resolve(null),
     isAuto ? getHelenaCustomFieldsAggregation(id, currentMonth) : Promise.resolve(null),
     isAuto ? getHelenaTakeoverStats(id, currentMonth) : Promise.resolve(null),
+    isAuto ? getDailyFunnelForMonth(id, currentMonth) : Promise.resolve(null),
   ])
+
+  const dailyMonthOptions = lastNMonths(currentMonth, 6)
+    .filter((k) => k >= DATA_START_MONTH)
+    .map((k) => ({ key: k, label: monthLabel(k) }))
 
   const currentIndex = allClinics.findIndex((c) => c.id === id)
   const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
@@ -269,6 +295,26 @@ export default async function ClinicDetailPage({
           />
         </Panel>
       </div>
+
+      {/* ── Taxa de agendamento dia a dia ───────────────────────── */}
+      {isAuto && dailyFunnelRes && (
+        <Panel
+          title="Taxa de agendamento por dia"
+          subtitle="leads → agendados no CRM, agrupados por dia de criação do card"
+        >
+          {dailyFunnelRes.ok ? (
+            <DailyRateChart
+              clinicId={id}
+              clinicName={clinic.name}
+              monthOptions={dailyMonthOptions}
+              initialMonth={currentMonth}
+              initialDays={dailyFunnelRes.days}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">{dailyFunnelRes.error}</p>
+          )}
+        </Panel>
+      )}
 
       {/* ── Relatório de conversas (análise IA) ────────────────── */}
       {isAuto && (
