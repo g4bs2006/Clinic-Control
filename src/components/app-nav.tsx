@@ -17,9 +17,11 @@ import {
   PanelLeftOpen,
   Activity,
   Search,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { signOut } from "@/lib/auth/actions";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "Início", icon: LayoutDashboard },
@@ -45,7 +47,11 @@ function subscribePinned(onChange: () => void) {
   return () => window.removeEventListener(PIN_EVENT, onChange);
 }
 
-export function AppNav() {
+export function AppNav({
+  user,
+}: {
+  user: { name: string; role: "gestor" | "desenvolvedor" } | null;
+}) {
   const pathname = usePathname();
   // pinned: user locked it open (persisted). peek: transient hover/focus expand.
   const pinned = useSyncExternalStore(
@@ -185,9 +191,33 @@ export function AppNav() {
           })}
         </div>
 
-        {/* Footer */}
+        {/* Footer: usuário logado + sair */}
+        <div className="border-t border-sidebar-border px-2 py-2">
+          <div className={cn("flex items-center gap-2", !open && "justify-center")}>
+            {open && user && (
+              <div className="min-w-0 flex-1 px-1">
+                <p className="truncate text-xs font-medium text-sidebar-foreground">
+                  {user.name}
+                </p>
+                <p className="text-[0.65rem] capitalize text-muted-foreground/70">
+                  {user.role}
+                </p>
+              </div>
+            )}
+            <form action={signOut}>
+              <button
+                type="submit"
+                title="Sair da conta"
+                aria-label="Sair da conta"
+                className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-red-400"
+              >
+                <LogOut className="size-4" />
+              </button>
+            </form>
+          </div>
+        </div>
         {open && (
-          <div className="px-4 py-3 text-[0.65rem] leading-tight text-muted-foreground/70">
+          <div className="px-4 pb-3 text-[0.65rem] leading-tight text-muted-foreground/70">
             Contact.IA · carteira de clínicas
           </div>
         )}
