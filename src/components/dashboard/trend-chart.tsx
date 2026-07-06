@@ -24,8 +24,8 @@ interface TrendChartProps {
   series: TrendSeries[]
   /** Formats values for the Y axis and tooltip. Default: percentage with 1 decimal (value already in %). */
   formatValue?: (v: number) => string
-  /** Key of the x-axis field in `data`. Default: "month". */
-  xKey?: string
+  /** Key of the x-axis field in `data` (e.g. "month" or "day") — must match a real key in `data`. */
+  xKey: string
 }
 
 // pt-BR rate formatting for axis/tooltip (value already in %)
@@ -124,7 +124,7 @@ function CustomTooltip({
   )
 }
 
-export function TrendChart({ data, series, formatValue = fmtPct, xKey = "month" }: TrendChartProps) {
+export function TrendChart({ data, series, formatValue = fmtPct, xKey }: TrendChartProps) {
   // Interactive selection: clicking a legend chip toggles that clinic's line.
   const [hidden, setHidden] = useState<Set<string>>(new Set())
 

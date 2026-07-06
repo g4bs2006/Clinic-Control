@@ -403,7 +403,7 @@ export default async function ClinicDetailPage({
         )}
 
         <Panel title="Tendência da taxa" subtitle="últimos 6 meses">
-          <TrendChart data={chartData} series={series} />
+          <TrendChart data={chartData} series={series} xKey="month" />
         </Panel>
       </div>
 

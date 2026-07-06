@@ -123,7 +123,7 @@ export default async function ComparativoPage({
         title="Tendência da taxa de conversão"
         subtitle="clique numa clínica na legenda para mostrar ou ocultar a linha"
       >
-        <TrendChart data={chartData} series={series} />
+        <TrendChart data={chartData} series={series} xKey="month" />
       </Panel>
 
       {/* ── Month-by-month table ───────────────────────────────── */}

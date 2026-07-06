@@ -113,13 +113,13 @@ export function DailyRateChart({
             <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               Taxa de agendamento
             </p>
-            <TrendChart data={chartData} series={series} />
+            <TrendChart data={chartData} series={series} xKey="day" />
           </div>
           <div>
             <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               Volume — leads vs. agendados
             </p>
-            <TrendChart data={countsData} series={countsSeries} formatValue={fmtCount} />
+            <TrendChart data={countsData} series={countsSeries} formatValue={fmtCount} xKey="day" />
           </div>
         </div>
       )}
