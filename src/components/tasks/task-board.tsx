@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2 } from "lucide-react"
+import { Trash2, List, LayoutGrid } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { CreateTaskDialog } from "./create-task-dialog"
 import { TaskSuggestions } from "./task-suggestions"
+import { TaskDetailDialog } from "./task-detail-dialog"
+import { KanbanBoard } from "./kanban-board"
 import type { ClinicOption, ProfileOption } from "./task-fields"
 import {
   updateTaskStatus,
@@ -75,6 +77,8 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
+  const [view, setView] = useState<"list" | "board">("list")
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null)
 
   function refresh() {
     router.refresh()
@@ -182,6 +186,27 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
           </SelectContent>
         </Select>
 
+        <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={view === "list" ? "secondary" : "ghost"}
+            title="Ver como lista"
+            onClick={() => setView("list")}
+          >
+            <List className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={view === "board" ? "secondary" : "ghost"}
+            title="Ver como board"
+            onClick={() => setView("board")}
+          >
+            <LayoutGrid className="size-3.5" />
+          </Button>
+        </div>
+
         <div className="flex-1" />
         <CreateTaskDialog
           clinics={clinics}
@@ -195,6 +220,8 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
         <p className="py-8 text-center text-sm text-muted-foreground">
           Nenhuma tarefa encontrada para esse filtro.
         </p>
+      ) : view === "board" ? (
+        <KanbanBoard tasks={filtered} onOpen={setOpenTaskId} onStatusChange={changeStatus} />
       ) : (
         <ul className="flex flex-col divide-y divide-border/40">
           {filtered.map((t) => (
@@ -204,9 +231,13 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
                 title={TASK_PRIORITY_LABEL[t.priority]}
               />
               <div className="min-w-0 flex-1">
-                <p className={`text-sm font-medium ${DONE_STATUSES.has(t.status) ? "text-muted-foreground line-through" : ""}`}>
+                <button
+                  type="button"
+                  onClick={() => setOpenTaskId(t.id)}
+                  className={`text-left text-sm font-medium hover:underline ${DONE_STATUSES.has(t.status) ? "text-muted-foreground line-through" : ""}`}
+                >
                   {t.title}
-                </p>
+                </button>
                 <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
                   <span className="rounded bg-accent/50 px-1.5 py-0.5">{TASK_CATEGORY_LABEL[t.category]}</span>
                   {t.clinic_id && t.clinic_name && (
@@ -262,6 +293,14 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
           ))}
         </ul>
       )}
+
+      <TaskDetailDialog
+        taskId={openTaskId}
+        clinics={clinics}
+        profiles={profiles}
+        onClose={() => setOpenTaskId(null)}
+        onChanged={refresh}
+      />
     </div>
   )
 }

@@ -35,6 +35,8 @@ export const TASK_PRIORITY_RANK: Record<TaskPriority, number> = {
   baixa: 0,
 };
 
+export const TASK_ATTACHMENTS_BUCKET = "task-attachments";
+
 export const TASK_STATUSES = ["pendente", "em_andamento", "concluida", "cancelada"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 

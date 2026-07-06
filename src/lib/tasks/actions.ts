@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { getCurrentProfile } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
-import type { TaskCategory, TaskPriority, TaskStatus } from "./categories";
+import { TASK_STATUS_LABEL, TASK_ATTACHMENTS_BUCKET, type TaskCategory, type TaskPriority, type TaskStatus } from "./categories";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,10 +22,14 @@ export type TaskRow = {
   assigned_to_name: string | null;
   due_date: string | null;
   source: "manual" | "ia";
+  parent_task_id: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
 };
+
+const TASK_SELECT =
+  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
 
 export type TaskSuggestionRow = {
   id: string;
@@ -77,6 +81,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     assigned_to_name: unwrapName(row.assignee as SingleOrArray<{ name: string | null }>),
     due_date: row.due_date as string | null,
     source: row.source as "manual" | "ia",
+    parent_task_id: row.parent_task_id as string | null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     completed_at: row.completed_at as string | null,
@@ -95,11 +100,7 @@ export async function listTasks(filters: TaskFilters = {}): Promise<TaskRow[]> {
   const supabase = await createClient();
   const clinicIds = await carteiraClinicIds();
 
-  let query = supabase
-    .from("tasks")
-    .select(
-      "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)",
-    );
+  let query = supabase.from("tasks").select(TASK_SELECT).is("parent_task_id", null);
 
   if (clinicIds !== null) {
     const profile = await getCurrentProfile();
@@ -123,10 +124,9 @@ export async function listClinicTasks(clinicId: string): Promise<TaskRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tasks")
-    .select(
-      "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)",
-    )
+    .select(TASK_SELECT)
     .eq("clinic_id", clinicId)
+    .is("parent_task_id", null)
     .order("status")
     .order("due_date", { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);
@@ -253,11 +253,23 @@ export async function updateTaskStatus(
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
 
+  const { data: current } = await supabase.from("tasks").select("status").eq("id", id).maybeSingle();
+
   const { error } = await supabase
     .from("tasks")
     .update({ status, completed_at: status === "concluida" ? new Date().toISOString() : null })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
+
+  if (current && current.status !== status) {
+    const user = await getSessionUser();
+    await supabase.from("task_comments").insert({
+      task_id: id,
+      author_id: user!.id,
+      kind: "system",
+      body: `Status alterado de "${TASK_STATUS_LABEL[current.status as TaskStatus]}" para "${TASK_STATUS_LABEL[status]}"`,
+    });
+  }
 
   revalidatePath("/tarefas");
   revalidatePath("/");
@@ -342,6 +354,285 @@ export async function dismissTaskSuggestion(
     .update({ status: "dismissed", reviewed_at: new Date().toISOString(), reviewed_by: user!.id })
     .eq("id", suggestionId)
     .eq("status", "pending");
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/tarefas");
+  return { ok: true };
+}
+
+// ── Detalhe de uma tarefa (subtarefas, anexos, atividade) ────────────────────
+
+export async function getTask(id: string): Promise<TaskRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("tasks").select(TASK_SELECT).eq("id", id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? mapTaskRow(data) : null;
+}
+
+/** Subtarefas (tasks filhas) de uma tarefa. */
+export async function listSubtasks(parentTaskId: string): Promise<TaskRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select(TASK_SELECT)
+    .eq("parent_task_id", parentTaskId)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapTaskRow);
+}
+
+/** Cria uma ou mais subtarefas reais, herdando clínica/categoria da tarefa mãe. */
+export async function createSubtasks(
+  parentTaskId: string,
+  titles: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const clean = titles.map((t) => t.trim()).filter((t) => t.length >= 3);
+  if (!clean.length) return { ok: false, error: "Nenhum título válido" };
+
+  const { data: parent, error: parentError } = await supabase
+    .from("tasks")
+    .select("clinic_id, category")
+    .eq("id", parentTaskId)
+    .maybeSingle();
+  if (parentError) return { ok: false, error: parentError.message };
+  if (!parent) return { ok: false, error: "Tarefa não encontrada" };
+
+  const user = await getSessionUser();
+  const { error } = await supabase.from("tasks").insert(
+    clean.map((title) => ({
+      parent_task_id: parentTaskId,
+      clinic_id: parent.clinic_id,
+      category: parent.category,
+      title,
+      priority: "media",
+      source: "ia" as const,
+      created_by: user!.id,
+    })),
+  );
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/tarefas");
+  return { ok: true };
+}
+
+/**
+ * Pede ao DeepSeek para quebrar uma descrição livre em subtarefas menores.
+ * Não persiste nada — retorna a lista pra revisão antes de criar de verdade.
+ */
+export async function suggestSubtasks(
+  description: string,
+): Promise<{ ok: true; titles: string[] } | { ok: false; error: string }> {
+  if (!(await getSessionUser())) return { ok: false, error: "Não autenticado" };
+
+  const text = description.trim();
+  if (text.length < 10) return { ok: false, error: "Descreva a tarefa com mais detalhes" };
+
+  const apiKey = (process.env.DEEPSEEK_API_KEY ?? "").trim();
+  if (!apiKey) return { ok: false, error: "DEEPSEEK_API_KEY não configurada no servidor" };
+  const model = (process.env.LLM_MODEL ?? "deepseek-chat").trim();
+  const baseUrl = (process.env.LLM_BASE_URL ?? "https://api.deepseek.com").trim().replace(/\/+$/, "");
+
+  const prompt =
+    `Divida a tarefa abaixo em uma lista de subtarefas menores, objetivas e acionáveis ` +
+    `(3 a 8 itens, cada uma um passo concreto). Responda em JSON: {"subtarefas": ["...", "..."]}.\n\n` +
+    `Tarefa: ${text}`;
+
+  try {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        max_tokens: 600,
+      }),
+    });
+    if (!res.ok) return { ok: false, error: `IA respondeu ${res.status}` };
+    const json = await res.json();
+    const content = json?.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(content);
+    const titles = Array.isArray(parsed.subtarefas)
+      ? parsed.subtarefas.filter((t: unknown): t is string => typeof t === "string" && t.trim().length >= 3)
+      : [];
+    if (!titles.length) return { ok: false, error: "IA não retornou subtarefas válidas" };
+    return { ok: true, titles: titles.slice(0, 10) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Falha ao consultar IA" };
+  }
+}
+
+// ── Anexos ───────────────────────────────────────────────────────────────────
+
+export type TaskAttachmentRow = {
+  id: string;
+  file_path: string;
+  file_name: string;
+  content_type: string | null;
+  size_bytes: number | null;
+  uploaded_by_name: string | null;
+  created_at: string;
+};
+
+export async function listTaskAttachments(taskId: string): Promise<TaskAttachmentRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("task_attachments")
+    .select("id, file_path, file_name, content_type, size_bytes, created_at, uploader:app_users!uploaded_by(name)")
+    .eq("task_id", taskId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    file_path: row.file_path as string,
+    file_name: row.file_name as string,
+    content_type: row.content_type as string | null,
+    size_bytes: row.size_bytes as number | null,
+    uploaded_by_name: unwrapName(row.uploader as SingleOrArray<{ name: string | null }>),
+    created_at: row.created_at as string,
+  }));
+}
+
+/** URL assinada de upload (1h) para um anexo — o cliente sobe o arquivo direto pro Storage. */
+export async function createTaskAttachmentUploadUrl(
+  taskId: string,
+  fileName: string,
+): Promise<{ ok: true; path: string; token: string } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const safeName = fileName.replace(/[^\w.\-]+/g, "_");
+  const path = `${taskId}/${Date.now()}_${safeName}`;
+  const { data, error } = await supabase.storage
+    .from(TASK_ATTACHMENTS_BUCKET)
+    .createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, error: error?.message ?? "Falha ao assinar upload" };
+  return { ok: true, path, token: data.token };
+}
+
+/** Registra o anexo no banco depois que o upload pro Storage já terminou. */
+export async function confirmTaskAttachment(input: {
+  taskId: string;
+  filePath: string;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const user = await getSessionUser();
+  const { error } = await supabase.from("task_attachments").insert({
+    task_id: input.taskId,
+    file_path: input.filePath,
+    file_name: input.fileName,
+    content_type: input.contentType,
+    size_bytes: input.sizeBytes,
+    uploaded_by: user!.id,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  await supabase.from("task_comments").insert({
+    task_id: input.taskId,
+    author_id: user!.id,
+    kind: "system",
+    body: `Anexou o arquivo "${input.fileName}"`,
+  });
+
+  revalidatePath("/tarefas");
+  return { ok: true };
+}
+
+export async function getTaskAttachmentUrl(
+  attachmentId: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data: attachment, error: fetchError } = await supabase
+    .from("task_attachments")
+    .select("file_path")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (fetchError) return { ok: false, error: fetchError.message };
+  if (!attachment) return { ok: false, error: "Anexo não encontrado" };
+
+  const { data, error } = await supabase.storage
+    .from(TASK_ATTACHMENTS_BUCKET)
+    .createSignedUrl(attachment.file_path as string, 300);
+  if (error || !data) return { ok: false, error: error?.message ?? "Falha ao gerar link" };
+  return { ok: true, url: data.signedUrl };
+}
+
+export async function deleteTaskAttachment(
+  attachmentId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const { data: attachment, error: fetchError } = await supabase
+    .from("task_attachments")
+    .select("file_path")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (fetchError) return { ok: false, error: fetchError.message };
+  if (attachment) {
+    await supabase.storage.from(TASK_ATTACHMENTS_BUCKET).remove([attachment.file_path as string]);
+  }
+
+  const { error } = await supabase.from("task_attachments").delete().eq("id", attachmentId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/tarefas");
+  return { ok: true };
+}
+
+// ── Comentários e atividade ──────────────────────────────────────────────────
+
+export type TaskActivityRow = {
+  id: string;
+  body: string;
+  kind: "comment" | "system";
+  author_name: string | null;
+  created_at: string;
+};
+
+export async function listTaskActivity(taskId: string): Promise<TaskActivityRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("task_comments")
+    .select("id, body, kind, created_at, author:app_users!author_id(name)")
+    .eq("task_id", taskId)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    body: row.body as string,
+    kind: row.kind as "comment" | "system",
+    author_name: unwrapName(row.author as SingleOrArray<{ name: string | null }>),
+    created_at: row.created_at as string,
+  }));
+}
+
+export async function addTaskComment(
+  taskId: string,
+  body: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const text = body.trim();
+  if (!text) return { ok: false, error: "Comentário vazio" };
+
+  const user = await getSessionUser();
+  const { error } = await supabase.from("task_comments").insert({
+    task_id: taskId,
+    author_id: user!.id,
+    body: text,
+    kind: "comment",
+  });
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/tarefas");
