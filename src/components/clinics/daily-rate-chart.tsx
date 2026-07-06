@@ -13,9 +13,15 @@ import { getDailyFunnelForMonth } from "@/lib/clinics/integration-actions"
 import type { DailyFunnelPoint } from "@/lib/helena/funnel"
 
 const CLINIC_COLOR = "#7C3AED"
+const LEADS_COLOR = "#22d3ee"
+const SCHEDULED_COLOR = "#34d399"
 
 function dayLabel(day: string): string {
   return day.slice(8, 10)
+}
+
+function fmtCount(v: number): string {
+  return v.toLocaleString("pt-BR")
 }
 
 interface DailyRateChartProps {
@@ -61,6 +67,16 @@ export function DailyRateChart({
   }))
   const series: TrendSeries[] = [{ key: clinicName, color: CLINIC_COLOR }]
 
+  const countsData = days.map((d) => ({
+    day: dayLabel(d.day),
+    Leads: d.leads,
+    Agendados: d.scheduled,
+  }))
+  const countsSeries: TrendSeries[] = [
+    { key: "Leads", color: LEADS_COLOR },
+    { key: "Agendados", color: SCHEDULED_COLOR },
+  ]
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
@@ -89,8 +105,22 @@ export function DailyRateChart({
       {error ? (
         <p className="text-sm text-red-400">{error}</p>
       ) : (
-        <div style={{ opacity: pending ? 0.6 : 1, transition: "opacity 0.15s ease" }}>
-          <TrendChart data={chartData} series={series} />
+        <div
+          className="flex flex-col gap-5"
+          style={{ opacity: pending ? 0.6 : 1, transition: "opacity 0.15s ease" }}
+        >
+          <div>
+            <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Taxa de agendamento
+            </p>
+            <TrendChart data={chartData} series={series} />
+          </div>
+          <div>
+            <p className="mb-1 text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Volume — leads vs. agendados
+            </p>
+            <TrendChart data={countsData} series={countsSeries} formatValue={fmtCount} />
+          </div>
         </div>
       )}
     </div>

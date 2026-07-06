@@ -19,9 +19,13 @@ export interface TrendSeries {
 }
 
 interface TrendChartProps {
-  /** One object per month: { month: "abr/25", [clinicName]: 12.5 | null, ... } — rates already in % */
+  /** One object per point (month/day): { month: "abr/25", [seriesName]: 12.5 | null, ... } */
   data: Array<Record<string, string | number | null>>
   series: TrendSeries[]
+  /** Formats values for the Y axis and tooltip. Default: percentage with 1 decimal (value already in %). */
+  formatValue?: (v: number) => string
+  /** Key of the x-axis field in `data`. Default: "month". */
+  xKey?: string
 }
 
 // pt-BR rate formatting for axis/tooltip (value already in %)
@@ -38,10 +42,12 @@ function CustomTooltip({
   active,
   payload,
   label,
+  formatValue,
 }: {
   active?: boolean
   payload?: Array<{ name: string; value: number | null; color: string }>
   label?: string
+  formatValue: (v: number) => string
 }) {
   if (!active || !payload?.length) return null
   // Only show series that have a value this month, strongest first
@@ -110,7 +116,7 @@ function CustomTooltip({
               fontVariantNumeric: "tabular-nums",
             }}
           >
-            {fmtPct(r.value as number)}
+            {formatValue(r.value as number)}
           </span>
         </div>
       ))}
@@ -118,7 +124,7 @@ function CustomTooltip({
   )
 }
 
-export function TrendChart({ data, series }: TrendChartProps) {
+export function TrendChart({ data, series, formatValue = fmtPct, xKey = "month" }: TrendChartProps) {
   // Interactive selection: clicking a legend chip toggles that clinic's line.
   const [hidden, setHidden] = useState<Set<string>>(new Set())
 
@@ -160,19 +166,19 @@ export function TrendChart({ data, series }: TrendChartProps) {
             vertical={false}
           />
           <XAxis
-            dataKey="month"
+            dataKey={xKey}
             tick={{ fill: "oklch(0.64 0 0)", fontSize: 11 }}
             tickLine={false}
             axisLine={{ stroke: "oklch(0.27 0.006 286)" }}
           />
           <YAxis
-            tickFormatter={(v: number) => `${v}%`}
+            tickFormatter={(v: number) => formatValue(v)}
             tick={{ fill: "oklch(0.64 0 0)", fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={44}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip formatValue={formatValue} />} />
           {series.map((s) => (
             <Line
               key={s.key}
