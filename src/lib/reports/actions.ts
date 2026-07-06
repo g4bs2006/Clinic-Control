@@ -94,11 +94,11 @@ export async function createReportJob(input: {
 
   const { data: integ } = await supabase
     .from("clinic_integrations")
-    .select("helena_token_encrypted, panel_id")
+    .select("helena_token_encrypted")
     .eq("clinic_id", input.clinicId)
     .maybeSingle();
-  if (!integ?.helena_token_encrypted || !integ.panel_id) {
-    return { ok: false, error: "Clínica sem integração Helena (token + painel) configurada" };
+  if (!integ?.helena_token_encrypted) {
+    return { ok: false, error: "Clínica sem integração Helena (token) configurada" };
   }
 
   const { data: active } = await supabase

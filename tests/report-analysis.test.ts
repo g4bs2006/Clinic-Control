@@ -33,14 +33,13 @@ function session(overrides: Partial<RawSession> = {}): RawSession {
   return { id: "sess-1", contactId: "contact-1", createdAt: "2026-06-10T12:00:00Z", status: "COMPLETED", ...overrides };
 }
 
-function analyze(messages: RawMessage[], opts: { agendou?: boolean; sess?: Partial<RawSession> } = {}) {
+function analyze(messages: RawMessage[], opts: { sess?: Partial<RawSession> } = {}) {
   return analyzeConversation(
     {
       session: session(opts.sess),
       messages,
       contact: { name: "Maria", phoneNumber: "+5579999990000" },
       canalNome: "WhatsApp",
-      agendouNoCrm: opts.agendou ?? false,
     },
     KW,
   );
@@ -140,18 +139,15 @@ describe("detectE5Substage", () => {
 // ── analyzeConversation ──────────────────────────────────────────────────────
 
 describe("analyzeConversation", () => {
-  it("conversa IA que agendou (CRM) chega a E5.5 com habilidades inferidas", () => {
-    const row = analyze(
-      [
-        msgPaciente("oi, queria uma avaliação"),
-        msgIa("olá! o que mais te incomoda?"),
-        msgPaciente("dente quebrado"),
-        msgIa("separei as duas melhores opções: opção 1 amanhã 9h"),
-        msgPaciente("pode ser amanhã"),
-        msgIa("agendamento confirmado, te esperamos!"),
-      ],
-      { agendou: true },
-    );
+  it("conversa com keyword de confirmação chega a E5.5 com habilidades inferidas", () => {
+    const row = analyze([
+      msgPaciente("oi, queria uma avaliação"),
+      msgIa("olá! o que mais te incomoda?"),
+      msgPaciente("dente quebrado"),
+      msgIa("separei as duas melhores opções: opção 1 amanhã 9h"),
+      msgPaciente("pode ser amanhã"),
+      msgIa("agendamento confirmado, te esperamos!"),
+    ]);
     expect(row.agendou).toBe(true);
     expect(row.estagioCod).toBe("E5.5");
     expect(row.tipoAtendimento).toBe("IA Autônoma");
@@ -159,17 +155,20 @@ describe("analyzeConversation", () => {
     expect(row.motivoParada).toBe("Agendamento confirmado pela IA");
   });
 
-  it("keyword de 'agendou' SEM card no CRM não vira agendamento (falso positivo)", () => {
+  it("sem keyword de confirmação, mostrar vagas não marca agendou (fica em sub-estágio E5.x)", () => {
+    const row = analyze([
+      msgPaciente("oi"),
+      msgIa("separei as duas melhores opções: qual fica melhor?"),
+    ]);
+    expect(row.agendou).toBe(false);
+    expect(row.estagioCod).toBe("E5.1");
+  });
+
+  it("keyword de confirmação sem conversa prévia ainda promove a conversa para E5", () => {
     const row = analyze([
       msgPaciente("oi"),
       msgIa("agendamento confirmado, te esperamos!"),
     ]);
-    expect(row.agendou).toBe(false);
-    expect(row.estagioCod.startsWith("E5")).toBe(true);
-  });
-
-  it("CRM confirma agendamento em conversa que parou cedo → promove para E5", () => {
-    const row = analyze([msgPaciente("oi"), msgIa("olá, tudo bem?")], { agendou: true });
     expect(row.agendou).toBe(true);
     expect(row.estagioCod.startsWith("E5")).toBe(true);
   });

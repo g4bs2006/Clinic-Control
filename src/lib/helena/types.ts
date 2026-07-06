@@ -20,8 +20,6 @@ export interface HelenaCard {
   monetaryAmount: number | null;
   createdAt: string;
   customFields?: Record<string, unknown>;
-  /** Sessão de chat que originou o card (usado no relatório de conversas). */
-  sessionId?: string | null;
 }
 
 export interface HelenaCompany {

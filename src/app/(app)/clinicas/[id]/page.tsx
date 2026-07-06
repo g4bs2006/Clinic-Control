@@ -274,7 +274,7 @@ export default async function ClinicDetailPage({
       {isAuto && (
         <Panel
           title="Relatório de conversas"
-          subtitle="análise das conversas da IA no período: funil E0-E8, agendamentos reais (CRM) e planilha para o cliente"
+          subtitle="análise das conversas da IA no período: funil E0-E8, agendamentos estimados por keyword e planilha para o cliente"
         >
           <ReportPanel clinicId={id} initialJobs={reportJobs} />
         </Panel>

@@ -74,11 +74,6 @@ export async function listCards(
         monetaryAmount: c.monetaryAmount ?? null,
         createdAt: c.createdAt,
         customFields: c.customFields ?? undefined,
-        sessionId:
-          (c as { sessionId?: string; sessionID?: string; session_id?: string }).sessionId ??
-          (c as { sessionID?: string }).sessionID ??
-          (c as { session_id?: string }).session_id ??
-          null,
       });
     }
     if (!data.hasMorePages) break;

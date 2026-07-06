@@ -38,7 +38,7 @@ const DESCR_ESTAGIO: Record<string, string> = {
   "E5.1": "IA apresentou vagas, lead não avançou",
   "E5.2": "IA pediu os dados do paciente",
   "E5.3": "Lead enviou dados mas não confirmou",
-  "E5.4": "Agendamento realizado (confirmado no CRM)",
+  "E5.4": "Agendamento identificado no texto da conversa",
   "E5.5": "Agendado pela IA com tag AGENDOU",
   E6: "Atendimento finalizado com check-out completo",
   E7: "Conversa transferida para atendente humano",
@@ -99,8 +99,8 @@ export async function buildReportXlsx(input: {
 
   const kv: [string, string, string?][] = [
     ["Conversas únicas (contatos)", String(stats.total)],
-    ["Agendamentos (CRM real)", String(stats.agendamentos), C.agendou],
-    ["Taxa de conversão", fmtPct(stats.taxaConversao), C.agendou],
+    ["Agendamentos (estimativa por texto)", String(stats.agendamentos), C.agendou],
+    ["Taxa de conversão (estimada)", fmtPct(stats.taxaConversao), C.agendou],
     ["Taxa de engajamento", fmtPct(stats.taxaEngajamento)],
     ["Leads sem resposta", String(stats.semResposta)],
     ["Atendimentos 100% IA", String(stats.iaAutonoma), C.iaCol],
@@ -153,6 +153,20 @@ export async function buildReportXlsx(input: {
     ws1.getCell(r, 3).alignment = { horizontal: "right" };
     r++;
   }
+
+  r++;
+  const avisoAgendou = ws1.getCell(r, 1);
+  avisoAgendou.value =
+    "⚠ Agendamentos = detecção por palavra-chave de confirmação no texto da conversa " +
+    "(ex.: \"agendamento confirmado\", \"te esperamos\"), SEM cruzamento com o CRM. " +
+    "Pode haver falso positivo (a IA disse a frase sem o paciente confirmar) ou falso " +
+    "negativo (agendou sem usar essas palavras). Confira a coluna Motivo/Estágio na aba " +
+    "Conversas antes de repassar o número ao cliente.";
+  avisoAgendou.font = { italic: true, size: 9, color: { argb: "FF8B6914" } };
+  avisoAgendou.alignment = { wrapText: true, vertical: "top" };
+  ws1.mergeCells(r, 1, r, 3);
+  ws1.getRow(r).height = 52;
+  r++;
 
   if (input.usesDefaultKeywords) {
     r++;

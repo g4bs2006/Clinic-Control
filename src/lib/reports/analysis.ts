@@ -130,8 +130,9 @@ export function detectStage(
 
   if (kw.E6.some((k) => ti.includes(k)))
     return { label: "E6 - Finalização ✓", cod: "E6", transbordo, melhoria };
-  // Termos como "agendamento confirmado" indicam que a IA chegou ao E5, mas
-  // NÃO determinam agendou=true — apenas o CRM real confirma o agendamento.
+  // Termos como "agendamento confirmado" levam a conversa ao estágio E5; a
+  // classificação do agendamento em si (analyzeConversation) usa a mesma
+  // keyword para marcar agendou=true — não há confirmação externa (CRM).
   if (kw.E5_AGENDOU.some((k) => ta.includes(k)))
     return { label: "E5 - Tentou Agendar", cod: "E5", transbordo, melhoria };
   if (kw.E5_TENTOU.some((k) => ti.includes(k)))
@@ -211,8 +212,6 @@ export function analyzeConversation(
     messages: RawMessage[];
     contact: RawContact | null;
     canalNome: string;
-    /** sessionIds com card no painel CRM = agendamento real */
-    agendouNoCrm: boolean;
   },
   kw: ReportKeywords,
 ): ConversationRow {
@@ -249,9 +248,12 @@ export function analyzeConversation(
   let { label: estagioLabel, cod: estagioCod } = detected;
   const { transbordo, melhoria } = detected;
 
-  // Agendamento real: fonte única = CRM. Se o CRM confirma mas o estágio
-  // detectado ficou abaixo de E5, promove (a conversa chegou ao fechamento).
-  const agendou = input.agendouNoCrm;
+  // Agendamento: detectado por keyword de confirmação no texto da conversa
+  // (KW E5_AGENDOU) — não há cruzamento com o CRM nesta versão. Sujeito a
+  // falso positivo (ex.: "te esperamos" sem confirmação real); ver aviso na
+  // planilha. Se a keyword aparece mas o estágio ficou abaixo de E5, promove
+  // (a conversa chegou ao fechamento).
+  const agendou = kw.E5_AGENDOU.some((k) => normalizar(tAllStr).includes(k));
   if (agendou && estagioCod !== "E5" && estagioCod !== "E6") {
     estagioCod = "E5";
     estagioLabel = "E5 - Tentou Agendar";

@@ -6,8 +6,6 @@ import {
   listSessionMessages,
   getContactRaw,
   listChannels,
-  getPanelWithSteps,
-  listCards,
 } from "@/lib/helena/client";
 import {
   analyzeConversation,
@@ -25,10 +23,6 @@ import { buildReportXlsx } from "./xlsx";
 // limite de tempo da function; o restante fica para o próximo tick.
 const BATCH_SIZE = 40;
 const FETCH_CONCURRENCY = 6;
-
-// Etapas do card que NÃO implicam agendamento; qualquer outra etapa do painel
-// significa que houve agendamento em algum momento (o card avança no funil).
-const STEPS_SEM_AGENDAMENTO = new Set(["Leads", "Não Agendados"]);
 
 export type TickResult =
   | { done: false; status: string; progressDone: number; progressTotal: number }
@@ -116,17 +110,13 @@ export async function processReportJob(jobId: string): Promise<TickResult> {
     // ── Credenciais da clínica ───────────────────────────────────────────
     const { data: integ } = await supabase
       .from("clinic_integrations")
-      .select("helena_token_encrypted, panel_id")
+      .select("helena_token_encrypted")
       .eq("clinic_id", job.clinic_id)
       .maybeSingle();
     if (!integ?.helena_token_encrypted) {
       return failJob(jobId, "Clínica sem integração Helena configurada");
     }
-    if (!integ.panel_id) {
-      return failJob(jobId, "Clínica sem painel CRM configurado");
-    }
     const token = decryptToken(integ.helena_token_encrypted as string);
-    const panelId = integ.panel_id as string;
 
     // Dias no fuso do Brasil (-03:00), para o período casar com o dia local
     // das conversas e das datas exibidas na planilha.
@@ -208,23 +198,6 @@ export async function processReportJob(jobId: string): Promise<TickResult> {
       .update({ status: "analyzing", updated_at: new Date().toISOString() })
       .eq("id", jobId);
 
-    // Agendamentos reais: cards do painel CRM criados no período, em qualquer
-    // etapa que implique agendamento (o card se move no funil — só "Leads" e
-    // "Não Agendados" ficam de fora).
-    const [{ steps }, cards] = await Promise.all([
-      getPanelWithSteps(token, panelId),
-      listCards(token, panelId, { after, before }),
-    ]);
-    const stepTitleById = new Map(steps.map((s) => [s.id, s.title]));
-    const agendouSessionIds = new Set(
-      cards
-        .filter((c) => {
-          const title = stepTitleById.get(c.stepId);
-          return title != null && !STEPS_SEM_AGENDAMENTO.has(title) && c.sessionId;
-        })
-        .map((c) => c.sessionId as string),
-    );
-
     // Staging completo do período (paginado)
     const staged: StagedPayload[] = [];
     for (let from = 0; ; from += 500) {
@@ -251,7 +224,6 @@ export async function processReportJob(jobId: string): Promise<TickResult> {
           messages: p.messages ?? [],
           contact: p.contact,
           canalNome: p.canalNome ?? "?",
-          agendouNoCrm: agendouSessionIds.has(p.session.id),
         },
         kw,
       ),
