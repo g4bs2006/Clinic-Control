@@ -34,6 +34,8 @@ import { ClinicFunnelSetup } from "@/components/clinics/clinic-funnel-setup"
 import { listReportJobs } from "@/lib/reports/actions"
 import { ReportPanel } from "@/components/reports/report-panel"
 import { getDailyFunnelForMonth } from "@/lib/clinics/integration-actions"
+import { listClinicTasks, listTaskSuggestions } from "@/lib/tasks/actions"
+import { TaskBoard } from "@/components/tasks/task-board"
 import { DailyRateChart } from "@/components/clinics/daily-rate-chart"
 
 export const dynamic = "force-dynamic"
@@ -150,6 +152,12 @@ export default async function ClinicDetailPage({
     ])
 
   const reportJobs = isAuto ? await listReportJobs(id) : []
+
+  const [clinicTasks, allTaskSuggestions] = await Promise.all([
+    listClinicTasks(id),
+    listTaskSuggestions(),
+  ])
+  const clinicTaskSuggestions = allTaskSuggestions.filter((s) => s.clinic_id === id)
 
   // Gestor vê (leitura) o checklist do desenvolvedor responsável pela clínica.
   const responsibleDevId =
@@ -295,6 +303,17 @@ export default async function ClinicDetailPage({
           />
         </Panel>
       </div>
+
+      {/* ── Tarefas ─────────────────────────────────────────────── */}
+      <Panel title="Tarefas" subtitle="pendências manuais e sugeridas pela IA para esta clínica">
+        <TaskBoard
+          tasks={clinicTasks}
+          suggestions={clinicTaskSuggestions}
+          clinics={[{ id: clinic.id, name: clinic.name, developerId: clinic.developer_id ?? null }]}
+          profiles={profiles.map((p) => ({ id: p.id, name: p.name, email: p.email }))}
+          defaultClinicId={clinic.id}
+        />
+      </Panel>
 
       {/* ── Taxa de agendamento dia a dia ───────────────────────── */}
       {isAuto && dailyFunnelRes && (

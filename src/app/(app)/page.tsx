@@ -10,10 +10,10 @@ import { RankingTable } from "@/components/dashboard/ranking-table"
 import { PortfolioFilters } from "@/components/dashboard/portfolio-filters"
 import { listCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
-import { listResponseStats, listAttentionSummaries } from "@/lib/whatsapp/actions"
-import { fmtDuration } from "@/lib/whatsapp/format"
+import { listAttentionSummaries } from "@/lib/whatsapp/actions"
 import { ExportButton } from "@/components/dashboard/export-button"
-import { CheckCircle2 } from "lucide-react"
+import { countMyPendingTasks } from "@/lib/tasks/actions"
+import { CheckCircle2, ListTodo } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -57,14 +57,14 @@ export default async function HomePage({
   const rawRegion = params.region ?? ""
 
   // Fetch portfolio data, check items, all checks, raw clinics and WhatsApp stats
-  const [portfolioData, checkItems, allChecksMap, rawClinics, responseStats, rawAttentionSummaries, scope] = await Promise.all([
+  const [portfolioData, checkItems, allChecksMap, rawClinics, rawAttentionSummaries, scope, myPendingTasks] = await Promise.all([
     getPortfolioForMonth(month),
     listCheckItems(),
     listAllClinicChecks(),
     listClinics(),
-    listResponseStats(month),
     listAttentionSummaries(),
     getCarteiraScope(params.dev),
+    countMyPendingTasks(),
   ])
 
   // Escopo por carteira: desenvolvedor vê só a sua; gestor pode filtrar (?dev=).
@@ -98,22 +98,6 @@ export default async function HomePage({
 
   // Apply region filter to rows for ranking table (summary uses all rows)
   const filteredRows = region ? allRows.filter((r) => r.region === region) : allRows
-
-  // Performance por região (sobre todas as linhas com dados)
-  const regionAgg = new Map<string, { sum: number; count: number; leads: number }>()
-  for (const r of allRows) {
-    if (r.source === "none") continue
-    const key = r.region ?? "Sem região"
-    const agg = regionAgg.get(key) ?? { sum: 0, count: 0, leads: 0 }
-    agg.sum += r.rate
-    agg.count += 1
-    agg.leads += r.leads
-    regionAgg.set(key, agg)
-  }
-  const regionPerformance = Array.from(regionAgg.entries())
-    .map(([name, { sum, count, leads }]) => ({ name, avgRate: sum / count, count, leads }))
-    .sort((a, b) => b.avgRate - a.avgRate)
-  const maxRegionRate = Math.max(0.0001, ...regionPerformance.map((r) => r.avgRate))
 
   // Month selector options — desde maio/2026 (primeiro mês com dados) até o atual
   const monthOptions = lastNMonths(currentMonth, 12)
@@ -173,23 +157,7 @@ export default async function HomePage({
     .sort((a, b) => a.rate - b.rate)
     .slice(0, 4)
 
-  // ── WhatsApp response time (per-clinic medians for the month) ──
   const nameByClinicId = new Map(allRows.map((r) => [r.clinicId, r.name]))
-  const responseRows = responseStats
-    .filter((s) => s.median_seconds != null && nameByClinicId.has(s.clinic_id))
-    .map((s) => ({
-      clinicId: s.clinic_id,
-      name: nameByClinicId.get(s.clinic_id)!,
-      medianSeconds: s.median_seconds!,
-      episodes: s.episodes,
-      unanswered: s.unanswered,
-    }))
-    .sort((a, b) => b.medianSeconds - a.medianSeconds)
-  const medianValues = responseRows.map((r) => r.medianSeconds).sort((a, b) => a - b)
-  const portfolioMedian =
-    medianValues.length > 0 ? medianValues[Math.floor(medianValues.length / 2)] : null
-  const totalUnanswered = responseRows.reduce((sum, r) => sum + r.unanswered, 0)
-  const slowestClinics = responseRows.slice(0, 4)
 
   // ── Prepare CSV Export Data ─────────────────────────────────
   const exportData = filteredRows.map((row) => {
@@ -330,6 +298,23 @@ export default async function HomePage({
             </div>
           </Panel>
 
+          {/* ── Minhas tarefas ──────────────────────────────────── */}
+          <Link href="/tarefas" className="block">
+            <Panel className="transition-colors hover:bg-accent/40">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-brand/15 text-brand">
+                  <ListTodo className="size-4.5" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground">Minhas tarefas</p>
+                  <p className="text-lg font-bold tabular-nums text-foreground">
+                    {myPendingTasks} pendente{myPendingTasks !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+            </Panel>
+          </Link>
+
           {/* ── Atenção · Resumos IA (WhatsApp) ──────────────────── */}
           <Panel
             title="Atenção · Resumos IA"
@@ -439,120 +424,6 @@ export default async function HomePage({
             )}
           </Panel>
 
-          {/* ── WhatsApp response time ───────────────────────────── */}
-          <Panel title="Tempo de resposta · WhatsApp" subtitle="mediana por clínica no mês">
-            {responseRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sem conversas no período.</p>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Mediana da carteira</span>
-                  <span className="font-semibold text-foreground tabular-nums">
-                    {fmtDuration(portfolioMedian)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between border-t border-border/40 pt-3 text-xs">
-                  <span className="text-muted-foreground">Conversas sem resposta:</span>
-                  <span className="font-semibold text-foreground tabular-nums">{totalUnanswered}</span>
-                </div>
-                <div className="border-t border-border/40 pt-3">
-                  <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                    Respostas mais lentas
-                  </div>
-                  <ul className="space-y-1.5">
-                    {slowestClinics.map((r) => (
-                      <li key={r.clinicId} className="flex items-center justify-between text-xs">
-                        <Link
-                          href={`/clinicas/${r.clinicId}`}
-                          className="text-brand-gradient hover:opacity-85 font-medium transition-opacity truncate max-w-[170px]"
-                        >
-                          {r.name}
-                        </Link>
-                        <span className="text-[0.68rem] text-muted-foreground tabular-nums shrink-0">
-                          {fmtDuration(r.medianSeconds)} · {r.episodes} conv.
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-          </Panel>
-
-          <Panel title="Performance por região" subtitle="taxa média · clique para filtrar">
-            {regionPerformance.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sem dados no período.</p>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {regionPerformance.map((r, i) => {
-                  const isReal = r.name !== "Sem região"
-                  const isActive = region === r.name
-                  const rank =
-                    regionPerformance.length > 1
-                      ? i === 0
-                        ? "melhor"
-                        : i === regionPerformance.length - 1
-                          ? "pior"
-                          : null
-                      : null
-                  const body = (
-                    <>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-1.5 text-sm text-foreground">
-                          {r.name}
-                          {rank && (
-                            <span
-                              className="rounded px-1 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide"
-                              style={{
-                                color: rank === "melhor" ? "oklch(0.74 0.16 152)" : "oklch(0.65 0.20 25)",
-                                background:
-                                  rank === "melhor"
-                                    ? "oklch(0.74 0.16 152 / 0.12)"
-                                    : "oklch(0.65 0.20 25 / 0.12)",
-                              }}
-                            >
-                              {rank}
-                            </span>
-                          )}
-                        </span>
-                        <span className="font-semibold tabular-nums text-brand-gradient">
-                          {fmtRate(r.avgRate)}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-brand"
-                            style={{ width: `${(r.avgRate / maxRegionRate) * 100}%` }}
-                          />
-                        </div>
-                        <span className="shrink-0 text-[0.65rem] text-muted-foreground tabular-nums">
-                          {r.count} clín. · {fmtNumber(r.leads)} leads
-                        </span>
-                      </div>
-                    </>
-                  )
-                  const cls = `block rounded-md px-2 py-1.5 ${isActive ? "bg-accent" : "hover:bg-accent/60"}`
-                  return (
-                    <li key={r.name}>
-                      {isReal ? (
-                        <Link
-                          href={`/?month=${month}&region=${encodeURIComponent(r.name)}${
-                            scope.developerFilter ? `&dev=${scope.developerFilter}` : ""
-                          }`}
-                          className={cls}
-                        >
-                          {body}
-                        </Link>
-                      ) : (
-                        <div className="px-2 py-1.5">{body}</div>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </Panel>
         </div>
 
         {/* Ranking Table */}
