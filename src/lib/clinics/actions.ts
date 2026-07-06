@@ -7,7 +7,7 @@ import { regionFromState } from "./region";
 import { geocodeAddress } from "@/lib/geocoding/nominatim";
 import { CLINIC_SYSTEMS } from "./systems";
 
-async function geoFields(input: ClinicInput) {
+export async function geoFields(input: ClinicInput) {
   const region = input.state ? regionFromState(input.state) : null;
   let lat: number | null = null, lng: number | null = null;
   if (input.address) {
