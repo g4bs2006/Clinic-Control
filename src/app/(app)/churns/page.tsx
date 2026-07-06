@@ -1,5 +1,6 @@
 import { listClinics } from "@/lib/clinics/actions"
 import { listChurns } from "@/lib/churns/actions"
+import { getCarteiraScope } from "@/lib/users/actions"
 import { monthKey } from "@/lib/snapshots/month"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
@@ -13,7 +14,20 @@ function fmtBRL(value: number): string {
 }
 
 export default async function ChurnsPage() {
-  const [clinics, churns] = await Promise.all([listClinics(), listChurns()])
+  const [allClinics, allChurns, scope] = await Promise.all([
+    listClinics(),
+    listChurns(),
+    getCarteiraScope(),
+  ])
+
+  // Escopo por carteira: desenvolvedor vê só as suas clínicas; gestor vê todas.
+  const clinics = scope.developerFilter
+    ? allClinics.filter((c) => c.developer_id === scope.developerFilter)
+    : allClinics
+  const scopedIds = new Set(clinics.map((c) => c.id))
+  const churns = scope.developerFilter
+    ? allChurns.filter((c) => scopedIds.has(c.clinic_id))
+    : allChurns
 
   const currentMonth = monthKey(new Date())
   const currentYear = currentMonth.slice(0, 4)

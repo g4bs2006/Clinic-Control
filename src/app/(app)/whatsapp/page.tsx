@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { listClinics } from "@/lib/clinics/actions"
+import { getCarteiraScope } from "@/lib/users/actions"
 import { monthKey, prevMonth, DATA_START_MONTH } from "@/lib/snapshots/month"
 import {
   listResponseStats,
@@ -66,14 +67,24 @@ export default async function WhatsappPage({
   const rawMonth = params.month ?? ""
   const month = /^\d{4}-\d{2}$/.test(rawMonth) ? rawMonth : currentMonth
 
-  const [clinics, stats, groups, summaryDates, lastCollectedAt, health] = await Promise.all([
+  const [allClinics, stats, allGroups, summaryDates, lastCollectedAt, health, scope] = await Promise.all([
     listClinics(),
     listResponseStats(month),
     listWhatsappGroups(),
     listSummaryDates(),
     getLastCollectedAt(),
     getEvolutionHealth(),
+    getCarteiraScope(),
   ])
+
+  // Escopo por carteira: desenvolvedor vê só as suas clínicas; gestor vê todas.
+  const clinics = scope.developerFilter
+    ? allClinics.filter((c) => c.developer_id === scope.developerFilter)
+    : allClinics
+  const scopedIds = new Set(clinics.map((c) => c.id))
+  const groups = scope.developerFilter
+    ? allGroups.filter((g) => g.clinic_id && scopedIds.has(g.clinic_id))
+    : allGroups
 
   // Fetch Helena account overview, users and teams for automatic clinics
   const autoClinics = clinics.filter((c) => c.mode === "auto")
@@ -92,7 +103,10 @@ export default async function WhatsappPage({
   const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
     ? rawDate
     : summaryDates[0] ?? new Date().toISOString().slice(0, 10)
-  const summaries = await listDailySummaries(date)
+  const allSummaries = await listDailySummaries(date)
+  const summaries = scope.developerFilter
+    ? allSummaries.filter((s) => scopedIds.has(s.clinic_id))
+    : allSummaries
 
   const nameById = new Map(clinics.map((c) => [c.id, c.name]))
   const mappedGroups = groups.filter((g) => g.clinic_id).length

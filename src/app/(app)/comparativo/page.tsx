@@ -1,5 +1,7 @@
 import Link from "next/link"
 import { getComparison } from "@/lib/portfolio/data"
+import { listClinics } from "@/lib/clinics/actions"
+import { getCarteiraScope } from "@/lib/users/actions"
 import { monthKey, prevMonth, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { Panel } from "@/components/dashboard/panel"
 import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart"
@@ -56,7 +58,23 @@ export default async function ComparativoPage({
   // Nunca antes do primeiro mês com dados (maio/2026)
   const months = lastNMonths(currentMonth, range).filter((m) => m >= DATA_START_MONTH)
 
-  const comparison = await getComparison(months)
+  const [allComparison, allClinics, scope] = await Promise.all([
+    getComparison(months),
+    listClinics(),
+    getCarteiraScope(),
+  ])
+
+  // Escopo por carteira: desenvolvedor vê só as suas clínicas; gestor vê todas.
+  const allowedIds = scope.developerFilter
+    ? new Set(
+        allClinics
+          .filter((c) => c.developer_id === scope.developerFilter)
+          .map((c) => c.id),
+      )
+    : null
+  const comparison = allowedIds
+    ? allComparison.filter((row) => allowedIds.has(row.clinicId))
+    : allComparison
 
   // Clinics with at least one data point in the window
   const withData = comparison.filter((row) =>

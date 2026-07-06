@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { listClinics } from "@/lib/clinics/actions";
+import { getCarteiraScope } from "@/lib/users/actions";
 import { listSnapshotsForMonth, ensureFrozen, freezeAllPastMonths } from "@/lib/snapshots/actions";
 import { getLiveFunnel } from "@/lib/clinics/integration-actions";
 import { monthKey } from "@/lib/snapshots/month";
@@ -22,11 +23,17 @@ export default async function MensalPage({
   const isCurrentMonth = month === monthKey(now);
 
   // Load clinics, snapshots, and status rules in parallel
-  const [clinics, snapshots, supabase] = await Promise.all([
+  const [allClinics, snapshots, supabase, scope] = await Promise.all([
     listClinics(),
     listSnapshotsForMonth(month),
     createClient(),
+    getCarteiraScope(),
   ]);
+
+  // Escopo por carteira: desenvolvedor vê só as suas clínicas; gestor vê todas.
+  const clinics = scope.developerFilter
+    ? allClinics.filter((c) => c.developer_id === scope.developerFilter)
+    : allClinics;
 
   // Load status rules
   const { data: rulesData } = await supabase
