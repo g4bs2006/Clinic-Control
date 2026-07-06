@@ -51,7 +51,7 @@ export async function upsertCheckItem(item: {
   id?: string;
   label: string;
   position: number;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<{ ok: true; data?: CheckItemRow } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
   const owner = (await currentUserId())!;
@@ -62,13 +62,13 @@ export async function upsertCheckItem(item: {
   const payload = { label, position: item.position };
 
   // Update só alcança itens do próprio usuário; insert nasce com o dono.
-  const { error } = item.id
-    ? await supabase.from("check_items").update(payload).eq("id", item.id).eq("owner_id", owner)
-    : await supabase.from("check_items").insert({ ...payload, owner_id: owner });
+  const { data, error } = item.id
+    ? await supabase.from("check_items").update(payload).eq("id", item.id).eq("owner_id", owner).select()
+    : await supabase.from("check_items").insert({ ...payload, owner_id: owner }).select();
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/configuracoes");
-  return { ok: true };
+  revalidatePath("/", "layout");
+  return { ok: true, data: data?.[0] as CheckItemRow };
 }
 
 export async function deleteCheckItem(
@@ -80,7 +80,7 @@ export async function deleteCheckItem(
 
   const { error } = await supabase.from("check_items").delete().eq("id", id).eq("owner_id", owner);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/configuracoes");
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 

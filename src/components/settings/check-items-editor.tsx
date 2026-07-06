@@ -55,6 +55,13 @@ export function CheckItemsEditor({ initialItems }: CheckItemsEditorProps) {
       })
       if (res.ok) {
         toast.success("Item salvo.")
+        if (res.data) {
+          setDrafts((prev) =>
+            prev.map((item, i) =>
+              i === index ? { ...item, id: res.data.id } : item
+            )
+          )
+        }
         router.refresh()
       } else {
         toast.error(res.error)

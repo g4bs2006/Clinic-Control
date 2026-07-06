@@ -28,4 +28,13 @@ describe("resolveStatus", () => {
   it("retorna null quando nenhuma faixa casa e não há override", () => {
     expect(resolveStatus({ rate: 5, rules })).toBeNull();
   });
+  it("funciona quando rate_min e rate_max sao strings", () => {
+    const stringRules = rules.map(r => ({
+      ...r,
+      rate_min: String(r.rate_min) as any,
+      rate_max: String(r.rate_max) as any,
+    }));
+    expect(resolveStatus({ rate: 0.02, rules: stringRules })).toEqual({ label: "Risco Churn", color: "#9ca3af" });
+    expect(resolveStatus({ rate: 0.12, rules: stringRules })).toEqual({ label: "Bom", color: "#3b82f6" });
+  });
 });
