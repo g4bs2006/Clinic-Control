@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { getSessionUser } from "@/lib/auth/session"
 import {
   CLINIC_FILES_BUCKET,
   listAllFiles,
@@ -16,16 +17,59 @@ export async function listClinicFiles(clinicId: string): Promise<StoredFile[]> {
   }
 }
 
+// Sem Supabase Auth o navegador não tem mais papel `authenticated` no Storage —
+// download e upload passam por URLs assinadas geradas aqui (service role).
+
+/** URL assinada de leitura (5 min) para visualizar/baixar um arquivo. */
+export async function getClinicFileDownloadUrl(
+  clinicId: string,
+  path: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  if (!(await getSessionUser())) return { ok: false, error: "Não autenticado" }
+  const fullPath = `${clinicId}/${path}`.replace(/\/{2,}/g, "/")
+  if (!fullPath.startsWith(`${clinicId}/`)) return { ok: false, error: "Caminho inválido" }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.storage
+    .from(CLINIC_FILES_BUCKET)
+    .createSignedUrl(fullPath, 300)
+  if (error || !data) return { ok: false, error: error?.message ?? "Falha ao assinar URL" }
+  return { ok: true, url: data.signedUrl }
+}
+
+/** URLs assinadas de upload (2h) para um lote de caminhos relativos à clínica. */
+export async function createClinicFileUploadUrls(
+  clinicId: string,
+  paths: string[],
+): Promise<
+  | { ok: true; uploads: { path: string; fullPath: string; token: string }[] }
+  | { ok: false; error: string }
+> {
+  if (!(await getSessionUser())) return { ok: false, error: "Não autenticado" }
+  if (paths.length === 0) return { ok: true, uploads: [] }
+  if (paths.length > 500) return { ok: false, error: "Máximo de 500 arquivos por lote" }
+
+  const supabase = await createClient()
+  const uploads: { path: string; fullPath: string; token: string }[] = []
+  for (const path of paths) {
+    const fullPath = `${clinicId}/${path}`.replace(/\/{2,}/g, "/")
+    if (!fullPath.startsWith(`${clinicId}/`)) return { ok: false, error: `Caminho inválido: ${path}` }
+    const { data, error } = await supabase.storage
+      .from(CLINIC_FILES_BUCKET)
+      .createSignedUploadUrl(fullPath, { upsert: true })
+    if (error || !data) return { ok: false, error: error?.message ?? `Falha ao assinar upload de ${path}` }
+    uploads.push({ path, fullPath, token: data.token })
+  }
+  return { ok: true, uploads }
+}
+
 // Exclui um arquivo do repositório da clínica. `path` é relativo à clínica.
 export async function deleteClinicFile(
   clinicId: string,
   path: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!(await getSessionUser())) return { ok: false, error: "Não autenticado" }
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: "Não autenticado" }
 
   // Garante que o caminho está dentro da clínica (evita apagar fora do escopo).
   const fullPath = `${clinicId}/${path}`.replace(/\/{2,}/g, "/")
@@ -44,11 +88,8 @@ export async function deleteClinicFile(
 export async function deleteAllClinicFiles(
   clinicId: string,
 ): Promise<{ ok: true; deleted: number } | { ok: false; error: string }> {
+  if (!(await getSessionUser())) return { ok: false, error: "Não autenticado" }
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: "Não autenticado" }
 
   const files = await listAllFiles(supabase, clinicId)
   if (files.length === 0) return { ok: true, deleted: 0 }

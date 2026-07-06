@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/auth/session";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,23 +22,15 @@ export type ClinicCheckRow = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  return supabase;
+  if (!(await getSessionUser())) return null;
+  return createClient();
 }
 
 // ── Check Items (checklist PESSOAL — cada usuário tem os seus) ──────────────
 
 /** Id do usuário logado (ou null). */
 async function currentUserId(): Promise<string | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? null;
+  return (await getSessionUser())?.id ?? null;
 }
 
 /** Itens do checklist de `ownerId` — default: o usuário logado. */
@@ -61,7 +54,7 @@ export async function upsertCheckItem(item: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
-  const owner = (await supabase.auth.getUser()).data.user!.id;
+  const owner = (await currentUserId())!;
 
   const label = item.label.trim();
   if (label.length < 2) return { ok: false, error: "Rótulo muito curto" };
@@ -83,7 +76,7 @@ export async function deleteCheckItem(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
-  const owner = (await supabase.auth.getUser()).data.user!.id;
+  const owner = (await currentUserId())!;
 
   const { error } = await supabase.from("check_items").delete().eq("id", id).eq("owner_id", owner);
   if (error) return { ok: false, error: error.message };
@@ -158,7 +151,7 @@ export async function toggleClinicCheck(
   if (!supabase) return { ok: false, error: "Não autenticado" };
 
   // Só o dono do item pode marcar — a visão do gestor é somente leitura.
-  const owner = (await supabase.auth.getUser()).data.user!.id;
+  const owner = (await currentUserId())!;
   const { data: item } = await supabase
     .from("check_items")
     .select("owner_id")

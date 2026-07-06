@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getSessionUser } from "@/lib/auth/session";
 import { encryptToken } from "@/lib/crypto/token";
 import { createCompanyToken } from "@/lib/helena/admin";
 import { clinicInputSchema, type ClinicInput } from "@/lib/clinics/schema";
@@ -67,10 +67,7 @@ export async function createClinicFromHelenaAccount(
   requestedDeveloperId: string | null,
 ) {
   try {
-    const auth = await createClient();
-    const {
-      data: { user },
-    } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const parsed = clinicInputSchema.safeParse(input);
@@ -123,10 +120,7 @@ export async function createClinicFromHelenaAccount(
 /** Vincula uma conta Helena a uma clínica já existente (sem integração). */
 export async function linkHelenaAccountToClinic(companyId: string, clinicId: string) {
   try {
-    const auth = await createClient();
-    const {
-      data: { user },
-    } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     if (!process.env.HELENA_MASTER_TOKEN) {

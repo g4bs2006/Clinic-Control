@@ -1,5 +1,6 @@
 import JSZip from "jszip"
 import { createClient } from "@/lib/supabase/server"
+import { getSessionUser } from "@/lib/auth/session"
 import {
   CLINIC_FILES_BUCKET,
   listAllFiles,
@@ -11,12 +12,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
+  if (!(await getSessionUser())) return new Response("Não autorizado", { status: 401 })
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return new Response("Não autorizado", { status: 401 })
 
   const files = await listAllFiles(supabase, id)
   if (!files.length) return new Response("Nenhum arquivo", { status: 404 })

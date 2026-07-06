@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getSessionUser } from "@/lib/auth/session";
 import { decryptToken } from "@/lib/crypto/token";
 import { listCompanies, listCompanyTokens } from "@/lib/helena/admin";
 import { listWebhookSubscriptions, listWebhookEvents } from "@/lib/helena/client";
@@ -58,8 +59,7 @@ export async function getClinicHelenaIntegration(clinicId: string): Promise<
   | { ok: false; error: string }
 > {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false, error: "Não autenticado" };
 
     const supabase = createServiceClient();
@@ -109,8 +109,7 @@ export async function syncHelenaAccounts(): Promise<
   | { ok: false; error: string }
 > {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false, error: "Não autenticado" };
 
     const masterToken = process.env.HELENA_MASTER_TOKEN;

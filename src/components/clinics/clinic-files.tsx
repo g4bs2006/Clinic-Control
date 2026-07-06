@@ -8,7 +8,12 @@ import remarkGfm from "remark-gfm"
 import { Upload, Download, FileText, FolderUp, Trash2, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { importParsedAgents } from "@/lib/agents/actions"
-import { deleteClinicFile, deleteAllClinicFiles } from "@/lib/clinics/files-actions"
+import {
+  deleteClinicFile,
+  deleteAllClinicFiles,
+  getClinicFileDownloadUrl,
+  createClinicFileUploadUrls,
+} from "@/lib/clinics/files-actions"
 import {
   CLINIC_FILES_BUCKET,
   toStorageKey,
@@ -72,11 +77,11 @@ export function ClinicFiles({
   async function openFile(f: StoredFile) {
     setViewLoading(f.fullPath)
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase.storage
-        .from(CLINIC_FILES_BUCKET)
-        .download(f.fullPath)
-      if (error || !data) throw new Error(error?.message ?? "Falha ao abrir")
+      const signed = await getClinicFileDownloadUrl(clinicId, f.path)
+      if (!signed.ok) throw new Error(signed.error)
+      const res = await fetch(signed.url)
+      if (!res.ok) throw new Error("Falha ao abrir")
+      const data = await res.blob()
       const e = ext(f.path)
       if (TEXT_EXTS.includes(e)) {
         const text = await data.text()
@@ -127,16 +132,36 @@ export function ClinicFiles({
     setProgress({ done: 0, total: arr.length })
     const supabase = createClient()
 
+    // Upload via URLs assinadas (o navegador não tem mais sessão no Storage).
+    const keyed = arr.map((file) => ({
+      file,
+      key: toStorageKey(
+        (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
+      ),
+    }))
+    const signed = await createClinicFileUploadUrls(clinicId, keyed.map((k) => k.key))
+    if (!signed.ok) {
+      toast.error(signed.error)
+      setBusy(false)
+      setProgress(null)
+      if (inputRef.current) inputRef.current.value = ""
+      return
+    }
+    const tokenByPath = new Map(signed.uploads.map((u) => [u.path, u]))
+
     const promptFiles: InputFile[] = []
     let failed = 0
-    for (let i = 0; i < arr.length; i++) {
-      const file = arr[i]
-      const rel =
-        (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
-      const key = toStorageKey(rel) // remove acentos/caracteres inválidos
+    for (let i = 0; i < keyed.length; i++) {
+      const { file, key } = keyed[i]
+      const upload = tokenByPath.get(key)
+      if (!upload) {
+        failed++
+        setProgress({ done: i + 1, total: arr.length })
+        continue
+      }
       const { error } = await supabase.storage
         .from(CLINIC_FILES_BUCKET)
-        .upload(`${clinicId}/${key}`, file, { upsert: true })
+        .uploadToSignedUrl(upload.fullPath, upload.token, file)
       if (error) {
         failed++ // não aborta o lote: segue para os demais
       } else if (isAgentMd(key)) {

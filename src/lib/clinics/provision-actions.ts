@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { encryptToken, decryptToken } from "@/lib/crypto/token";
 import { createCompany, createCompanyToken } from "@/lib/helena/admin";
@@ -16,11 +17,7 @@ import { PROVISION_STEPS, type ProvisionStep, type ProvisionRow } from "./provis
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user ? supabase : null;
+  return (await getSessionUser()) ? createClient() : null;
 }
 
 type Service = ReturnType<typeof createServiceClient>;

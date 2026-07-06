@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/auth/session";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,12 +33,8 @@ export type TeamMemberRow = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  return supabase;
+  if (!(await getSessionUser())) return null;
+  return createClient();
 }
 
 // ── Métrica de tempo de resposta ─────────────────────────────────────────────

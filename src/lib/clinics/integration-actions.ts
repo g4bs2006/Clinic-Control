@@ -1,7 +1,7 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getSessionUser } from "@/lib/auth/session";
 import { encryptToken, decryptToken } from "@/lib/crypto/token";
 import {
   listPanels,
@@ -26,8 +26,7 @@ import { monthKey, monthRangeUtc } from "@/lib/snapshots/month";
 
 export async function listPanelsForToken(token: string) {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
     const panels = await listPanels(token);
     return { ok: true as const, panels };
@@ -38,8 +37,7 @@ export async function listPanelsForToken(token: string) {
 
 export async function getHelenaSetupOverview(token: string) {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const [panels, contactCount, channels] = await Promise.all([
@@ -67,8 +65,7 @@ export async function getHelenaSetupOverview(token: string) {
 
 export async function saveIntegration(clinicId: string, token: string, panelId: string) {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
     const { panel } = await getPanelWithSteps(token, panelId); // valida token + obtém companyId
     const supabase = createServiceClient();
@@ -88,8 +85,7 @@ export async function saveIntegration(clinicId: string, token: string, panelId: 
 
 export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const supabase = createServiceClient();
@@ -125,8 +121,7 @@ export async function listClinicLeads(
   clinicId: string,
 ): Promise<{ ok: true; leads: ClinicLead[] } | { ok: false; error: string }> {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const supabase = createServiceClient();
@@ -179,8 +174,7 @@ export async function getHelenaAccountOverview(clinicId: string) {
       return cached.value;
     }
 
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const supabase = createServiceClient();
@@ -216,8 +210,7 @@ export async function getHelenaAccountOverview(clinicId: string) {
 
 export async function getHelenaChatStatsForMonth(clinicId: string, yearMonth: string) {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const supabase = createServiceClient();
@@ -252,8 +245,7 @@ export async function getHelenaTakeoverStats(clinicId: string, yearMonth: string
         | { ok: false; error: string };
     }
 
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const supabase = createServiceClient();
@@ -277,8 +269,7 @@ export async function getHelenaTakeoverStats(clinicId: string, yearMonth: string
 
 export async function listHelenaTeamsAndUsers(clinicId: string) {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const supabase = createServiceClient();
@@ -303,8 +294,7 @@ export async function listHelenaTeamsAndUsers(clinicId: string) {
 
 export async function getHelenaCustomFieldsAggregation(clinicId: string, yearMonth: string) {
   try {
-    const auth = await createClient();
-    const { data: { user } } = await auth.auth.getUser();
+    const user = await getSessionUser();
     if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const supabase = createServiceClient();

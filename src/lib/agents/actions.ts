@@ -2,16 +2,13 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import { getSessionUser } from "@/lib/auth/session";
 import { parseAgentFiles, type InputFile } from "./parser"
 
 // Gate: qualquer usuário autenticado (equipe interna), como nas demais actions.
 async function authed() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return null
-  return supabase
+  if (!(await getSessionUser())) return null
+  return createClient()
 }
 
 export type StageRow = {

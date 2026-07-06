@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getCurrentProfile } from "@/lib/users/actions";
+import { hashPassword } from "@/lib/auth/password";
+import { createSession } from "@/lib/auth/session";
 
 export type UserInvite = {
   id: string;
@@ -15,7 +16,7 @@ export type UserInvite = {
 
 /** Convites cadastrados (pendentes e usados) — para a seção Usuários. */
 export async function listInvites(): Promise<UserInvite[]> {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("user_invites")
     .select("id, email, role, created_at, used_at")
@@ -65,8 +66,8 @@ export async function removeInvite(id: string) {
 
 /**
  * Ativa a conta de um e-mail pré-aprovado ("Novo por aqui?" no login).
- * Ação PÚBLICA — o gate é o convite pendente. Cria (ou completa) o usuário no
- * Auth com a senha escolhida, aplica o papel do convite, marca used_at e loga.
+ * Ação PÚBLICA — o gate é o convite pendente. Cria (ou completa) o usuário em
+ * app_users com a senha escolhida, aplica o papel do convite, marca used_at e loga.
  */
 export async function activateAccount(email: string, password: string) {
   const normalized = email.trim().toLowerCase();
@@ -88,45 +89,39 @@ export async function activateAccount(email: string, password: string) {
     return { ok: false as const, error: "Esta conta já foi ativada — use 'Entrar' com sua senha" };
   }
 
-  // O usuário pode já existir no Auth (convites por e-mail anteriores) — o
-  // espelho user_profiles diz se existe e qual é o id.
+  const passwordHash = await hashPassword(password);
+  const name = normalized.split("@")[0];
+
+  // O usuário pode já existir (migrado do Supabase Auth) — só completa a senha.
   const { data: existing } = await service
-    .from("user_profiles")
+    .from("app_users")
     .select("id")
     .eq("email", normalized)
     .maybeSingle();
 
   let userId: string;
   if (existing) {
-    const { error } = await service.auth.admin.updateUserById(existing.id as string, {
-      password,
-      email_confirm: true,
-    });
+    const { error } = await service
+      .from("app_users")
+      .update({ password_hash: passwordHash, role: invite.role, active: true })
+      .eq("id", existing.id);
     if (error) return { ok: false as const, error: error.message };
     userId = existing.id as string;
   } else {
-    const { data, error } = await service.auth.admin.createUser({
-      email: normalized,
-      password,
-      email_confirm: true,
-    });
-    if (error || !data.user) {
+    const { data, error } = await service
+      .from("app_users")
+      .insert({ email: normalized, name, password_hash: passwordHash, role: invite.role })
+      .select("id")
+      .single();
+    if (error || !data) {
       return { ok: false as const, error: error?.message ?? "Falha ao criar usuário" };
     }
-    userId = data.user.id;
+    userId = data.id as string;
   }
 
-  // Papel do convite vale sobre o default do trigger; marca o convite como usado.
-  await service.from("user_profiles").upsert({ id: userId, email: normalized, role: invite.role });
   await service.from("user_invites").update({ used_at: new Date().toISOString() }).eq("id", invite.id);
 
-  // Login imediato com a senha recém-definida.
-  const supabase = await createClient();
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: normalized,
-    password,
-  });
-  if (signInError) return { ok: false as const, error: signInError.message };
-
+  // Login imediato.
+  await createSession(userId);
   return { ok: true as const };
 }

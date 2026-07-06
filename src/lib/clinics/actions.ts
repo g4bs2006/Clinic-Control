@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser } from "@/lib/auth/session";
 import { clinicInputSchema, type ClinicInput, type Clinic } from "./schema";
 import { regionFromState } from "./region";
 import { geocodeAddress } from "@/lib/geocoding/nominatim";
@@ -85,11 +86,9 @@ export async function updateClinic(id: string, input: ClinicInput) {
 // Atualiza apenas o sistema/prontuário da clínica (sem re-geocodificar).
 // `system` vazio limpa o campo. Valida contra a lista conhecida.
 export async function updateClinicSystem(id: string, system: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) return { ok: false as const, error: "Não autenticado" };
+  const supabase = await createClient();
 
   const value = system.trim();
   if (value && !(CLINIC_SYSTEMS as readonly string[]).includes(value)) {
@@ -108,11 +107,9 @@ export async function updateClinicSystem(id: string, system: string) {
 
 // Atualiza apenas o modo de integração da clínica (sem re-geocodificar).
 export async function updateClinicMode(id: string, mode: "auto" | "manual") {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) return { ok: false as const, error: "Não autenticado" };
+  const supabase = await createClient();
 
   const { error } = await supabase
     .from("clinics")

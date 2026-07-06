@@ -1,37 +1,31 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getSessionUser } from "@/lib/auth/session";
+import { hashPassword, verifyPassword, generateTempPassword } from "@/lib/auth/password";
 
 export type UserProfile = {
   id: string;
   email: string | null;
   name: string | null;
   role: "gestor" | "desenvolvedor";
+  active?: boolean;
 };
 
-/** Perfil do usuário logado (null se não autenticado). */
+/** Perfil do usuário logado (null se não autenticado ou inativo). */
 export async function getCurrentProfile(): Promise<UserProfile | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) return null;
-  const { data } = await supabase
-    .from("user_profiles")
-    .select("id, email, name, role")
-    .eq("id", user.id)
-    .maybeSingle();
-  return (data as UserProfile | null) ?? null;
+  return { id: user.id, email: user.email, name: user.name, role: user.role, active: user.active };
 }
 
 /** Todos os perfis (para a seção Usuários e selects de carteira). */
 export async function listUserProfiles(): Promise<UserProfile[]> {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { data, error } = await supabase
-    .from("user_profiles")
-    .select("id, email, name, role")
+    .from("app_users")
+    .select("id, email, name, role, active")
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as UserProfile[];
@@ -74,7 +68,7 @@ async function requireGestor(): Promise<{ ok: true; userId: string } | { ok: fal
   return { ok: true, userId: profile.id };
 }
 
-/** Troca o papel de um usuário — apenas gestor; escrita via service_role. */
+/** Troca o papel de um usuário — apenas gestor. */
 export async function updateUserRole(userId: string, role: "gestor" | "desenvolvedor") {
   const gate = await requireGestor();
   if (!gate.ok) return gate;
@@ -83,9 +77,69 @@ export async function updateUserRole(userId: string, role: "gestor" | "desenvolv
   }
 
   const supabase = createServiceClient();
-  const { error } = await supabase.from("user_profiles").update({ role }).eq("id", userId);
+  const { error } = await supabase.from("app_users").update({ role }).eq("id", userId);
   if (error) return { ok: false as const, error: error.message };
   revalidatePath("/configuracoes");
+  return { ok: true as const };
+}
+
+/** Ativa/desativa um usuário — apenas gestor. Inativo não loga nem mantém sessão. */
+export async function setUserActive(userId: string, active: boolean) {
+  const gate = await requireGestor();
+  if (!gate.ok) return gate;
+  if (!active && userId === gate.userId) {
+    return { ok: false as const, error: "Você não pode desativar a si mesmo" };
+  }
+
+  const supabase = createServiceClient();
+  const { error } = await supabase.from("app_users").update({ active }).eq("id", userId);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/configuracoes");
+  return { ok: true as const };
+}
+
+/**
+ * Redefine a senha de um usuário para uma temporária — apenas gestor.
+ * A senha é retornada UMA vez para o gestor repassar; a pessoa troca depois
+ * em Configurações → Minha conta.
+ */
+export async function resetUserPassword(userId: string) {
+  const gate = await requireGestor();
+  if (!gate.ok) return gate;
+
+  const temp = generateTempPassword();
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("app_users")
+    .update({ password_hash: await hashPassword(temp) })
+    .eq("id", userId);
+  if (error) return { ok: false as const, error: error.message };
+  return { ok: true as const, tempPassword: temp };
+}
+
+/** Troca a própria senha (exige a senha atual). */
+export async function changeOwnPassword(currentPassword: string, newPassword: string) {
+  const user = await getSessionUser();
+  if (!user) return { ok: false as const, error: "Não autenticado" };
+  if (newPassword.length < 8) {
+    return { ok: false as const, error: "A nova senha precisa ter pelo menos 8 caracteres" };
+  }
+
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("app_users")
+    .select("password_hash")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!data || !(await verifyPassword(currentPassword, data.password_hash as string | null))) {
+    return { ok: false as const, error: "Senha atual incorreta" };
+  }
+
+  const { error } = await supabase
+    .from("app_users")
+    .update({ password_hash: await hashPassword(newPassword) })
+    .eq("id", user.id);
+  if (error) return { ok: false as const, error: error.message };
   return { ok: true as const };
 }
 

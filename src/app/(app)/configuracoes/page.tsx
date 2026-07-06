@@ -11,6 +11,7 @@ import { CheckItemsEditor } from "@/components/settings/check-items-editor"
 import { WhatsappGroupsEditor } from "@/components/settings/whatsapp-groups-editor"
 import { WhatsappTeamEditor } from "@/components/settings/whatsapp-team-editor"
 import { UsersEditor } from "@/components/settings/users-editor"
+import { ChangePasswordForm } from "@/components/settings/change-password-form"
 
 export const dynamic = "force-dynamic"
 
@@ -52,6 +53,11 @@ export default async function ConfiguracoesPage() {
           clinicCountByDeveloper={clinicCountByDeveloper}
         />
         <InvitesEditor initialInvites={invites} />
+      </Panel>
+
+      {/* ── Minha conta ────────────────────────────────────────── */}
+      <Panel title="Minha conta" subtitle="trocar a própria senha de acesso">
+        <ChangePasswordForm />
       </Panel>
 
       {/* ── Status rules ───────────────────────────────────────── */}
