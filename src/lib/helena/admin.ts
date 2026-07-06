@@ -193,7 +193,8 @@ export async function createCompanyToken(
   opts?: Opts,
 ): Promise<string> {
   const data = await post(masterToken, `/core/v1/company/${companyId}/tokens`, { name }, opts);
-  // o formato exato não está documentado — tenta os campos usuais
+  // Resposta documentada (PublicPermanentTokenDTO): o campo é `token`, mas é
+  // nullable na spec — os fallbacks ficam como defesa.
   const token = (data.token ?? data.value ?? data.accessToken ?? data.key) as string | undefined;
   if (!token) throw new Error("Resposta da Helena sem o token criado");
   return token;
