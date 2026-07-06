@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveStatus, type StatusRule } from "@/lib/snapshots/status";
+import { resolveStatus, findOverlappingRule, type StatusRule } from "@/lib/snapshots/status";
 
 const rules: StatusRule[] = [
   { label: "Risco Churn", rate_min: 0.0, rate_max: 0.05, color: "#9ca3af" },
@@ -36,5 +36,39 @@ describe("resolveStatus", () => {
     }));
     expect(resolveStatus({ rate: 0.02, rules: stringRules })).toEqual({ label: "Risco Churn", color: "#9ca3af" });
     expect(resolveStatus({ rate: 0.12, rules: stringRules })).toEqual({ label: "Bom", color: "#3b82f6" });
+  });
+});
+
+describe("findOverlappingRule", () => {
+  const withIds = rules.map((r, i) => ({ ...r, id: `id-${i}` }));
+
+  it("detecta sobreposição com faixa existente", () => {
+    const conflict = findOverlappingRule({ rate_min: 0.2, rate_max: 1.01 }, withIds);
+    expect(conflict?.label).toBe("Ótimo");
+  });
+  it("aceita faixa disjunta", () => {
+    expect(findOverlappingRule({ rate_min: 1.01, rate_max: 2 }, withIds)).toBeNull();
+  });
+  it("limites encostados não contam como sobreposição", () => {
+    const partial = withIds.slice(0, 2); // 0–0.05 e 0.05–0.09
+    expect(findOverlappingRule({ rate_min: 0.09, rate_max: 0.2 }, partial)).toBeNull();
+  });
+  it("ignora a própria regra ao editar", () => {
+    expect(
+      findOverlappingRule({ id: "id-4", rate_min: 0.13, rate_max: 0.9 }, withIds),
+    ).toBeNull();
+  });
+  it("edição que invade a vizinha ainda conflita", () => {
+    const conflict = findOverlappingRule({ id: "id-4", rate_min: 0.12, rate_max: 1.01 }, withIds);
+    expect(conflict?.label).toBe("Bom");
+  });
+  it("funciona quando rate_min e rate_max vêm como strings do banco", () => {
+    const stringRules = withIds.map((r) => ({
+      ...r,
+      rate_min: String(r.rate_min) as unknown as number,
+      rate_max: String(r.rate_max) as unknown as number,
+    }));
+    expect(findOverlappingRule({ rate_min: 0.2, rate_max: 0.5 }, stringRules)?.label).toBe("Ótimo");
+    expect(findOverlappingRule({ rate_min: 1.01, rate_max: 2 }, stringRules)).toBeNull();
   });
 });

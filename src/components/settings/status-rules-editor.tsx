@@ -184,7 +184,9 @@ export function StatusRulesEditor({ initialRules }: StatusRulesEditorProps) {
 
       <p className="text-xs text-muted-foreground">
         As faixas usam a taxa de conversão (agendados ÷ leads). Uma taxa cai na faixa
-        cujo intervalo a contém — mínima inclusiva, máxima exclusiva.
+        cujo intervalo a contém — mínima inclusiva, máxima exclusiva. As faixas não
+        podem se sobrepor: para inserir uma nova no meio, ajuste antes os limites das
+        vizinhas.
       </p>
     </div>
   )
