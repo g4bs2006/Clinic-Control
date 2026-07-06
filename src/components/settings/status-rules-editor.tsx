@@ -73,10 +73,11 @@ export function StatusRulesEditor({ initialRules }: StatusRulesEditorProps) {
       })
       if (res.ok) {
         toast.success("Faixa salva.")
-        if (res.data) {
+        const saved = res.data
+        if (saved) {
           setDrafts((prev) =>
             prev.map((item, i) =>
-              i === index ? { ...item, id: res.data.id } : item
+              i === index ? { ...item, id: saved.id } : item
             )
           )
         }
