@@ -31,6 +31,8 @@ import { ClinicChecks } from "@/components/clinics/clinic-checks"
 import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
 import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
 import { ClinicFunnelSetup } from "@/components/clinics/clinic-funnel-setup"
+import { listReportJobs } from "@/lib/reports/actions"
+import { ReportPanel } from "@/components/reports/report-panel"
 
 export const dynamic = "force-dynamic"
 
@@ -120,6 +122,8 @@ export default async function ClinicDetailPage({
       listUserProfiles(),
       getCurrentProfile(),
     ])
+
+  const reportJobs = isAuto ? await listReportJobs(id) : []
 
   // Gestor vê (leitura) o checklist do desenvolvedor responsável pela clínica.
   const responsibleDevId =
@@ -265,6 +269,16 @@ export default async function ClinicDetailPage({
           />
         </Panel>
       </div>
+
+      {/* ── Relatório de conversas (análise IA) ────────────────── */}
+      {isAuto && (
+        <Panel
+          title="Relatório de conversas"
+          subtitle="análise das conversas da IA no período: funil E0-E8, agendamentos reais (CRM) e planilha para o cliente"
+        >
+          <ReportPanel clinicId={id} initialJobs={reportJobs} />
+        </Panel>
+      )}
 
       {/* ── Credenciais do Formulário ──────────────────────────── */}
       {(clinic.system === "Google Agenda" || clinic.system === "Clinicorp") && (

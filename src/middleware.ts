@@ -3,7 +3,9 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth/cookie-name";
 import { verifySessionToken } from "@/lib/auth/token";
 
 // Rotas públicas: login e ativação de conta (e-mail pré-aprovado).
-const PUBLIC_PREFIXES = ["/login", "/ativar-conta"];
+// /api/reports/process valida a própria autenticação (assinatura HMAC interna
+// dos ticks de relatório) — ver src/app/api/reports/process/route.ts.
+const PUBLIC_PREFIXES = ["/login", "/ativar-conta", "/api/reports/process"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -74,6 +74,11 @@ export async function listCards(
         monetaryAmount: c.monetaryAmount ?? null,
         createdAt: c.createdAt,
         customFields: c.customFields ?? undefined,
+        sessionId:
+          (c as { sessionId?: string; sessionID?: string; session_id?: string }).sessionId ??
+          (c as { sessionID?: string }).sessionID ??
+          (c as { session_id?: string }).session_id ??
+          null,
       });
     }
     if (!data.hasMorePages) break;
@@ -81,6 +86,80 @@ export async function listCards(
     if (page > MAX_PAGES) throw new Error("Helena API: paginação excedeu o limite de páginas");
   }
   return out;
+}
+
+/** Sessões cruas do período (payload completo — usado no relatório de conversas). */
+export async function listSessionsRaw(
+  token: string,
+  range: { after: string; before: string },
+  opts?: Opts,
+): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = [];
+  let page = 1;
+  for (;;) {
+    const data = await get(
+      token,
+      "/chat/v2/session",
+      {
+        "CreatedAt.After": range.after,
+        "CreatedAt.Before": range.before,
+        OrderBy: "createdAt",
+        OrderDirection: "ASCENDING",
+        PageSize: "100",
+        PageNumber: String(page),
+      },
+      opts,
+    );
+    const batch = data.items ?? [];
+    out.push(...batch);
+    if (!data.hasMorePages || batch.length === 0) break;
+    page += 1;
+    if (page > MAX_PAGES) throw new Error("Helena API: paginação excedeu o limite de páginas");
+  }
+  return out;
+}
+
+/** Mensagens cruas de uma sessão, em ordem cronológica. */
+export async function listSessionMessages(
+  token: string,
+  sessionId: string,
+  opts?: Opts,
+): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = [];
+  let page = 1;
+  for (;;) {
+    const data = await get(
+      token,
+      "/chat/v1/message",
+      {
+        SessionId: sessionId,
+        OrderBy: "createdAt",
+        OrderDirection: "ASCENDING",
+        PageSize: "100",
+        PageNumber: String(page),
+      },
+      opts,
+    );
+    const batch = data.items ?? [];
+    out.push(...batch);
+    if (!data.hasMorePages || batch.length === 0) break;
+    page += 1;
+    if (page > MAX_PAGES) throw new Error("Helena API: paginação excedeu o limite de páginas");
+  }
+  return out;
+}
+
+/** Contato cru por id (nome/telefone/tags) — null se não encontrado. */
+export async function getContactRaw(
+  token: string,
+  contactId: string,
+  opts?: Opts,
+): Promise<Record<string, unknown> | null> {
+  try {
+    return await get(token, `/core/v1/contact/${contactId}`, {}, opts);
+  } catch {
+    return null;
+  }
 }
 
 export async function getContactCount(token: string, opts?: Opts): Promise<number> {

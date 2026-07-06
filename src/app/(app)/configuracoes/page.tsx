@@ -2,8 +2,10 @@ import { listStatusRules, listFunnelSteps } from "@/lib/snapshots/rules-actions"
 import { listCheckItems } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
-import { listUserProfiles } from "@/lib/users/actions"
+import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
 import { listInvites } from "@/lib/users/invites-actions"
+import { listReportKeywords } from "@/lib/reports/actions"
+import { ReportKeywordsEditor } from "@/components/settings/report-keywords-editor"
 import { InvitesEditor } from "@/components/settings/invites-editor"
 import { Panel } from "@/components/dashboard/panel"
 import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
@@ -16,7 +18,7 @@ import { ChangePasswordForm } from "@/components/settings/change-password-form"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, invites] = await Promise.all([
+  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, invites, reportKeywords, currentProfile] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
@@ -25,6 +27,8 @@ export default async function ConfiguracoesPage() {
     listTeamMembers(),
     listUserProfiles(),
     listInvites(),
+    listReportKeywords(),
+    getCurrentProfile(),
   ])
 
   const clinicCountByDeveloper: Record<string, number> = {}
@@ -99,6 +103,17 @@ export default async function ConfiguracoesPage() {
         <p className="text-xs text-muted-foreground">
           As etapas são fixas nesta versão (espelham o funil padrão da Helena).
         </p>
+      </Panel>
+
+      {/* ── Keywords do relatório de conversas ─────────────────── */}
+      <Panel
+        title="Keywords do relatório de conversas"
+        subtitle="termos que classificam cada estágio do funil E0-E8 na análise das conversas"
+      >
+        <ReportKeywordsEditor
+          initialRows={reportKeywords}
+          readOnly={currentProfile?.role !== "gestor"}
+        />
       </Panel>
 
       {/* ── Checklist items (pessoais do usuário logado) ───────── */}
