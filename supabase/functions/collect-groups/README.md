@@ -56,3 +56,12 @@ $$);
 - Idempotente: reexecutar não duplica (unique `group_jid, message_id`).
 - Lógica pura em `normalize.ts` (testada em `tests/whatsapp-collect.test.ts`).
 - `fetchErrors`/`insertErrors` no retorno sinalizam cobertura parcial.
+
+## 4. Sincronização on-demand (app)
+
+Botão "Buscar grupos novos" em `/configuracoes` → seção "Grupos de WhatsApp" chama
+esta função direto (via `syncWhatsappGroups` em `src/lib/whatsapp/actions.ts`),
+sem esperar o cron das 18h — útil quando uma clínica nova entra e o grupo dela
+ainda não apareceu na lista de mapeamento. Usa `lookbackHours=24` (não é
+backfill). Requer a env var `COLLECT_GROUPS_CRON_SECRET` (mesmo valor deste
+secret) configurada no Vercel e no `.env.local`.

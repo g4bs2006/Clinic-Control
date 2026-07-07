@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { RefreshCw } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -9,7 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { updateGroupClinic, type WhatsappGroupRow } from "@/lib/whatsapp/actions"
+import { Button } from "@/components/ui/button"
+import { updateGroupClinic, syncWhatsappGroups, type WhatsappGroupRow } from "@/lib/whatsapp/actions"
 
 const NONE = "__none__"
 
@@ -19,10 +22,26 @@ interface WhatsappGroupsEditorProps {
 }
 
 export function WhatsappGroupsEditor({ groups, clinics }: WhatsappGroupsEditorProps) {
+  const router = useRouter()
   const [byJid, setByJid] = useState<Record<string, string | null>>(() =>
     Object.fromEntries(groups.map((g) => [g.group_jid, g.clinic_id])),
   )
   const [pending, startTransition] = useTransition()
+  const [syncing, setSyncing] = useState(false)
+
+  function sync() {
+    setSyncing(true)
+    startTransition(async () => {
+      const res = await syncWhatsappGroups()
+      setSyncing(false)
+      if (res.ok) {
+        toast.success(`${res.groupsFetched} grupos na Evolution · ${res.messagesInserted} mensagens novas.`)
+        router.refresh()
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
 
   function onChange(groupJid: string, val: string | null) {
     if (!val) return
@@ -46,10 +65,23 @@ export function WhatsappGroupsEditor({ groups, clinics }: WhatsappGroupsEditorPr
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs text-muted-foreground">
-        {mapped} de {groups.length} grupos mapeados. Grupos sem clínica (internos ou
-        de outras carteiras) ficam fora do cálculo do tempo de resposta.
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {mapped} de {groups.length} grupos mapeados. Grupos sem clínica (internos ou
+          de outras carteiras) ficam fora do cálculo do tempo de resposta.
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={syncing}
+          onClick={sync}
+          title="Busca na Evolution os grupos novos (ex.: clínica que acabou de entrar)"
+        >
+          <RefreshCw className={`size-3.5 ${syncing ? "animate-spin" : ""}`} />
+          Buscar grupos novos
+        </Button>
+      </div>
 
       <ul className="flex flex-col gap-1.5 max-h-[420px] overflow-y-auto pr-1">
         {groups.map((g) => (

@@ -215,6 +215,47 @@ export async function listWhatsappGroups(): Promise<WhatsappGroupRow[]> {
   return (data ?? []) as WhatsappGroupRow[];
 }
 
+/**
+ * Roda a coleta da Evolution (`collect-groups`) na hora, em vez de esperar o
+ * cron das 18h — para quando entra uma clínica nova e o grupo dela ainda não
+ * apareceu na lista de mapeamento. Reusa a mesma Edge Function do cron diário,
+ * só que on-demand; lookback curto (24h) então é rápido mesmo com muitos grupos.
+ */
+export async function syncWhatsappGroups(): Promise<
+  | { ok: true; groupsFetched: number; messagesInserted: number }
+  | { ok: false; error: string }
+> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secret = process.env.COLLECT_GROUPS_CRON_SECRET;
+  if (!baseUrl || !secret) {
+    return {
+      ok: false,
+      error: "Sincronização não configurada — falta COLLECT_GROUPS_CRON_SECRET no ambiente.",
+    };
+  }
+
+  let data: { ok?: boolean; error?: string; groupsFetched?: number; inserted?: number } | null = null;
+  try {
+    const res = await fetch(`${baseUrl}/functions/v1/collect-groups?lookbackHours=24`, {
+      method: "POST",
+      headers: { "x-cron-secret": secret },
+    });
+    data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      return { ok: false, error: data?.error ?? `Falha na sincronização (HTTP ${res.status})` };
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Falha ao contatar a função de coleta" };
+  }
+
+  revalidatePath("/configuracoes");
+  revalidatePath("/whatsapp");
+  return { ok: true, groupsFetched: data.groupsFetched ?? 0, messagesInserted: data.inserted ?? 0 };
+}
+
 /** Mapeia (ou desmapeia, clinicId=null) um grupo para uma clínica. */
 export async function updateGroupClinic(
   groupJid: string,
