@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Check, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,57 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
   const [priority, setPriority] = useState<TaskPriority>("media")
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
   const [dueDate, setDueDate] = useState("")
+  // Seleção múltipla (ação em lote). Limpa quando a lista muda (após confirmar/descartar).
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    setSelected(new Set())
+  }, [suggestions])
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function bulkConfirm() {
+    const chosen = suggestions.filter((s) => selected.has(s.id))
+    if (!chosen.length) return
+    startTransition(async () => {
+      const results = await Promise.all(
+        chosen.map((s) => {
+          const clinic = clinics.find((c) => c.id === s.clinic_id)
+          return acceptTaskSuggestion(s.id, {
+            clinicId: s.clinic_id,
+            category: defaultCategory,
+            priority: PRIORITY_BY_SEVERITY[s.severity] ?? "media",
+            assignedTo: clinic?.developerId ?? null,
+            dueDate: "",
+          })
+        }),
+      )
+      const okCount = results.filter((r) => r.ok).length
+      const failCount = results.length - okCount
+      if (okCount) toast.success(`${okCount} tarefa(s) criada(s) a partir das sugestões.`)
+      if (failCount) toast.error(`${failCount} sugestão(ões) não puderam ser confirmadas.`)
+      setSelected(new Set())
+      onChanged()
+    })
+  }
+
+  function bulkDismiss() {
+    const ids = [...selected]
+    if (!ids.length) return
+    startTransition(async () => {
+      const results = await Promise.all(ids.map((id) => dismissTaskSuggestion(id)))
+      const okCount = results.filter((r) => r.ok).length
+      if (okCount) toast.success(`${okCount} sugestão(ões) descartada(s).`)
+      setSelected(new Set())
+      onChanged()
+    })
+  }
 
   function openReview(s: TaskSuggestionRow) {
     const clinic = clinics.find((c) => c.id === s.clinic_id)
@@ -99,9 +151,44 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
           Pendências identificadas nos resumos diários — confirme para virar tarefa ou descarte.
         </p>
       </div>
+
+      {/* Cabeçalho de seleção + ação em lote */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-amber-500/15 pb-2">
+        <Checkbox
+          checked={suggestions.length > 0 && suggestions.every((s) => selected.has(s.id))}
+          onCheckedChange={(checked) =>
+            setSelected(checked ? new Set(suggestions.map((s) => s.id)) : new Set())
+          }
+          aria-label="Selecionar todas as sugestões"
+        />
+        {selected.size > 0 ? (
+          <>
+            <span className="text-xs font-medium text-muted-foreground">
+              {selected.size} selecionada{selected.size !== 1 ? "s" : ""}
+            </span>
+            <div className="flex-1" />
+            <Button type="button" size="sm" variant="outline" disabled={pending} onClick={bulkConfirm}>
+              <Check className="size-3.5" />
+              Confirmar ({selected.size})
+            </Button>
+            <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={bulkDismiss}>
+              <X className="size-3.5" />
+              Descartar ({selected.size})
+            </Button>
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground">Selecione para confirmar ou descartar em lote</span>
+        )}
+      </div>
+
       <ul className="flex flex-col divide-y divide-amber-500/15">
         {suggestions.map((s) => (
           <li key={s.id} className="flex flex-wrap items-center gap-2 py-2">
+            <Checkbox
+              checked={selected.has(s.id)}
+              onCheckedChange={() => toggleSelect(s.id)}
+              aria-label={`Selecionar sugestão ${s.text}`}
+            />
             <div className="min-w-0 flex-1">
               <p className="text-sm">
                 {s.severity === "alta" && (

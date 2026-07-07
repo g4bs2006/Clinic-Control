@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { CreateTaskDialog } from "./create-task-dialog"
 import { TaskSuggestions } from "./task-suggestions"
 import { TaskDetailDialog } from "./task-detail-dialog"
@@ -20,6 +21,7 @@ import { KanbanBoard } from "./kanban-board"
 import type { ClinicOption, ProfileOption } from "./task-fields"
 import {
   updateTaskStatus,
+  bulkUpdateTaskStatus,
   deleteTask,
   type TaskRow,
   type TaskSuggestionRow,
@@ -69,6 +71,9 @@ function TaskListItem({
   onOpen,
   onChangeStatus,
   onRemove,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }: {
   t: TaskRow
   categoryLabel: Record<string, string>
@@ -76,9 +81,19 @@ function TaskListItem({
   onOpen: (id: string) => void
   onChangeStatus: (id: string, status: TaskStatus) => void
   onRemove: (id: string) => void
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
 }) {
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5">
+      {selectable && (
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onToggleSelect?.(t.id)}
+          aria-label={`Selecionar tarefa ${t.title}`}
+        />
+      )}
       <span
         className={`size-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`}
         title={TASK_PRIORITY_LABEL[t.priority]}
@@ -165,8 +180,11 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
   // lista reflete na hora). Re-sincroniza quando o servidor envia nova lista
   // (criação, exclusão, aceite de sugestão, edição no detalhe — que dão refresh).
   const [tasks, setTasks] = useState(initialTasks)
+  // Seleção múltipla da lista (ação em lote). Limpa ao chegar nova lista do servidor.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   useEffect(() => {
     setTasks(initialTasks)
+    setSelected(new Set())
   }, [initialTasks])
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
@@ -213,6 +231,45 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
         toast.success("Tarefa excluída.")
         refresh()
       } else {
+        toast.error(res.error)
+      }
+    })
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function bulkStatus(status: TaskStatus) {
+    const ids = [...selected]
+    if (!ids.length) return
+    const idSet = selected
+    const snapshot = tasks
+    // Otimista: aplica o novo status nas selecionadas na hora.
+    setTasks((ts) =>
+      ts.map((t) =>
+        idSet.has(t.id)
+          ? { ...t, status, completed_at: status === "concluida" ? new Date().toISOString() : null }
+          : t,
+      ),
+    )
+    setSelected(new Set())
+    startTransition(async () => {
+      const res = await bulkUpdateTaskStatus(ids, status)
+      if (res.ok) {
+        toast.success(
+          status === "concluida"
+            ? `${res.count} tarefa(s) concluída(s).`
+            : `${res.count} tarefa(s) descartada(s).`,
+        )
+      } else {
+        setTasks(snapshot)
+        setSelected(idSet)
         toast.error(res.error)
       }
     })
@@ -394,19 +451,51 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
       ) : view === "board" ? (
         <KanbanBoard tasks={filtered} categoryLabel={categoryLabel} onOpen={setOpenTaskId} onStatusChange={changeStatus} />
       ) : (
-        <ul className="flex flex-col divide-y divide-border/40">
-          {filtered.map((t) => (
-            <TaskListItem
-              key={t.id}
-              t={t}
-              categoryLabel={categoryLabel}
-              pending={pending}
-              onOpen={setOpenTaskId}
-              onChangeStatus={changeStatus}
-              onRemove={remove}
+        <div className="flex flex-col">
+          {/* Cabeçalho de seleção + barra de ação em lote */}
+          <div className="flex flex-wrap items-center gap-3 border-b border-border/40 pb-2">
+            <Checkbox
+              checked={filtered.length > 0 && filtered.every((t) => selected.has(t.id))}
+              onCheckedChange={(checked) =>
+                setSelected(checked ? new Set(filtered.map((t) => t.id)) : new Set())
+              }
+              aria-label="Selecionar todas"
             />
-          ))}
-        </ul>
+            {selected.size > 0 ? (
+              <>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {selected.size} selecionada{selected.size !== 1 ? "s" : ""}
+                </span>
+                <div className="flex-1" />
+                <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => bulkStatus("concluida")}>
+                  Concluir ({selected.size})
+                </Button>
+                <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => bulkStatus("cancelada")}>
+                  Descartar ({selected.size})
+                </Button>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">Selecione tarefas para concluir ou descartar em lote</span>
+            )}
+          </div>
+
+          <ul className="flex flex-col divide-y divide-border/40">
+            {filtered.map((t) => (
+              <TaskListItem
+                key={t.id}
+                t={t}
+                categoryLabel={categoryLabel}
+                pending={pending}
+                onOpen={setOpenTaskId}
+                onChangeStatus={changeStatus}
+                onRemove={remove}
+                selectable
+                selected={selected.has(t.id)}
+                onToggleSelect={toggleSelect}
+              />
+            ))}
+          </ul>
+        </div>
       )}
 
       {suggestions.length > 0 && (

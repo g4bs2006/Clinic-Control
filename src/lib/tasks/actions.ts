@@ -280,6 +280,43 @@ export async function updateTaskStatus(
   return { ok: true };
 }
 
+/**
+ * Muda o status de várias tarefas de uma vez (ação em lote da lista). Uma única
+ * UPDATE + um único INSERT de comentários de histórico (para as que realmente
+ * mudaram) — independente da quantidade. Sem revalidatePath: a lista atualiza de
+ * forma otimista no cliente e as páginas são force-dynamic.
+ */
+export async function bulkUpdateTaskStatus(
+  ids: string[],
+  status: TaskStatus,
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+  if (!ids.length) return { ok: true, count: 0 };
+  const supabase = await createClient();
+
+  const { data: current } = await supabase.from("tasks").select("id, status").in("id", ids);
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ status, completed_at: status === "concluida" ? new Date().toISOString() : null })
+    .in("id", ids);
+  if (error) return { ok: false, error: error.message };
+
+  const changed = (current ?? []).filter((c) => c.status !== status);
+  if (changed.length) {
+    await supabase.from("task_comments").insert(
+      changed.map((c) => ({
+        task_id: c.id as string,
+        author_id: user.id,
+        kind: "system",
+        body: `Status alterado de "${TASK_STATUS_LABEL[c.status as TaskStatus]}" para "${TASK_STATUS_LABEL[status]}"`,
+      })),
+    );
+  }
+  return { ok: true, count: ids.length };
+}
+
 export async function deleteTask(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
