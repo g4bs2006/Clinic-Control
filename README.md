@@ -124,7 +124,7 @@ Sistema completo de gestão de pendências da carteira, com escopo por carteira 
 - Subtarefas reais (não um checklist): a descrição de uma tarefa pode ser enviada ao DeepSeek, que propõe uma quebra em passos menores; a lista é revisada antes de virar tarefas de fato.
 - Anexos de arquivo por tarefa.
 - Linha do tempo de atividade unificando comentários manuais e o histórico automático de mudança de status.
-- Visualização em lista ou em board Kanban (arrastar e soltar entre colunas de status).
+- Visualização em lista, board Kanban (arrastar e soltar entre colunas de status) ou **agenda "Minha semana"** — só as tarefas atribuídas a você, em aberto, agrupadas por prazo (Atrasadas, Hoje, Esta semana, Mais tarde, Sem prazo).
 
 ## Fluxos de dados principais
 
@@ -357,8 +357,17 @@ Migrations em `supabase/migrations/` são aplicadas diretamente no projeto Supab
 
 ## Roadmap
 
+### Direção estratégica
+
+O norte é transformar o Clinic Control de "painel que a equipe consulta" em **central de operação que puxa a equipe para a ação**, unificando a gestão e substituindo o ClickUp. Três frentes que se reforçam num ciclo (*detecta → vira tarefa → notifica → age → rastreia*):
+
+1. **Matar o ClickUp** — completar as tarefas nativas (frente atual).
+2. **Notificações** — levar os sinais para onde a equipe está (WhatsApp/e-mail/push).
+3. **Proatividade** — churn preditivo, padrões entre clínicas, ações automáticas.
+
 ### Concluído recentemente (julho/2026)
 
+- **Agenda "Minha semana"** — 3º modo em /tarefas com as tarefas do usuário agrupadas por prazo (primeiro passo de "matar o ClickUp").
 - **Melhorias nos resumos de IA** — comparação com o dia anterior (continuidade de problemas), classificação de severidade que define a prioridade sugerida da tarefa, e deduplicação de sugestões contra tarefas já abertas (`pg_trgm`).
 - **Custo de IA** — registro de consumo de tokens (`ai_usage_log`) e card de custo estimado em Configurações.
 - **Sincronização on-demand de grupos** — botão em Configurações para coletar grupos novos sem esperar o cron.
@@ -368,11 +377,13 @@ Migrations em `supabase/migrations/` são aplicadas diretamente no projeto Supab
 
 | Prioridade | Item | Observação |
 |---|---|---|
-| Alta | Detecção de padrões entre clínicas | Agrupar reclamações/temas recorrentes em várias clínicas no mesmo dia via *embeddings* (`pgvector`); desenhado, aguarda chave de embeddings (DeepSeek não oferece endpoint). |
+| Alta | Tarefas recorrentes | Frente "matar o ClickUp": recorrência (diária/semanal/mensal) com materialização da próxima ocorrência. |
+| Alta | Dependências entre tarefas | Frente "matar o ClickUp": "bloqueada por" entre tarefas. |
+| Alta | Notificações + lembretes de prazo | Fundação de entrega; habilita os lembretes externos de prazo (a "Minha semana" cobre o in-app). |
+| Média | Detecção de padrões entre clínicas | Agrupar reclamações/temas recorrentes via *embeddings* (`pgvector`); desenhado, aguarda chave de embeddings (DeepSeek não oferece endpoint). |
 | Média | Timeline de sentimento (30 dias) | Faixa de sentimento no perfil da clínica. |
 | Média | Rollup semanal por IA | Consolidado semanal; aguarda mais dados acumulados. |
 | Média | Relatório de conversas — Fase 2/3 | Abas IA×Humano/Habilidades/Mensagens, keywords por clínica e funil na tela. |
-| Média | Sugestões de mensagem para grupos com baixa interação | Feature em discussão; escopo ainda a definir. |
 | Baixa | Categorização automática de pendência | Sugerir categoria da tarefa por palavra-chave da pendência. |
 | Baixa | Segurança — itens adiados | Base URL fixa no re-disparo do relatório; mensagem de erro genérica da Helena ao cliente. |
 
