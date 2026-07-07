@@ -18,6 +18,7 @@ Aplicação privada de uso interno — não é um produto open source e não ace
 - [Scripts disponíveis](#scripts-disponíveis)
 - [Testes](#testes)
 - [Deploy](#deploy)
+- [Roadmap](#roadmap)
 
 ## Visão geral
 
@@ -353,3 +354,30 @@ npm test
 - **Processos agendados**: Edge Functions do Supabase, disparadas por `pg_cron`/`pg_net` (coleta de grupos, resumo diário, checagem de saúde da instância do WhatsApp).
 
 Migrations em `supabase/migrations/` são aplicadas diretamente no projeto Supabase (não há um passo de build que as execute automaticamente) — cada arquivo é numerado sequencialmente e idempotente sempre que possível (`create table if not exists`, `drop policy if exists` antes de recriar).
+
+## Roadmap
+
+### Concluído recentemente (julho/2026)
+
+- **Melhorias nos resumos de IA** — comparação com o dia anterior (continuidade de problemas), classificação de severidade que define a prioridade sugerida da tarefa, e deduplicação de sugestões contra tarefas já abertas (`pg_trgm`).
+- **Custo de IA** — registro de consumo de tokens (`ai_usage_log`) e card de custo estimado em Configurações.
+- **Sincronização on-demand de grupos** — botão em Configurações para coletar grupos novos sem esperar o cron.
+- **Endurecimento de segurança** — rate limit de login (`login_attempts`), proteção contra enumeração de usuários por timing, senhas temporárias com RNG criptográfico, gates de autenticação nas ações de clínica.
+
+### Próximos passos
+
+| Prioridade | Item | Observação |
+|---|---|---|
+| Alta | Detecção de padrões entre clínicas | Agrupar reclamações/temas recorrentes em várias clínicas no mesmo dia via *embeddings* (`pgvector`); desenhado, aguarda chave de embeddings (DeepSeek não oferece endpoint). |
+| Média | Timeline de sentimento (30 dias) | Faixa de sentimento no perfil da clínica. |
+| Média | Rollup semanal por IA | Consolidado semanal; aguarda mais dados acumulados. |
+| Média | Relatório de conversas — Fase 2/3 | Abas IA×Humano/Habilidades/Mensagens, keywords por clínica e funil na tela. |
+| Média | Sugestões de mensagem para grupos com baixa interação | Feature em discussão; escopo ainda a definir. |
+| Baixa | Categorização automática de pendência | Sugerir categoria da tarefa por palavra-chave da pendência. |
+| Baixa | Segurança — itens adiados | Base URL fixa no re-disparo do relatório; mensagem de erro genérica da Helena ao cliente. |
+
+### Pendências de configuração (operacionais)
+
+- Definir `CRON_SECRET` na Edge Function `collect-groups` e `COLLECT_GROUPS_CRON_SECRET` no Vercel (mesmo valor) para a sincronização on-demand.
+- Adicionar `DEEPSEEK_API_KEY` no Vercel/`.env.local` para a quebra de subtarefas por IA.
+- Migrar o modelo `deepseek-chat` antes da descontinuação anunciada (2026-07-24).
