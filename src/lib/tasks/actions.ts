@@ -252,8 +252,9 @@ export async function updateTaskStatus(
   id: string,
   status: TaskStatus,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+  const supabase = await createClient();
 
   const { data: current } = await supabase.from("tasks").select("status").eq("id", id).maybeSingle();
 
@@ -264,17 +265,18 @@ export async function updateTaskStatus(
   if (error) return { ok: false, error: error.message };
 
   if (current && current.status !== status) {
-    const user = await getSessionUser();
     await supabase.from("task_comments").insert({
       task_id: id,
-      author_id: user!.id,
+      author_id: user.id,
       kind: "system",
       body: `Status alterado de "${TASK_STATUS_LABEL[current.status as TaskStatus]}" para "${TASK_STATUS_LABEL[status]}"`,
     });
   }
 
-  revalidatePath("/tarefas");
-  revalidatePath("/");
+  // Sem revalidatePath: o board atualiza de forma otimista no cliente e as
+  // páginas afetadas (/tarefas, /, perfil da clínica) são force-dynamic — logo
+  // re-buscam sozinhas na próxima navegação. Evita o refetch completo (que no
+  // perfil da clínica re-dispararia as chamadas ao vivo da Helena) a cada drop.
   return { ok: true };
 }
 

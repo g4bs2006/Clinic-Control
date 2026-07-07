@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -70,9 +70,16 @@ interface TaskBoardProps {
   defaultClinicId?: string | null
 }
 
-export function TaskBoard({ tasks, suggestions, clinics, profiles, categories, defaultClinicId = null }: TaskBoardProps) {
+export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles, categories, defaultClinicId = null }: TaskBoardProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  // Cópia local para atualização otimista (arrastar no board / trocar status na
+  // lista reflete na hora). Re-sincroniza quando o servidor envia nova lista
+  // (criação, exclusão, aceite de sugestão, edição no detalhe — que dão refresh).
+  const [tasks, setTasks] = useState(initialTasks)
+  useEffect(() => {
+    setTasks(initialTasks)
+  }, [initialTasks])
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
@@ -93,10 +100,21 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, categories, d
   }
 
   function changeStatus(id: string, status: TaskStatus) {
+    // Move na hora (otimista); só re-busca se o servidor recusar.
+    const snapshot = tasks
+    setTasks((ts) =>
+      ts.map((t) =>
+        t.id === id
+          ? { ...t, status, completed_at: status === "concluida" ? new Date().toISOString() : null }
+          : t,
+      ),
+    )
     startTransition(async () => {
       const res = await updateTaskStatus(id, status)
-      if (res.ok) refresh()
-      else toast.error(res.error)
+      if (!res.ok) {
+        setTasks(snapshot)
+        toast.error(res.error)
+      }
     })
   }
 
