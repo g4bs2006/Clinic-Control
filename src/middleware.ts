@@ -5,7 +5,14 @@ import { verifySessionToken } from "@/lib/auth/token";
 // Rotas públicas: login e ativação de conta (e-mail pré-aprovado).
 // /api/reports/process valida a própria autenticação (assinatura HMAC interna
 // dos ticks de relatório) — ver src/app/api/reports/process/route.ts.
-const PUBLIC_PREFIXES = ["/login", "/ativar-conta", "/api/reports/process"];
+// /api/form-credentials é um webhook externo (Google Apps Script / n8n) com auth
+// própria via header x-webhook-secret — não pode exigir cookie de sessão.
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/ativar-conta",
+  "/api/reports/process",
+  "/api/form-credentials",
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

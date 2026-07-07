@@ -76,6 +76,12 @@ export function RankingTable({ rows }: RankingTableProps) {
   })
 
   const sorted = [...filtered].sort((a, b) => {
+    // Clínicas sem dados (nem automáticos, nem manuais) vão sempre para o fim —
+    // independentemente da coluna ou direção de ordenação.
+    const aNone = a.source === "none"
+    const bNone = b.source === "none"
+    if (aNone !== bNone) return aNone ? 1 : -1
+
     const va = a[sortKey]
     const vb = b[sortKey]
     return sortAsc ? va - vb : vb - va

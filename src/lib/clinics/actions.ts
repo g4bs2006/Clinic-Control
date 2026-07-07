@@ -40,6 +40,7 @@ export async function getClinic(id: string): Promise<Clinic | null> {
 }
 
 export async function createClinic(input: ClinicInput) {
+  if (!(await getSessionUser())) return { ok: false as const, error: "Não autenticado" };
   const parsed = clinicInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0].message };
   const supabase = await createClient();
@@ -71,6 +72,7 @@ export async function createClinic(input: ClinicInput) {
 }
 
 export async function updateClinic(id: string, input: ClinicInput) {
+  if (!(await getSessionUser())) return { ok: false as const, error: "Não autenticado" };
   const parsed = clinicInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0].message };
   const supabase = await createClient();
@@ -122,6 +124,7 @@ export async function updateClinicMode(id: string, mode: "auto" | "manual") {
 }
 
 export async function archiveClinic(id: string) {
+  if (!(await getSessionUser())) return { ok: false as const, error: "Não autenticado" };
   const supabase = await createClient();
   const { error } = await supabase.from("clinics").update({ contract_status: "archived" }).eq("id", id);
   if (error) return { ok: false as const, error: error.message };

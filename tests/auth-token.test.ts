@@ -55,9 +55,10 @@ describe("senha", () => {
     expect(await verifyPassword("qualquer", null)).toBe(false);
   });
 
-  it("senha temporária tem formato esperado", () => {
+  it("senha temporária: palavra + 8 chars base32 sem ambíguos, com entropia", () => {
     const p = generateTempPassword();
-    expect(p.length).toBeGreaterThanOrEqual(8);
-    expect(p).toMatch(/^[a-z]+-\d{4}-nova$/);
+    expect(p).toMatch(/^[a-z]+-[2-9a-hjkmnp-z]{8}$/);
+    // duas gerações não colidem (RNG criptográfico, ~40 bits)
+    expect(generateTempPassword()).not.toBe(generateTempPassword());
   });
 });

@@ -118,8 +118,8 @@ Job assíncrono por clínica e período: coleta as conversas da API da Helena em
 
 Sistema completo de gestão de pendências da carteira, com escopo por carteira (desenvolvedor vê as tarefas das próprias clínicas; gestor vê todas):
 
-- Criação manual ou automática — os resumos diários de IA identificam pendências, que entram numa fila de sugestões revisável (confirma ou descarta, nunca cria direto).
-- Categoria, prioridade, responsável, prazo, clínica vinculada (opcional).
+- Criação manual ou automática — os resumos diários de IA identificam pendências, que entram numa fila de sugestões revisável (confirma ou descarta, nunca cria direto). A sugestão não é gerada se já existe uma tarefa aberta parecida na mesma clínica (deduplicação por similaridade de texto, `pg_trgm`).
+- Categoria, prioridade, responsável, prazo, clínica vinculada (opcional). A prioridade sugerida vem da severidade do resumo que originou a pendência (severidade alta → tarefa urgente).
 - Subtarefas reais (não um checklist): a descrição de uma tarefa pode ser enviada ao DeepSeek, que propõe uma quebra em passos menores; a lista é revisada antes de virar tarefas de fato.
 - Anexos de arquivo por tarefa.
 - Linha do tempo de atividade unificando comentários manuais e o histórico automático de mudança de status.
@@ -152,6 +152,8 @@ flowchart LR
     Suggestions -->|revisão humana| Decision{{"Confirma ou descarta"}}
     Decision -->|confirma| Tasks[("tasks")]
 ```
+
+Cada resumo recebe no prompt um digest do dia anterior (para o modelo notar continuidade de problemas) e classifica a severidade do dia (`baixa`/`media`/`alta`), que define a prioridade sugerida da tarefa. O consumo de tokens de cada chamada de IA (resumo diário, quebra de subtarefas etc.) é registrado em `ai_usage_log`, alimentando um card de custo estimado em Configurações (preços em `src/lib/ai-usage/pricing.ts`).
 
 ### Job de relatório de conversas
 
@@ -244,11 +246,14 @@ Domínios de tabelas por área:
 | WhatsApp | `whatsapp_groups`, `whatsapp_group_messages`, `whatsapp_team_members`, `whatsapp_daily_summaries`, `evolution_health_checks` |
 | Relatório de conversas | `report_jobs`, `report_raw_sessions`, `report_keywords` |
 | Tarefas | `tasks`, `task_suggestions`, `task_attachments`, `task_comments` |
+| IA e segurança | `ai_usage_log` (consumo de tokens/custo), `login_attempts` (rate limit de login) |
 | Outros | `clinic_churns`, `check_items`, `clinic_checks`, `form_credentials` |
 
 ## Autenticação e autorização
 
 A aplicação não usa o Supabase Auth. A sessão é resolvida por uma tabela própria (`app_users`, com hash bcrypt de senha) e um cookie HTTP-only assinado com HMAC-SHA256 (`src/lib/auth/token.ts`), validado tanto no middleware (assinatura e expiração, sem consulta ao banco) quanto nas Server Actions (usuário existe e está ativo).
+
+O login (`src/lib/auth/actions.ts`) tem rate limit por e-mail (bloqueio após 8 falhas em 15 min, via tabela `login_attempts`), roda `bcrypt.compare` mesmo quando o e-mail não existe (contra um hash descartável) para não vazar por timing quais e-mails são válidos, e as senhas temporárias de reset usam RNG criptográfico com ~40 bits de entropia.
 
 ```mermaid
 flowchart LR
@@ -259,10 +264,12 @@ flowchart LR
     Middleware -->|Server Action| Session["getSessionUser()<br/>(confirma ativo no banco)"]
 ```
 
-Existem dois papéis:
+As Server Actions acessam o banco por um client de service role que **ignora o RLS** — todo usuário autenticado é staff interno de confiança, e a autorização é feita em nível de aplicação. Existem dois papéis:
 
-- **gestor** — acesso irrestrito a toda a carteira.
-- **desenvolvedor** — enxerga e gerencia apenas as clínicas em que consta como responsável (`clinics.developer_id`), além de tarefas atribuídas diretamente a ele. Esse recorte ("escopo de carteira") é aplicado de forma consistente em todas as páginas com dado por clínica: dashboard, mensal, comparativo, churns, gerenciador de grupos e tarefas.
+- **gestor** — acesso irrestrito.
+- **desenvolvedor** — por padrão enxerga apenas as clínicas em que consta como responsável (`clinics.developer_id`), além de tarefas atribuídas a ele. Esse recorte ("escopo de carteira") é um **filtro de visão** aplicado nas páginas com dado por clínica (dashboard, mensal, comparativo, churns, gerenciador de grupos e tarefas), não uma fronteira de isolamento entre staff.
+
+Operações administrativas são restritas a gestor via `requireGestor()` (`src/lib/users/actions.ts`): trocar papéis, ativar/desativar usuários, redefinir senha e definir o responsável (carteira) de uma clínica — com proteções contra o gestor rebaixar/desativar a si mesmo.
 
 ## Estrutura do repositório
 

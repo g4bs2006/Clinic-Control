@@ -16,7 +16,12 @@ interface LoginPageProps {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
-  const hasError = params.error === "1";
+  const errorMessage =
+    params.error === "locked"
+      ? "Muitas tentativas de login. Aguarde alguns minutos e tente novamente."
+      : params.error === "1"
+        ? "E-mail ou senha inválidos. Tente novamente."
+        : null;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -51,10 +56,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 autoComplete="current-password"
               />
             </div>
-            {hasError && (
-              <p className="text-sm text-destructive">
-                E-mail ou senha inválidos. Tente novamente.
-              </p>
+            {errorMessage && (
+              <p className="text-sm text-destructive">{errorMessage}</p>
             )}
             <Button type="submit" className="w-full">
               Entrar
