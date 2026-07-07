@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -34,6 +34,7 @@ import {
   type TaskStatus,
 } from "@/lib/tasks/categories"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
+import { agendaBucket, spDateParts, AGENDA_ORDER, AGENDA_LABEL, type AgendaBucket } from "@/lib/tasks/agenda"
 
 const ALL = "__all__"
 
@@ -60,17 +61,104 @@ function isOverdue(t: TaskRow): boolean {
   return t.due_date < new Date().toISOString().slice(0, 10)
 }
 
+/** Linha de tarefa reutilizada nos modos Lista e Semana. */
+function TaskListItem({
+  t,
+  categoryLabel,
+  pending,
+  onOpen,
+  onChangeStatus,
+  onRemove,
+}: {
+  t: TaskRow
+  categoryLabel: Record<string, string>
+  pending: boolean
+  onOpen: (id: string) => void
+  onChangeStatus: (id: string, status: TaskStatus) => void
+  onRemove: (id: string) => void
+}) {
+  return (
+    <li className="flex flex-wrap items-center gap-3 py-2.5">
+      <span
+        className={`size-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`}
+        title={TASK_PRIORITY_LABEL[t.priority]}
+      />
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => onOpen(t.id)}
+          className={`text-left text-sm font-medium hover:underline ${DONE_STATUSES.has(t.status) ? "text-muted-foreground line-through" : ""}`}
+        >
+          {t.title}
+        </button>
+        <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+          <span className="rounded bg-accent/50 px-1.5 py-0.5">{categoryLabel[t.category] ?? t.category}</span>
+          {t.clinic_id && t.clinic_name && (
+            <>
+              ·{" "}
+              <Link href={`/clinicas/${t.clinic_id}`} className="hover:text-foreground transition-colors">
+                {t.clinic_name}
+              </Link>
+            </>
+          )}
+          {t.assigned_to_name && <>· {t.assigned_to_name}</>}
+          {t.due_date && (
+            <span className={isOverdue(t) ? "font-semibold text-red-400" : undefined}>
+              · prazo {dateLabel(t.due_date)}
+            </span>
+          )}
+          {t.source === "ia" && (
+            <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-amber-400">
+              IA
+            </span>
+          )}
+        </p>
+      </div>
+
+      <Select
+        value={t.status}
+        items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
+        onValueChange={(v) => v && onChangeStatus(t.id, v as TaskStatus)}
+      >
+        <SelectTrigger className="h-7 min-w-[9rem] text-xs" disabled={pending}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {TASK_STATUSES.map((s) => (
+            <SelectItem key={s} value={s}>
+              {TASK_STATUS_LABEL[s]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="ghost"
+        disabled={pending}
+        title="Excluir tarefa"
+        onClick={() => onRemove(t.id)}
+      >
+        <Trash2 className="size-3.5" />
+      </Button>
+    </li>
+  )
+}
+
 interface TaskBoardProps {
   tasks: TaskRow[]
   suggestions: TaskSuggestionRow[]
   clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
   categories: TaskCategoryRow[]
+  /** Usuário logado — usado na aba "Semana" (agenda pessoal). */
+  currentUserId?: string | null
   /** Pré-seleciona a clínica no formulário de nova tarefa (painel embutido no perfil da clínica). */
   defaultClinicId?: string | null
 }
 
-export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles, categories, defaultClinicId = null }: TaskBoardProps) {
+export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles, categories, currentUserId = null, defaultClinicId = null }: TaskBoardProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   // Cópia local para atualização otimista (arrastar no board / trocar status na
@@ -83,7 +171,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
-  const [view, setView] = useState<"list" | "board">("list")
+  const [view, setView] = useState<"list" | "board" | "week">("list")
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
 
   const categoryLabel = Object.fromEntries(categories.map((c) => [c.slug, c.label]))
@@ -146,62 +234,82 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
       return a.due_date < b.due_date ? -1 : 1
     })
 
+  // ── Agenda "Minha semana": só as minhas tarefas abertas, agrupadas por prazo ──
+  const { today, endOfWeek } = spDateParts(new Date())
+  const myOpenTasks = tasks.filter(
+    (t) => t.assigned_to === currentUserId && !DONE_STATUSES.has(t.status),
+  )
+  const weekGroups = new Map<AgendaBucket, TaskRow[]>(AGENDA_ORDER.map((b) => [b, []]))
+  for (const t of myOpenTasks) {
+    weekGroups.get(agendaBucket(t.due_date, today, endOfWeek))!.push(t)
+  }
+  for (const list of weekGroups.values()) {
+    list.sort((a, b) => {
+      if (a.due_date && b.due_date && a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1
+      return TASK_PRIORITY_RANK[b.priority] - TASK_PRIORITY_RANK[a.priority]
+    })
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={statusFilter}
-          items={{ [ALL]: "Todos os status", ...Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]])) }}
-          onValueChange={(v) => setStatusFilter(v ?? ALL)}
-        >
-          <SelectTrigger className="h-8 text-sm min-w-[9rem]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos os status</SelectItem>
-            {TASK_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {TASK_STATUS_LABEL[s]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {view !== "week" && (
+          <>
+            <Select
+              value={statusFilter}
+              items={{ [ALL]: "Todos os status", ...Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]])) }}
+              onValueChange={(v) => setStatusFilter(v ?? ALL)}
+            >
+              <SelectTrigger className="h-8 text-sm min-w-[9rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todos os status</SelectItem>
+                {TASK_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {TASK_STATUS_LABEL[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        <Select
-          value={categoryFilter}
-          items={{ [ALL]: "Todas as categorias", ...Object.fromEntries(filterCategories.map((c) => [c.slug, c.label])) }}
-          onValueChange={(v) => setCategoryFilter(v ?? ALL)}
-        >
-          <SelectTrigger className="h-8 text-sm min-w-[9rem]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todas as categorias</SelectItem>
-            {filterCategories.map((c) => (
-              <SelectItem key={c.slug} value={c.slug}>
-                {c.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Select
+              value={categoryFilter}
+              items={{ [ALL]: "Todas as categorias", ...Object.fromEntries(filterCategories.map((c) => [c.slug, c.label])) }}
+              onValueChange={(v) => setCategoryFilter(v ?? ALL)}
+            >
+              <SelectTrigger className="h-8 text-sm min-w-[9rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todas as categorias</SelectItem>
+                {filterCategories.map((c) => (
+                  <SelectItem key={c.slug} value={c.slug}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        <Select
-          value={priorityFilter}
-          items={{ [ALL]: "Todas as prioridades", ...Object.fromEntries(TASK_PRIORITIES.map((p) => [p, TASK_PRIORITY_LABEL[p]])) }}
-          onValueChange={(v) => setPriorityFilter(v ?? ALL)}
-        >
-          <SelectTrigger className="h-8 text-sm min-w-[9rem]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todas as prioridades</SelectItem>
-            {TASK_PRIORITIES.map((p) => (
-              <SelectItem key={p} value={p}>
-                {TASK_PRIORITY_LABEL[p]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Select
+              value={priorityFilter}
+              items={{ [ALL]: "Todas as prioridades", ...Object.fromEntries(TASK_PRIORITIES.map((p) => [p, TASK_PRIORITY_LABEL[p]])) }}
+              onValueChange={(v) => setPriorityFilter(v ?? ALL)}
+            >
+              <SelectTrigger className="h-8 text-sm min-w-[9rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todas as prioridades</SelectItem>
+                {TASK_PRIORITIES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {TASK_PRIORITY_LABEL[p]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
 
         <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
           <Button
@@ -222,6 +330,15 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
           >
             <LayoutGrid className="size-3.5" />
           </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={view === "week" ? "secondary" : "ghost"}
+            title="Ver minha semana"
+            onClick={() => setView("week")}
+          >
+            <CalendarDays className="size-3.5" />
+          </Button>
         </div>
 
         <div className="flex-1" />
@@ -234,7 +351,43 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {view === "week" ? (
+        myOpenTasks.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Você não tem tarefas em aberto atribuídas a você.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-5">
+            {AGENDA_ORDER.map((bucket) => {
+              const items = weekGroups.get(bucket)!
+              if (!items.length) return null
+              return (
+                <div key={bucket}>
+                  <h3 className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className={bucket === "atrasada" ? "text-red-400" : undefined}>
+                      {AGENDA_LABEL[bucket]}
+                    </span>
+                    <span className="tabular-nums text-[0.68rem] text-muted-foreground/70">{items.length}</span>
+                  </h3>
+                  <ul className="flex flex-col divide-y divide-border/40">
+                    {items.map((t) => (
+                      <TaskListItem
+                        key={t.id}
+                        t={t}
+                        categoryLabel={categoryLabel}
+                        pending={pending}
+                        onOpen={setOpenTaskId}
+                        onChangeStatus={changeStatus}
+                        onRemove={remove}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
+          </div>
+        )
+      ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           Nenhuma tarefa encontrada para esse filtro.
         </p>
@@ -243,71 +396,15 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
       ) : (
         <ul className="flex flex-col divide-y divide-border/40">
           {filtered.map((t) => (
-            <li key={t.id} className="flex flex-wrap items-center gap-3 py-2.5">
-              <span
-                className={`size-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`}
-                title={TASK_PRIORITY_LABEL[t.priority]}
-              />
-              <div className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => setOpenTaskId(t.id)}
-                  className={`text-left text-sm font-medium hover:underline ${DONE_STATUSES.has(t.status) ? "text-muted-foreground line-through" : ""}`}
-                >
-                  {t.title}
-                </button>
-                <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-                  <span className="rounded bg-accent/50 px-1.5 py-0.5">{categoryLabel[t.category] ?? t.category}</span>
-                  {t.clinic_id && t.clinic_name && (
-                    <>
-                      ·{" "}
-                      <Link href={`/clinicas/${t.clinic_id}`} className="hover:text-foreground transition-colors">
-                        {t.clinic_name}
-                      </Link>
-                    </>
-                  )}
-                  {t.assigned_to_name && <>· {t.assigned_to_name}</>}
-                  {t.due_date && (
-                    <span className={isOverdue(t) ? "font-semibold text-red-400" : undefined}>
-                      · prazo {dateLabel(t.due_date)}
-                    </span>
-                  )}
-                  {t.source === "ia" && (
-                    <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-amber-400">
-                      IA
-                    </span>
-                  )}
-                </p>
-              </div>
-
-              <Select
-                value={t.status}
-                items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
-                onValueChange={(v) => v && changeStatus(t.id, v as TaskStatus)}
-              >
-                <SelectTrigger className="h-7 min-w-[9rem] text-xs" disabled={pending}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TASK_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {TASK_STATUS_LABEL[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                disabled={pending}
-                title="Excluir tarefa"
-                onClick={() => remove(t.id)}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </li>
+            <TaskListItem
+              key={t.id}
+              t={t}
+              categoryLabel={categoryLabel}
+              pending={pending}
+              onOpen={setOpenTaskId}
+              onChangeStatus={changeStatus}
+              onRemove={remove}
+            />
           ))}
         </ul>
       )}

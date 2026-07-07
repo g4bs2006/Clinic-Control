@@ -1,19 +1,20 @@
 import { listTasks, listTaskSuggestions } from "@/lib/tasks/actions"
 import { listActiveTaskCategories } from "@/lib/tasks/category-actions"
 import { listClinics } from "@/lib/clinics/actions"
-import { listUserProfiles } from "@/lib/users/actions"
+import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
 import { Panel } from "@/components/dashboard/panel"
 import { TaskBoard } from "@/components/tasks/task-board"
 
 export const dynamic = "force-dynamic"
 
 export default async function TarefasPage() {
-  const [tasks, suggestions, clinics, profiles, categories] = await Promise.all([
+  const [tasks, suggestions, clinics, profiles, categories, currentProfile] = await Promise.all([
     listTasks(),
     listTaskSuggestions(),
     listClinics(),
     listUserProfiles(),
     listActiveTaskCategories(),
+    getCurrentProfile(),
   ])
 
   const clinicOptions = clinics
@@ -39,6 +40,7 @@ export default async function TarefasPage() {
           clinics={clinicOptions}
           profiles={profileOptions}
           categories={categories}
+          currentUserId={currentProfile?.id ?? null}
         />
       </Panel>
     </main>
