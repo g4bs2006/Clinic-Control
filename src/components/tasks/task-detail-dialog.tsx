@@ -49,6 +49,7 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from "@/lib/tasks/categories"
+import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
 function fmtBytes(n: number | null): string {
   if (n == null) return ""
@@ -71,11 +72,12 @@ interface TaskDetailDialogProps {
   taskId: string | null
   clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
+  categories: TaskCategoryRow[]
   onClose: () => void
   onChanged: () => void
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, onClose, onChanged }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onChanged }: TaskDetailDialogProps) {
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
   const [task, setTask] = useState<TaskRow | null>(null)
@@ -289,6 +291,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, onClose, onChanged
               <TaskFields
                 clinics={clinics}
                 profiles={profiles}
+                categories={categories}
                 clinicId={task.clinic_id}
                 onClinicIdChange={(v) => saveField({ clinicId: v })}
                 category={task.category}

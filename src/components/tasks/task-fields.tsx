@@ -9,13 +9,12 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import {
-  TASK_CATEGORIES,
-  TASK_CATEGORY_LABEL,
   TASK_PRIORITIES,
   TASK_PRIORITY_LABEL,
   type TaskCategory,
   type TaskPriority,
 } from "@/lib/tasks/categories"
+import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
 export const NO_CLINIC = "__none__"
 export const UNASSIGNED = "__unassigned__"
@@ -30,6 +29,7 @@ export function profileLabel(p: ProfileOption): string {
 interface TaskFieldsProps {
   clinics: ClinicOption[]
   profiles: ProfileOption[]
+  categories: TaskCategoryRow[]
   clinicId: string | null
   onClinicIdChange: (v: string | null) => void
   category: TaskCategory
@@ -47,6 +47,7 @@ interface TaskFieldsProps {
 export function TaskFields({
   clinics,
   profiles,
+  categories,
   clinicId,
   onClinicIdChange,
   category,
@@ -90,18 +91,24 @@ export function TaskFields({
         Categoria
         <Select
           value={category}
-          items={Object.fromEntries(TASK_CATEGORIES.map((c) => [c, TASK_CATEGORY_LABEL[c]]))}
+          items={{
+            ...Object.fromEntries(categories.map((c) => [c.slug, c.label])),
+            ...(categories.some((c) => c.slug === category) ? {} : { [category]: category }),
+          }}
           onValueChange={(v) => v && onCategoryChange(v as TaskCategory)}
         >
           <SelectTrigger className="h-8 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {TASK_CATEGORIES.map((c) => (
-              <SelectItem key={c} value={c}>
-                {TASK_CATEGORY_LABEL[c]}
+            {categories.map((c) => (
+              <SelectItem key={c.slug} value={c.slug}>
+                {c.label}
               </SelectItem>
             ))}
+            {!categories.some((c) => c.slug === category) && (
+              <SelectItem value={category}>{category}</SelectItem>
+            )}
           </SelectContent>
         </Select>
       </label>

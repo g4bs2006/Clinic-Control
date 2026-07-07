@@ -35,6 +35,7 @@ import { listReportJobs } from "@/lib/reports/actions"
 import { ReportPanel } from "@/components/reports/report-panel"
 import { getDailyFunnelForMonth } from "@/lib/clinics/integration-actions"
 import { listClinicTasks, listTaskSuggestions } from "@/lib/tasks/actions"
+import { listActiveTaskCategories } from "@/lib/tasks/category-actions"
 import { TaskBoard } from "@/components/tasks/task-board"
 import { DailyRateChart } from "@/components/clinics/daily-rate-chart"
 
@@ -153,9 +154,10 @@ export default async function ClinicDetailPage({
 
   const reportJobs = isAuto ? await listReportJobs(id) : []
 
-  const [clinicTasks, allTaskSuggestions] = await Promise.all([
+  const [clinicTasks, allTaskSuggestions, taskCategories] = await Promise.all([
     listClinicTasks(id),
     listTaskSuggestions(),
+    listActiveTaskCategories(),
   ])
   const clinicTaskSuggestions = allTaskSuggestions.filter((s) => s.clinic_id === id)
 
@@ -311,6 +313,7 @@ export default async function ClinicDetailPage({
           suggestions={clinicTaskSuggestions}
           clinics={[{ id: clinic.id, name: clinic.name, developerId: clinic.developer_id ?? null }]}
           profiles={profiles.map((p) => ({ id: p.id, name: p.name, email: p.email }))}
+          categories={taskCategories}
           defaultClinicId={clinic.id}
         />
       </Panel>

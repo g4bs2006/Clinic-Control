@@ -5,10 +5,12 @@ import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
 import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
 import { listInvites } from "@/lib/users/invites-actions"
 import { listReportKeywords } from "@/lib/reports/actions"
+import { listTaskCategories } from "@/lib/tasks/category-actions"
 import { ReportKeywordsEditor } from "@/components/settings/report-keywords-editor"
 import { InvitesEditor } from "@/components/settings/invites-editor"
 import { Panel } from "@/components/dashboard/panel"
 import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
+import { TaskCategoriesEditor } from "@/components/settings/task-categories-editor"
 import { CheckItemsEditor } from "@/components/settings/check-items-editor"
 import { WhatsappGroupsEditor } from "@/components/settings/whatsapp-groups-editor"
 import { WhatsappTeamEditor } from "@/components/settings/whatsapp-team-editor"
@@ -18,7 +20,7 @@ import { ChangePasswordForm } from "@/components/settings/change-password-form"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, invites, reportKeywords, currentProfile] = await Promise.all([
+  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, invites, reportKeywords, currentProfile, taskCategories] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
@@ -29,6 +31,7 @@ export default async function ConfiguracoesPage() {
     listInvites(),
     listReportKeywords(),
     getCurrentProfile(),
+    listTaskCategories(),
   ])
 
   const clinicCountByDeveloper: Record<string, number> = {}
@@ -62,6 +65,14 @@ export default async function ConfiguracoesPage() {
       {/* ── Minha conta ────────────────────────────────────────── */}
       <Panel title="Minha conta" subtitle="trocar a própria senha de acesso">
         <ChangePasswordForm />
+      </Panel>
+
+      {/* ── Categorias de tarefa ───────────────────────────────── */}
+      <Panel
+        title="Categorias de tarefa"
+        subtitle="usadas em /tarefas e no painel de tarefas de cada clínica"
+      >
+        <TaskCategoriesEditor initialCategories={taskCategories} />
       </Panel>
 
       {/* ── Status rules ───────────────────────────────────────── */}

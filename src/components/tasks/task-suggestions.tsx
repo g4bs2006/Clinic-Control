@@ -17,6 +17,7 @@ import {
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
 import { acceptTaskSuggestion, dismissTaskSuggestion, type TaskSuggestionRow } from "@/lib/tasks/actions"
 import type { TaskCategory, TaskPriority } from "@/lib/tasks/categories"
+import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
 function dateLabel(d: string): string {
   if (!d) return ""
@@ -32,20 +33,22 @@ interface TaskSuggestionsProps {
   suggestions: TaskSuggestionRow[]
   clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
+  categories: TaskCategoryRow[]
   onChanged: () => void
 }
 
-export function TaskSuggestions({ suggestions, clinics, profiles, onChanged }: TaskSuggestionsProps) {
+export function TaskSuggestions({ suggestions, clinics, profiles, categories, onChanged }: TaskSuggestionsProps) {
+  const defaultCategory = categories[0]?.slug ?? "outro"
   const [pending, startTransition] = useTransition()
   const [reviewing, setReviewing] = useState<TaskSuggestionRow | null>(null)
-  const [category, setCategory] = useState<TaskCategory>("atendimento")
+  const [category, setCategory] = useState<TaskCategory>(defaultCategory)
   const [priority, setPriority] = useState<TaskPriority>("media")
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
   const [dueDate, setDueDate] = useState("")
 
   function openReview(s: TaskSuggestionRow) {
     const clinic = clinics.find((c) => c.id === s.clinic_id)
-    setCategory("atendimento")
+    setCategory(defaultCategory)
     setPriority("media")
     setAssignedTo(clinic?.developerId ?? null)
     setDueDate("")
@@ -137,6 +140,7 @@ export function TaskSuggestions({ suggestions, clinics, profiles, onChanged }: T
           <TaskFields
             clinics={clinics}
             profiles={profiles}
+            categories={categories}
             clinicId={reviewing?.clinic_id ?? null}
             onClinicIdChange={() => {}}
             lockClinic

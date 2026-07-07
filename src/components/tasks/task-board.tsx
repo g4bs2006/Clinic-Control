@@ -25,17 +25,15 @@ import {
   type TaskSuggestionRow,
 } from "@/lib/tasks/actions"
 import {
-  TASK_CATEGORIES,
-  TASK_CATEGORY_LABEL,
   TASK_PRIORITIES,
   TASK_PRIORITY_LABEL,
   TASK_PRIORITY_RANK,
   TASK_STATUSES,
   TASK_STATUS_LABEL,
-  type TaskCategory,
   type TaskPriority,
   type TaskStatus,
 } from "@/lib/tasks/categories"
+import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
 const ALL = "__all__"
 
@@ -67,11 +65,12 @@ interface TaskBoardProps {
   suggestions: TaskSuggestionRow[]
   clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
+  categories: TaskCategoryRow[]
   /** Pré-seleciona a clínica no formulário de nova tarefa (painel embutido no perfil da clínica). */
   defaultClinicId?: string | null
 }
 
-export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinicId = null }: TaskBoardProps) {
+export function TaskBoard({ tasks, suggestions, clinics, profiles, categories, defaultClinicId = null }: TaskBoardProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
@@ -79,6 +78,15 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
   const [view, setView] = useState<"list" | "board">("list")
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+
+  const categoryLabel = Object.fromEntries(categories.map((c) => [c.slug, c.label]))
+  // Inclui categorias desativadas que ainda aparecem em alguma tarefa, senão o filtro não acha elas.
+  const filterCategories = [
+    ...categories,
+    ...Array.from(new Set(tasks.map((t) => t.category)))
+      .filter((slug) => !categories.some((c) => c.slug === slug))
+      .map((slug) => ({ id: slug, slug, label: slug, position: 999, active: false })),
+  ]
 
   function refresh() {
     router.refresh()
@@ -122,15 +130,6 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
 
   return (
     <div className="flex flex-col gap-6">
-      {suggestions.length > 0 && (
-        <TaskSuggestions
-          suggestions={suggestions}
-          clinics={clinics}
-          profiles={profiles}
-          onChanged={refresh}
-        />
-      )}
-
       <div className="flex flex-wrap items-center gap-2">
         <Select
           value={statusFilter}
@@ -152,7 +151,7 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
 
         <Select
           value={categoryFilter}
-          items={{ [ALL]: "Todas as categorias", ...Object.fromEntries(TASK_CATEGORIES.map((c) => [c, TASK_CATEGORY_LABEL[c]])) }}
+          items={{ [ALL]: "Todas as categorias", ...Object.fromEntries(filterCategories.map((c) => [c.slug, c.label])) }}
           onValueChange={(v) => setCategoryFilter(v ?? ALL)}
         >
           <SelectTrigger className="h-8 text-sm min-w-[9rem]">
@@ -160,9 +159,9 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Todas as categorias</SelectItem>
-            {TASK_CATEGORIES.map((c) => (
-              <SelectItem key={c} value={c}>
-                {TASK_CATEGORY_LABEL[c]}
+            {filterCategories.map((c) => (
+              <SelectItem key={c.slug} value={c.slug}>
+                {c.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -211,6 +210,7 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
         <CreateTaskDialog
           clinics={clinics}
           profiles={profiles}
+          categories={categories}
           defaultClinicId={defaultClinicId}
           onCreated={refresh}
         />
@@ -221,7 +221,7 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
           Nenhuma tarefa encontrada para esse filtro.
         </p>
       ) : view === "board" ? (
-        <KanbanBoard tasks={filtered} onOpen={setOpenTaskId} onStatusChange={changeStatus} />
+        <KanbanBoard tasks={filtered} categoryLabel={categoryLabel} onOpen={setOpenTaskId} onStatusChange={changeStatus} />
       ) : (
         <ul className="flex flex-col divide-y divide-border/40">
           {filtered.map((t) => (
@@ -239,7 +239,7 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
                   {t.title}
                 </button>
                 <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-                  <span className="rounded bg-accent/50 px-1.5 py-0.5">{TASK_CATEGORY_LABEL[t.category]}</span>
+                  <span className="rounded bg-accent/50 px-1.5 py-0.5">{categoryLabel[t.category] ?? t.category}</span>
                   {t.clinic_id && t.clinic_name && (
                     <>
                       ·{" "}
@@ -294,10 +294,21 @@ export function TaskBoard({ tasks, suggestions, clinics, profiles, defaultClinic
         </ul>
       )}
 
+      {suggestions.length > 0 && (
+        <TaskSuggestions
+          suggestions={suggestions}
+          clinics={clinics}
+          profiles={profiles}
+          categories={categories}
+          onChanged={refresh}
+        />
+      )}
+
       <TaskDetailDialog
         taskId={openTaskId}
         clinics={clinics}
         profiles={profiles}
+        categories={categories}
         onClose={() => setOpenTaskId(null)}
         onChanged={refresh}
       />

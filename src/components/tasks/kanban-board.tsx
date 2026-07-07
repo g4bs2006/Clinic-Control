@@ -4,7 +4,6 @@ import { useState } from "react"
 import Link from "next/link"
 import type { TaskRow } from "@/lib/tasks/actions"
 import {
-  TASK_CATEGORY_LABEL,
   TASK_PRIORITY_LABEL,
   TASK_STATUSES,
   TASK_STATUS_LABEL,
@@ -35,11 +34,12 @@ function isOverdue(t: TaskRow): boolean {
 
 interface KanbanBoardProps {
   tasks: TaskRow[]
+  categoryLabel: Record<string, string>
   onOpen: (id: string) => void
   onStatusChange: (id: string, status: TaskStatus) => void
 }
 
-export function KanbanBoard({ tasks, onOpen, onStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: KanbanBoardProps) {
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
@@ -97,7 +97,7 @@ export function KanbanBoard({ tasks, onOpen, onStatusChange }: KanbanBoardProps)
                     <p className="text-sm font-medium leading-snug">{t.title}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-1 text-[0.65rem] text-muted-foreground">
-                    <span className="rounded bg-accent/60 px-1 py-0.5">{TASK_CATEGORY_LABEL[t.category]}</span>
+                    <span className="rounded bg-accent/60 px-1 py-0.5">{categoryLabel[t.category] ?? t.category}</span>
                     {t.clinic_name && (
                       <Link
                         href={`/clinicas/${t.clinic_id}`}

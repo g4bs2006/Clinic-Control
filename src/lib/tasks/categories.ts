@@ -1,22 +1,7 @@
-// Categorias e prioridades canônicas de tarefas.
-export const TASK_CATEGORIES = [
-  "atendimento",
-  "financeiro",
-  "suporte_tecnico",
-  "onboarding",
-  "contrato",
-  "outro",
-] as const;
-export type TaskCategory = (typeof TASK_CATEGORIES)[number];
-
-export const TASK_CATEGORY_LABEL: Record<TaskCategory, string> = {
-  atendimento: "Atendimento",
-  financeiro: "Financeiro",
-  suporte_tecnico: "Suporte técnico",
-  onboarding: "Onboarding",
-  contrato: "Contrato",
-  outro: "Outro",
-};
+// Prioridades canônicas de tarefas.
+// Categorias deixaram de ser fixas em código — vêm de `task_categories` no banco,
+// configuráveis em /configuracoes (ver src/lib/tasks/category-actions.ts).
+export type TaskCategory = string;
 
 export const TASK_PRIORITIES = ["baixa", "media", "alta", "urgente"] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];

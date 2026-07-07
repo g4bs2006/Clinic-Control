@@ -17,24 +17,28 @@ import {
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
 import { createTask } from "@/lib/tasks/actions"
 import type { TaskCategory, TaskPriority } from "@/lib/tasks/categories"
+import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
 export function CreateTaskDialog({
   clinics,
   profiles,
+  categories,
   defaultClinicId = null,
   onCreated,
 }: {
   clinics: ClinicOption[]
   profiles: ProfileOption[]
+  categories: TaskCategoryRow[]
   defaultClinicId?: string | null
   onCreated: () => void
 }) {
+  const defaultCategory = categories[0]?.slug ?? "outro"
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [clinicId, setClinicId] = useState<string | null>(defaultClinicId)
-  const [category, setCategory] = useState<TaskCategory>("outro")
+  const [category, setCategory] = useState<TaskCategory>(defaultCategory)
   const [priority, setPriority] = useState<TaskPriority>("media")
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
   const [dueDate, setDueDate] = useState("")
@@ -43,7 +47,7 @@ export function CreateTaskDialog({
     setTitle("")
     setDescription("")
     setClinicId(defaultClinicId)
-    setCategory("outro")
+    setCategory(defaultCategory)
     setPriority("media")
     setAssignedTo(null)
     setDueDate("")
@@ -110,6 +114,7 @@ export function CreateTaskDialog({
           <TaskFields
             clinics={clinics}
             profiles={profiles}
+            categories={categories}
             clinicId={clinicId}
             onClinicIdChange={setClinicId}
             category={category}
