@@ -26,6 +26,7 @@ Infra: permanece no **Vercel** (auto-deploy do `main`) + **Supabase**. Avaliamos
 
 - **Agenda "Minha semana"** — 3º modo em /tarefas com as tarefas do usuário agrupadas por prazo (Atrasadas, Hoje, Esta semana, Mais tarde, Sem prazo).
 - **Seleção múltipla + ação em lote** — na lista de tarefas e na fila de sugestões da IA (confirmar/descartar várias de uma vez).
+- **Ciclo de vida das tarefas concluídas** — Lista esconde concluídas/canceladas por padrão (toggle "mostrar concluídas"); arquivamento automático das que passam de 7 dias (coluna `archived_at` + cron diário `archive-done-tasks-daily`), preservando o histórico.
 - **Board reativo (UI otimista)** — arrastar/mudar status reflete na hora, sem recarregar a página.
 - **Melhorias nos resumos de IA** — comparação com o dia anterior (continuidade), severidade que define a prioridade da tarefa, deduplicação de sugestões (`pg_trgm`).
 - **Custo de IA** — log de consumo de tokens (`ai_usage_log`) + card de custo estimado em Configurações.

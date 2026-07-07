@@ -101,7 +101,11 @@ export async function listTasks(filters: TaskFilters = {}): Promise<TaskRow[]> {
   const supabase = await createClient();
   const clinicIds = await carteiraClinicIds();
 
-  let query = supabase.from("tasks").select(TASK_SELECT).is("parent_task_id", null);
+  let query = supabase
+    .from("tasks")
+    .select(TASK_SELECT)
+    .is("parent_task_id", null)
+    .is("archived_at", null);
 
   if (clinicIds !== null) {
     const profile = await getCurrentProfile();
@@ -128,6 +132,7 @@ export async function listClinicTasks(clinicId: string): Promise<TaskRow[]> {
     .select(TASK_SELECT)
     .eq("clinic_id", clinicId)
     .is("parent_task_id", null)
+    .is("archived_at", null)
     .order("status")
     .order("due_date", { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);

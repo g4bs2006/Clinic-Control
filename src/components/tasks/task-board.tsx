@@ -190,6 +190,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
   const [view, setView] = useState<"list" | "board" | "week">("list")
+  const [showDone, setShowDone] = useState(false)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
 
   const categoryLabel = Object.fromEntries(categories.map((c) => [c.slug, c.label]))
@@ -275,8 +276,13 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
     })
   }
 
+  // Na Lista, esconde concluídas/canceladas por padrão (a menos que o usuário
+  // ligue "Mostrar concluídas" ou filtre explicitamente por um status). No Board
+  // as colunas Concluída/Cancelada continuam visíveis.
+  const hideDone = view === "list" && !showDone && statusFilter === ALL
   const filtered = tasks
     .filter((t) => statusFilter === ALL || t.status === statusFilter)
+    .filter((t) => !(hideDone && DONE_STATUSES.has(t.status)))
     .filter((t) => categoryFilter === ALL || t.category === categoryFilter)
     .filter((t) => priorityFilter === ALL || t.priority === priorityFilter)
     .sort((a, b) => {
@@ -366,6 +372,18 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
               </SelectContent>
             </Select>
           </>
+        )}
+
+        {view === "list" && (
+          <Button
+            type="button"
+            size="sm"
+            variant={showDone ? "secondary" : "outline"}
+            onClick={() => setShowDone((v) => !v)}
+            title={showDone ? "Ocultar concluídas e canceladas" : "Mostrar concluídas e canceladas"}
+          >
+            {showDone ? "Ocultar concluídas" : "Mostrar concluídas"}
+          </Button>
         )}
 
         <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
