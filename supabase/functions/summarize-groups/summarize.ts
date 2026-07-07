@@ -14,12 +14,24 @@ export interface TeamEntry {
   kind: "human" | "bot";
 }
 
+export type Severidade = "baixa" | "media" | "alta";
+
 export interface SummaryHighlights {
   temas: string[];
   pendencias: string[];
   reclamacoes: string[];
   sentimento: "positivo" | "neutro" | "negativo";
   risco_churn: boolean;
+  severidade: Severidade;
+  continuidade: string | null;
+}
+
+/** Resumo do dia anterior, para o modelo notar continuidade de problemas. */
+export interface YesterdayDigest {
+  sentimento?: SummaryHighlights["sentimento"];
+  temas?: string[];
+  pendencias?: string[];
+  reclamacoes?: string[];
 }
 
 export interface ModelSummary {
@@ -67,12 +79,29 @@ export function buildTranscript(
   return { transcript: lines.join("\n"), used };
 }
 
-export function buildPrompt(clinicName: string, dateLabel: string, transcript: string): string {
+/** Digest curto do dia anterior para dar contexto de continuidade ao modelo. */
+export function buildYesterdayDigest(y: YesterdayDigest | null | undefined): string {
+  if (!y) return "";
+  const parts: string[] = [];
+  if (y.sentimento) parts.push(`sentimento ${y.sentimento}`);
+  if (y.pendencias?.length) parts.push(`pendências: ${y.pendencias.join("; ")}`);
+  if (y.reclamacoes?.length) parts.push(`reclamações: ${y.reclamacoes.join("; ")}`);
+  if (y.temas?.length) parts.push(`temas: ${y.temas.join("; ")}`);
+  return parts.length ? `RESUMO DE ONTEM (contexto, não repita literalmente): ${parts.join(" | ")}` : "";
+}
+
+export function buildPrompt(
+  clinicName: string,
+  dateLabel: string,
+  transcript: string,
+  yesterdayDigest?: string,
+): string {
   return [
     `Você é um analista de sucesso do cliente da Contact.IA, empresa que presta serviço de agendamento por IA para clínicas odontológicas.`,
     `Abaixo está a conversa de ${dateLabel} no grupo de WhatsApp entre a equipe da Contact.IA e a clínica "${clinicName}".`,
     `Mensagens marcadas com [equipe] ou "Bot" são do nosso lado; as demais são de pessoas da clínica (cliente).`,
     ``,
+    ...(yesterdayDigest ? [yesterdayDigest, ``] : []),
     `Resuma objetivamente o que aconteceu no dia. Responda APENAS com JSON válido neste formato:`,
     `{`,
     `  "resumo_md": "resumo do dia em markdown, 3 a 8 linhas, em português",`,
@@ -80,10 +109,11 @@ export function buildPrompt(clinicName: string, dateLabel: string, transcript: s
     `  "pendencias": ["o que ficou pendente ou aguardando alguém"],`,
     `  "reclamacoes": ["reclamações ou insatisfações do cliente, se houver"],`,
     `  "sentimento": "positivo" | "neutro" | "negativo",`,
-    `  "risco_churn": true | false`,
+    `  "severidade": "baixa" | "media" | "alta",`,
+    `  "continuidade": "nota curta se algo do resumo de ontem persiste ou se agravou hoje, senão null"`,
     `}`,
     ``,
-    `"risco_churn" = true apenas se houver sinal claro de insatisfação grave, ameaça de cancelamento ou frustração recorrente.`,
+    `"severidade" = "alta" apenas se houver sinal claro de insatisfação grave, ameaça de cancelamento ou frustração recorrente; "media" para atrito pontual relevante; "baixa" no dia a dia normal.`,
     ``,
     `CONVERSA:`,
     transcript,
@@ -101,6 +131,13 @@ export function parseModelSummary(raw: string): ModelSummary | null {
       Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
     const sentimento =
       j.sentimento === "positivo" || j.sentimento === "negativo" ? j.sentimento : "neutro";
+    const severidade: Severidade =
+      j.severidade === "alta" || j.severidade === "media" || j.severidade === "baixa"
+        ? j.severidade
+        : j.risco_churn === true
+          ? "alta"
+          : "baixa";
+    const continuidade = typeof j.continuidade === "string" && j.continuidade.trim() ? j.continuidade.trim() : null;
     return {
       resumo_md: resumo,
       highlights: {
@@ -108,7 +145,9 @@ export function parseModelSummary(raw: string): ModelSummary | null {
         pendencias: arr(j.pendencias),
         reclamacoes: arr(j.reclamacoes),
         sentimento,
-        risco_churn: j.risco_churn === true,
+        risco_churn: severidade === "alta",
+        severidade,
+        continuidade,
       },
     };
   } catch {

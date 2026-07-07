@@ -54,36 +54,38 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
         return (
           <div
             key={status}
-            className={`rounded-lg transition-[padding] ${isOver ? "p-[2px]" : "p-px"}`}
-            style={{ background: "var(--brand)" }}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragOverStatus(status)
+            }}
+            onDragLeave={() => setDragOverStatus((s) => (s === status ? null : s))}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragOverStatus(null)
+              const id = e.dataTransfer.getData("text/task-id")
+              if (id) onStatusChange(id, status)
+            }}
+            className={`flex flex-col gap-2 rounded-lg border p-2.5 transition-colors ${
+              isOver ? "border-brand bg-brand/5" : "border-border/60 bg-accent/10"
+            }`}
           >
-            <div
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDragOverStatus(status)
-              }}
-              onDragLeave={() => setDragOverStatus((s) => (s === status ? null : s))}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDragOverStatus(null)
-                const id = e.dataTransfer.getData("text/task-id")
-                if (id) onStatusChange(id, status)
-              }}
-              className={`flex flex-col gap-2 rounded-[calc(var(--radius-lg)-2px)] bg-card p-2.5 transition-colors ${
-                isOver ? "bg-brand/5" : ""
-              }`}
-            >
-              <div className="flex items-center justify-between px-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {TASK_STATUS_LABEL[status]}
-                </p>
-                <span className="text-[0.68rem] tabular-nums text-muted-foreground">{items.length}</span>
-              </div>
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {TASK_STATUS_LABEL[status]}
+              </p>
+              <span className="text-[0.68rem] tabular-nums text-muted-foreground">{items.length}</span>
+            </div>
 
-              <div className="flex flex-col gap-2 min-h-[3rem]">
-                {items.map((t) => (
+            <div className="flex flex-col gap-2 min-h-[3rem]">
+              {items.map((t) => (
+                <div
+                  key={t.id}
+                  className={`rounded-md p-px transition-opacity hover:opacity-100 ${
+                    draggingId === t.id ? "opacity-40" : "opacity-70"
+                  }`}
+                  style={{ background: "var(--brand)" }}
+                >
                   <div
-                    key={t.id}
                     draggable
                     onDragStart={(e) => {
                       setDraggingId(t.id)
@@ -92,9 +94,7 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
                     }}
                     onDragEnd={() => setDraggingId(null)}
                     onClick={() => onOpen(t.id)}
-                    className={`flex cursor-pointer flex-col gap-1.5 rounded-md border border-border/50 bg-card p-2.5 shadow-sm transition-opacity hover:border-border ${
-                      draggingId === t.id ? "opacity-40" : ""
-                    }`}
+                    className="flex cursor-pointer flex-col gap-1.5 rounded-[calc(var(--radius-md)-1px)] bg-card p-2.5 shadow-sm"
                   >
                     <div className="flex items-start gap-1.5">
                       <span className={`mt-1 size-1.5 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`} />
@@ -121,8 +121,8 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
                       )}
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
         )

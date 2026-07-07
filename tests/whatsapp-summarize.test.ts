@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPrompt,
   buildTranscript,
+  buildYesterdayDigest,
   parseModelSummary,
   senderLabel,
   type TeamEntry,
@@ -95,7 +96,23 @@ describe("parseModelSummary", () => {
     );
     expect(parsed?.highlights.sentimento).toBe("neutro");
     expect(parsed?.highlights.risco_churn).toBe(false);
+    expect(parsed?.highlights.severidade).toBe("baixa");
+    expect(parsed?.highlights.continuidade).toBeNull();
     expect(parsed?.highlights.temas).toEqual([]);
+  });
+
+  it("lê severidade e continuidade quando o modelo retorna", () => {
+    const parsed = parseModelSummary(
+      JSON.stringify({ resumo_md: "ok", severidade: "alta", continuidade: "3º dia com atraso" }),
+    );
+    expect(parsed?.highlights.severidade).toBe("alta");
+    expect(parsed?.highlights.risco_churn).toBe(true);
+    expect(parsed?.highlights.continuidade).toBe("3º dia com atraso");
+  });
+
+  it("deriva severidade 'alta' de risco_churn quando o modelo não manda severidade (compat)", () => {
+    const parsed = parseModelSummary(JSON.stringify({ resumo_md: "ok", risco_churn: true }));
+    expect(parsed?.highlights.severidade).toBe("alta");
   });
 
   it("rejeita resposta sem resumo ou não-JSON", () => {
@@ -107,6 +124,22 @@ describe("parseModelSummary", () => {
     const p = buildPrompt("Yamar", "01/07/2026", "[10:00] A: oi");
     expect(p).toContain('clínica "Yamar"');
     expect(p).toContain("resumo_md");
+    expect(p).toContain("severidade");
     expect(p).toContain("CONVERSA:");
+  });
+
+  it("inclui o digest de ontem no prompt quando fornecido", () => {
+    const digest = buildYesterdayDigest({ sentimento: "negativo", pendencias: ["retorno do financeiro"] });
+    const p = buildPrompt("Yamar", "01/07/2026", "[10:00] A: oi", digest);
+    expect(p).toContain("RESUMO DE ONTEM");
+    expect(p).toContain("retorno do financeiro");
+  });
+});
+
+describe("buildYesterdayDigest", () => {
+  it("retorna string vazia quando não há resumo de ontem", () => {
+    expect(buildYesterdayDigest(null)).toBe("");
+    expect(buildYesterdayDigest(undefined)).toBe("");
+    expect(buildYesterdayDigest({})).toBe("");
   });
 });

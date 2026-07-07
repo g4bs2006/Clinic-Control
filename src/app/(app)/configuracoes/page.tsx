@@ -6,6 +6,9 @@ import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
 import { listInvites } from "@/lib/users/invites-actions"
 import { listReportKeywords } from "@/lib/reports/actions"
 import { listTaskCategories } from "@/lib/tasks/category-actions"
+import { getAiUsageStats } from "@/lib/ai-usage/actions"
+import { purposeLabel, formatBrl } from "@/lib/ai-usage/pricing"
+import { KpiCard } from "@/components/dashboard/kpi-card"
 import { ReportKeywordsEditor } from "@/components/settings/report-keywords-editor"
 import { InvitesEditor } from "@/components/settings/invites-editor"
 import { Panel } from "@/components/dashboard/panel"
@@ -20,7 +23,7 @@ import { ChangePasswordForm } from "@/components/settings/change-password-form"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, invites, reportKeywords, currentProfile, taskCategories] = await Promise.all([
+  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, invites, reportKeywords, currentProfile, taskCategories, aiUsage] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
@@ -32,6 +35,7 @@ export default async function ConfiguracoesPage() {
     listReportKeywords(),
     getCurrentProfile(),
     listTaskCategories(),
+    getAiUsageStats(),
   ])
 
   const clinicCountByDeveloper: Record<string, number> = {}
@@ -66,6 +70,35 @@ export default async function ConfiguracoesPage() {
       <Panel title="Minha conta" subtitle="trocar a própria senha de acesso">
         <ChangePasswordForm />
       </Panel>
+
+      {/* ── Custo de IA ─────────────────────────────────────────── */}
+      {currentProfile?.role === "gestor" && (
+        <Panel
+          title="Custo de IA"
+          subtitle={`estimativa do mês (${aiUsage.yearMonth}) — resumos diários, subtarefas via IA etc.`}
+        >
+          <div className="flex flex-wrap gap-3">
+            <KpiCard
+              label="Custo estimado"
+              value={formatBrl(aiUsage.totalCostBrl)}
+              hint={`${(aiUsage.totalPromptTokens + aiUsage.totalCompletionTokens).toLocaleString("pt-BR")} tokens`}
+              accent="purple"
+            />
+            {aiUsage.byPurpose.map((p) => (
+              <KpiCard
+                key={p.purpose}
+                label={purposeLabel(p.purpose)}
+                value={formatBrl(p.costBrl)}
+                hint={`${(p.promptTokens + p.completionTokens).toLocaleString("pt-BR")} tokens`}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Estimativa com base no preço público da DeepSeek (input pior caso) e câmbio fixo — ajustar em{" "}
+            <code>src/lib/ai-usage/pricing.ts</code> se os preços mudarem.
+          </p>
+        </Panel>
+      )}
 
       {/* ── Categorias de tarefa ───────────────────────────────── */}
       <Panel

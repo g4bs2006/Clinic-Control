@@ -19,6 +19,12 @@ import { acceptTaskSuggestion, dismissTaskSuggestion, type TaskSuggestionRow } f
 import type { TaskCategory, TaskPriority } from "@/lib/tasks/categories"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
+const PRIORITY_BY_SEVERITY: Record<TaskSuggestionRow["severity"], TaskPriority> = {
+  baixa: "baixa",
+  media: "media",
+  alta: "urgente",
+}
+
 function dateLabel(d: string): string {
   if (!d) return ""
   const [y, m, day] = d.split("-").map(Number)
@@ -49,7 +55,7 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
   function openReview(s: TaskSuggestionRow) {
     const clinic = clinics.find((c) => c.id === s.clinic_id)
     setCategory(defaultCategory)
-    setPriority("media")
+    setPriority(PRIORITY_BY_SEVERITY[s.severity] ?? "media")
     setAssignedTo(clinic?.developerId ?? null)
     setDueDate("")
     setReviewing(s)
@@ -97,7 +103,14 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
         {suggestions.map((s) => (
           <li key={s.id} className="flex flex-wrap items-center gap-2 py-2">
             <div className="min-w-0 flex-1">
-              <p className="text-sm">{s.text}</p>
+              <p className="text-sm">
+                {s.severity === "alta" && (
+                  <span className="mr-1.5 rounded bg-red-500/15 px-1 py-0.5 text-[0.6rem] font-bold uppercase text-red-400">
+                    Urgente
+                  </span>
+                )}
+                {s.text}
+              </p>
               <p className="text-xs text-muted-foreground">
                 <Link href={`/clinicas/${s.clinic_id}`} className="hover:text-foreground transition-colors">
                   {s.clinic_name}

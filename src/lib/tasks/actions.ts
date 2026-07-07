@@ -38,6 +38,7 @@ export type TaskSuggestionRow = {
   summary_id: string;
   summary_date: string;
   text: string;
+  severity: "baixa" | "media" | "alta";
 };
 
 export type TaskFilters = {
@@ -140,7 +141,7 @@ export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
 
   let query = supabase
     .from("task_suggestions")
-    .select("id, clinic_id, summary_id, text, clinics(name), whatsapp_daily_summaries(summary_date)")
+    .select("id, clinic_id, summary_id, text, severity, clinics(name), whatsapp_daily_summaries(summary_date)")
     .eq("status", "pending");
   if (clinicIds !== null) {
     if (!clinicIds.length) return [];
@@ -159,6 +160,7 @@ export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
       summary_id: row.summary_id as string,
       summary_date: summaryRow?.summary_date ?? "",
       text: row.text as string,
+      severity: (row.severity as "baixa" | "media" | "alta" | null) ?? "media",
     };
   });
 }
@@ -459,6 +461,16 @@ export async function suggestSubtasks(
     const titles = Array.isArray(parsed.subtarefas)
       ? parsed.subtarefas.filter((t: unknown): t is string => typeof t === "string" && t.trim().length >= 3)
       : [];
+
+    const supabase = await createClient();
+    await supabase.from("ai_usage_log").insert({
+      provider: "deepseek",
+      model,
+      purpose: "subtarefas_ia",
+      prompt_tokens: json?.usage?.prompt_tokens ?? 0,
+      completion_tokens: json?.usage?.completion_tokens ?? 0,
+    });
+
     if (!titles.length) return { ok: false, error: "IA não retornou subtarefas válidas" };
     return { ok: true, titles: titles.slice(0, 10) };
   } catch (e) {

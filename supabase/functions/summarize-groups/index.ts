@@ -15,9 +15,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   buildPrompt,
   buildTranscript,
+  buildYesterdayDigest,
   parseModelSummary,
   type TeamEntry,
   type TranscriptMessage,
+  type YesterdayDigest,
 } from "./summarize.ts";
 
 const SCHEMA = "clinic_control";
@@ -37,7 +39,13 @@ function todaySaoPaulo(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 }
 
-async function callLlm(prompt: string): Promise<string> {
+interface LlmResult {
+  content: string;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+async function callLlm(prompt: string): Promise<LlmResult> {
   const res = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -54,7 +62,11 @@ async function callLlm(prompt: string): Promise<string> {
   });
   if (!res.ok) throw new Error(`LLM ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const j = await res.json();
-  return j?.choices?.[0]?.message?.content ?? "";
+  return {
+    content: j?.choices?.[0]?.message?.content ?? "",
+    promptTokens: j?.usage?.prompt_tokens ?? 0,
+    completionTokens: j?.usage?.completion_tokens ?? 0,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -82,18 +94,26 @@ Deno.serve(async (req) => {
   const dayStart = `${date}T00:00:00-03:00`;
   const dayEnd = `${date}T23:59:59.999-03:00`;
 
-  const [{ data: groups }, { data: team }, { data: existing }] = await Promise.all([
+  const yesterdayDate = new Date(`${date}T00:00:00-03:00`);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+  const yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
+
+  const [{ data: groups }, { data: team }, { data: existing }, { data: yesterday }] = await Promise.all([
     supabase.from("whatsapp_groups").select("group_jid, clinic_id").not("clinic_id", "is", null),
     supabase.from("whatsapp_team_members").select("lid, name, kind").not("lid", "is", null),
     force
       ? Promise.resolve({ data: [] as { clinic_id: string }[] })
       : supabase.from("whatsapp_daily_summaries").select("clinic_id").eq("summary_date", date),
+    supabase.from("whatsapp_daily_summaries").select("clinic_id, highlights").eq("summary_date", yesterdayStr),
   ]);
 
   const teamByLid = new Map<string, TeamEntry>(
     (team ?? []).map((t) => [t.lid as string, t as TeamEntry]),
   );
   const done = new Set((existing ?? []).map((e) => e.clinic_id as string));
+  const yesterdayByClinic = new Map<string, YesterdayDigest>(
+    (yesterday ?? []).map((y) => [y.clinic_id as string, (y.highlights ?? {}) as YesterdayDigest]),
+  );
 
   // grupos por clínica (uma clínica pode ter mais de um grupo)
   const groupsByClinic = new Map<string, string[]>();
@@ -136,22 +156,40 @@ Deno.serve(async (req) => {
 
           const { transcript, used } = buildTranscript(messages, teamByLid);
           const clinicName = nameById.get(clinicId) ?? "clínica";
-          const raw = await callLlm(buildPrompt(clinicName, dateLabel, transcript));
-          const parsed = parseModelSummary(raw);
+          const yesterdayDigest = buildYesterdayDigest(yesterdayByClinic.get(clinicId));
+          const llm = await callLlm(buildPrompt(clinicName, dateLabel, transcript, yesterdayDigest || undefined));
+          const parsed = parseModelSummary(llm.content);
           if (!parsed) throw new Error("resposta do modelo não é o JSON esperado");
 
-          const { error } = await supabase.from("whatsapp_daily_summaries").upsert(
-            {
-              clinic_id: clinicId,
-              summary_date: date,
-              summary_md: parsed.resumo_md,
-              highlights: parsed.highlights,
-              model: MODEL,
-              message_count: used,
-            },
-            { onConflict: "clinic_id,summary_date" },
-          );
+          const { data: saved, error } = await supabase
+            .from("whatsapp_daily_summaries")
+            .upsert(
+              {
+                clinic_id: clinicId,
+                summary_date: date,
+                summary_md: parsed.resumo_md,
+                highlights: parsed.highlights,
+                model: MODEL,
+                message_count: used,
+                severity: parsed.highlights.severidade,
+                prompt_tokens: llm.promptTokens,
+                completion_tokens: llm.completionTokens,
+              },
+              { onConflict: "clinic_id,summary_date" },
+            )
+            .select("id")
+            .single();
           if (error) throw new Error(error.message);
+
+          await supabase.from("ai_usage_log").insert({
+            provider: "deepseek",
+            model: MODEL,
+            purpose: "resumo_diario",
+            prompt_tokens: llm.promptTokens,
+            completion_tokens: llm.completionTokens,
+            clinic_id: clinicId,
+            reference_id: saved?.id ?? null,
+          });
           summarized++;
         } catch (e) {
           errors.push(`${nameById.get(clinicId) ?? clinicId}: ${(e as Error).message}`);
