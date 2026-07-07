@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# dumps de dados de produção (PII/segredos) — nunca versionar
+supabase/dump/data.sql
+
 # vercel
 .vercel
 

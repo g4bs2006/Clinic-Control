@@ -19,8 +19,8 @@ diferente + `automacao_clinicas`). Por isso o Clinic Control foi instalado num
 1. **Expor o schema na API:** painel do projeto novo → Settings → API → **Exposed schemas**
    → adicionar `clinic_control`. SEM ISSO o PostgREST (`.from()`) não enxerga as tabelas.
 2. **Env vars** (local `.env` + Vercel):
-   - `NEXT_PUBLIC_SUPABASE_URL = https://jggfnfxdtfqeqyvxufgu.supabase.co`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY = sb_publishable_oKvLEB2qbPPs4DFAr48J2Q_86_xTQIv`
+   - `NEXT_PUBLIC_SUPABASE_URL = <pegar no painel do projeto — Settings → API>`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY = <pegar no painel do projeto — Settings → API>`
    - `SUPABASE_SERVICE_ROLE_KEY = <pegar no painel do projeto novo>`
    - `ENCRYPTION`/chave AES da Helena: **reusar a mesma** do deploy antigo (senão o token
      em clinic_integrations não descriptografa → re-cadastrar pela UI).
