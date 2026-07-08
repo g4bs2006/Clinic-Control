@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -85,6 +85,7 @@ function TaskListItem({
   selected?: boolean
   onToggleSelect?: (id: string) => void
 }) {
+  const isDone = t.status === "concluida"
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5">
       {selectable && (
@@ -94,6 +95,16 @@ function TaskListItem({
           aria-label={`Selecionar tarefa ${t.title}`}
         />
       )}
+      {/* Concluir/reabrir num clique (otimista) */}
+      <button
+        type="button"
+        onClick={() => onChangeStatus(t.id, isDone ? "pendente" : "concluida")}
+        title={isDone ? "Reabrir tarefa" : "Concluir tarefa"}
+        aria-label={isDone ? "Reabrir tarefa" : "Concluir tarefa"}
+        className={`shrink-0 transition-colors ${isDone ? "text-emerald-500 hover:text-muted-foreground" : "text-muted-foreground/50 hover:text-emerald-500"}`}
+      >
+        {isDone ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}
+      </button>
       <span
         className={`size-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`}
         title={TASK_PRIORITY_LABEL[t.priority]}
@@ -135,7 +146,7 @@ function TaskListItem({
         items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
         onValueChange={(v) => v && onChangeStatus(t.id, v as TaskStatus)}
       >
-        <SelectTrigger className="h-7 min-w-[9rem] text-xs" disabled={pending}>
+        <SelectTrigger className="h-7 min-w-[9rem] text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -182,10 +193,15 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
   const [tasks, setTasks] = useState(initialTasks)
   // Seleção múltipla da lista (ação em lote). Limpa ao chegar nova lista do servidor.
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  useEffect(() => {
+  // Re-sincroniza com o servidor (criação, exclusão, aceite de sugestão, edição
+  // no detalhe) ajustando o estado durante o render — padrão recomendado do React
+  // em vez de setState num efeito (evita render em cascata e flash de dado velho).
+  const [prevInitial, setPrevInitial] = useState(initialTasks)
+  if (initialTasks !== prevInitial) {
+    setPrevInitial(initialTasks)
     setTasks(initialTasks)
     setSelected(new Set())
-  }, [initialTasks])
+  }
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
@@ -532,6 +548,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
         profiles={profiles}
         categories={categories}
         onClose={() => setOpenTaskId(null)}
+        onStatusChange={changeStatus}
         onChanged={refresh}
       />
     </div>

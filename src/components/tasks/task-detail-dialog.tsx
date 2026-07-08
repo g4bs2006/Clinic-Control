@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Sparkles, Paperclip, Download, Trash2, Send, Loader2, X } from "lucide-react"
+import { Sparkles, Paperclip, Download, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -74,10 +74,12 @@ interface TaskDetailDialogProps {
   profiles: ProfileOption[]
   categories: TaskCategoryRow[]
   onClose: () => void
+  /** Reflete a troca de status no board na hora (otimista, sem refetch). */
+  onStatusChange?: (id: string, status: TaskStatus) => void
   onChanged: () => void
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onChanged }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onChanged }: TaskDetailDialogProps) {
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
   const [task, setTask] = useState<TaskRow | null>(null)
@@ -90,6 +92,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [comment, setComment] = useState("")
   const [suggested, setSuggested] = useState<string[] | null>(null)
   const [uploading, setUploading] = useState(false)
+  // Marca que houve alteração; o board só é re-sincronizado ao fechar (uma vez),
+  // em vez de um refetch de página inteira a cada micro-edição.
+  const changedRef = useRef(false)
 
   async function reload(id: string) {
     const [t, subs, atts, acts] = await Promise.all([
@@ -114,13 +119,23 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       setSuggested(null)
       return
     }
+    changedRef.current = false
     setLoading(true)
     reload(taskId).finally(() => setLoading(false))
   }, [taskId])
 
+  // Fecha o dialog e, se algo mudou, sincroniza o board uma única vez.
+  function handleClose() {
+    if (changedRef.current) {
+      changedRef.current = false
+      onChanged()
+    }
+    onClose()
+  }
+
   function refreshAll() {
     if (taskId) startTransition(() => reload(taskId))
-    onChanged()
+    changedRef.current = true
   }
 
   function saveField(patch: Parameters<typeof updateTask>[1]) {
@@ -134,6 +149,11 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
 
   function changeStatus(status: TaskStatus) {
     if (!taskId) return
+    // Otimista: reflete no board e no próprio dialog na hora, sem esperar o servidor.
+    onStatusChange?.(taskId, status)
+    setTask((t) =>
+      t ? { ...t, status, completed_at: status === "concluida" ? new Date().toISOString() : null } : t,
+    )
     startTransition(async () => {
       const res = await updateTaskStatus(taskId, status)
       if (res.ok) refreshAll()
@@ -147,8 +167,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       const res = await deleteTask(taskId)
       if (res.ok) {
         toast.success("Tarefa excluída.")
-        onChanged()
-        onClose()
+        changedRef.current = true
+        handleClose()
       } else toast.error(res.error)
     })
   }
@@ -241,7 +261,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   }
 
   return (
-    <Dialog open={taskId != null} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={taskId != null} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         {loading || !task ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -453,7 +473,28 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="sm:justify-between">
+              {task.status === "concluida" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => changeStatus("pendente")}
+                >
+                  <RotateCcw className="size-4" />
+                  Reabrir tarefa
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => changeStatus("concluida")}
+                  className="bg-emerald-600 text-white hover:bg-emerald-600/90"
+                >
+                  <CheckCircle2 className="size-4" />
+                  Concluir tarefa
+                </Button>
+              )}
               <DialogClose className={buttonVariants({ variant: "outline" })}>Fechar</DialogClose>
             </DialogFooter>
           </>
