@@ -6,6 +6,8 @@ import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
 import { listReportKeywords } from "@/lib/reports/actions"
 import { listTaskCategories } from "@/lib/tasks/category-actions"
 import { getAiUsageStats } from "@/lib/ai-usage/actions"
+import { getAiSettings, getSuggestionStats } from "@/lib/ai-settings/actions"
+import { AiSettingsPanel } from "@/components/settings/ai-settings-panel"
 import { purposeLabel, formatBrl } from "@/lib/ai-usage/pricing"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { ReportKeywordsEditor } from "@/components/settings/report-keywords-editor"
@@ -21,7 +23,7 @@ import { ChangePasswordForm } from "@/components/settings/change-password-form"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage] = await Promise.all([
+  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
@@ -33,6 +35,8 @@ export default async function ConfiguracoesPage() {
     getCurrentProfile(),
     listTaskCategories(),
     getAiUsageStats(),
+    getAiSettings(),
+    getSuggestionStats(),
   ])
 
   const clinicCountByDeveloper: Record<string, number> = {}
@@ -93,6 +97,20 @@ export default async function ConfiguracoesPage() {
             Estimativa com base no preço público da DeepSeek (input pior caso) e câmbio fixo — ajustar em{" "}
             <code>src/lib/ai-usage/pricing.ts</code> se os preços mudarem.
           </p>
+        </Panel>
+      )}
+
+      {/* ── IA: instruções, qualidade e teste ──────────────────── */}
+      {currentProfile?.role === "gestor" && (
+        <Panel
+          title="IA — resumos e sugestões"
+          subtitle="ajuste as instruções e o modelo, acompanhe a qualidade e teste sem gravar"
+        >
+          <AiSettingsPanel
+            settings={aiSettings}
+            stats={suggestionStats}
+            clinics={clinics.map((c) => ({ id: c.id, name: c.name }))}
+          />
         </Panel>
       )}
 

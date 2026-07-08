@@ -2,14 +2,16 @@
 // Roda via pg_cron após a coleta (collect-groups). Lê as mensagens do dia de
 // cada clínica mapeada e grava um resumo em whatsapp_daily_summaries.
 //
+// Config da IA (instruções/modelo/temperatura/max_tokens) vem da tabela
+// ai_settings (editável na plataforma, sem redeploy); cai nos defaults se ausente.
+//
 // Secrets: CRON_SECRET (compartilhado com collect-groups), DEEPSEEK_API_KEY.
-//   Opcionais: LLM_MODEL (default deepseek-chat), LLM_BASE_URL (default
-//   https://api.deepseek.com) — a API é compatível com o formato OpenAI,
-//   então trocar de provedor é só trocar esses três secrets.
+//   Opcionais: LLM_MODEL, LLM_BASE_URL (fallback quando ai_settings não define).
 //
 // Chamada: POST com header x-cron-secret: <CRON_SECRET>
 //   ?date=YYYY-MM-DD (default: hoje no fuso America/Sao_Paulo)
 //   ?force=1 re-gera resumos já existentes do dia.
+//   ?preview=1&clinic=<id> → só devolve o resultado do dia p/ 1 clínica, SEM gravar.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -28,12 +30,18 @@ const MIN_MESSAGES = 2; // menos que isso não rende resumo
 
 const CRON_SECRET = (Deno.env.get("CRON_SECRET") ?? "").trim();
 const API_KEY = (Deno.env.get("DEEPSEEK_API_KEY") ?? "").trim();
-const MODEL = (Deno.env.get("LLM_MODEL") ?? "deepseek-chat").trim();
+const MODEL_FALLBACK = (Deno.env.get("LLM_MODEL") ?? "deepseek-chat").trim();
 const BASE_URL = (Deno.env.get("LLM_BASE_URL") ?? "https://api.deepseek.com")
   .trim()
   .replace(/\/+$/, "");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+interface LlmConfig {
+  model: string;
+  temperature: number;
+  maxTokens: number;
+}
 
 function todaySaoPaulo(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
@@ -45,7 +53,7 @@ interface LlmResult {
   completionTokens: number;
 }
 
-async function callLlm(prompt: string): Promise<LlmResult> {
+async function callLlm(prompt: string, cfg: LlmConfig): Promise<LlmResult> {
   const res = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -53,11 +61,11 @@ async function callLlm(prompt: string): Promise<LlmResult> {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: cfg.model,
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-      temperature: 0.3,
-      max_tokens: 1200,
+      temperature: cfg.temperature,
+      max_tokens: cfg.maxTokens,
     }),
   });
   if (!res.ok) throw new Error(`LLM ${res.status}: ${(await res.text()).slice(0, 300)}`);
@@ -81,6 +89,7 @@ Deno.serve(async (req) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("date") ?? "")
     ? url.searchParams.get("date")!
     : todaySaoPaulo();
+  const preview = url.searchParams.get("preview") === "1";
   // O dia CORRENTE sempre re-gera (upsert) — a conversa ainda está acontecendo;
   // dias passados só com ?force=1.
   const force = url.searchParams.get("force") === "1" || date === todaySaoPaulo();
@@ -90,26 +99,89 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // Config da IA (editável na plataforma).
+  const { data: aiCfg } = await supabase
+    .from("ai_settings")
+    .select("summary_instructions, model, temperature, max_tokens")
+    .eq("id", true)
+    .maybeSingle();
+  const cfg: LlmConfig = {
+    model: (aiCfg?.model as string | null)?.trim() || MODEL_FALLBACK,
+    temperature: aiCfg?.temperature != null ? Number(aiCfg.temperature) : 0.3,
+    maxTokens: aiCfg?.max_tokens != null ? Number(aiCfg.max_tokens) : 1200,
+  };
+  const instructions = (aiCfg?.summary_instructions as string | null)?.trim() || undefined;
+
   // Janela do dia no fuso de SP (UTC-3, sem horário de verão desde 2019).
   const dayStart = `${date}T00:00:00-03:00`;
   const dayEnd = `${date}T23:59:59.999-03:00`;
+  const dateLabel = date.split("-").reverse().join("/");
+
+  const { data: team } = await supabase
+    .from("whatsapp_team_members")
+    .select("lid, name, kind")
+    .not("lid", "is", null);
+  const teamByLid = new Map<string, TeamEntry>((team ?? []).map((t) => [t.lid as string, t as TeamEntry]));
+
+  // ── Preview: 1 clínica, sem gravar (playground de teste do prompt) ──────────
+  if (preview) {
+    const clinicId = url.searchParams.get("clinic");
+    if (!clinicId) return Response.json({ ok: false, error: "parâmetro 'clinic' obrigatório" });
+    const { data: groups } = await supabase
+      .from("whatsapp_groups")
+      .select("group_jid")
+      .eq("clinic_id", clinicId);
+    const jids = (groups ?? []).map((g) => g.group_jid as string);
+    if (!jids.length) return Response.json({ ok: false, error: "Clínica sem grupo de WhatsApp mapeado." });
+    const { data: msgs } = await supabase
+      .from("whatsapp_group_messages")
+      .select("event_ts, participant, push_name, from_me, text")
+      .in("group_jid", jids)
+      .gte("event_ts", dayStart)
+      .lte("event_ts", dayEnd)
+      .not("text", "is", null)
+      .order("event_ts");
+    const messages = (msgs ?? []) as TranscriptMessage[];
+    if (messages.length < MIN_MESSAGES) {
+      return Response.json({ ok: false, error: "Poucas mensagens nesse dia para gerar resumo." });
+    }
+    const { transcript } = buildTranscript(messages, teamByLid);
+    const { data: clinicRow } = await supabase.from("clinics").select("name").eq("id", clinicId).maybeSingle();
+    const prompt = buildPrompt(
+      (clinicRow?.name as string) ?? "clínica",
+      dateLabel,
+      transcript,
+      undefined,
+      instructions,
+    );
+    try {
+      const llm = await callLlm(prompt, cfg);
+      const parsed = parseModelSummary(llm.content);
+      return Response.json({
+        ok: !!parsed,
+        model: cfg.model,
+        date,
+        resumo_md: parsed?.resumo_md ?? null,
+        highlights: parsed?.highlights ?? null,
+        error: parsed ? undefined : "resposta do modelo não é o JSON esperado",
+      });
+    } catch (e) {
+      return Response.json({ ok: false, error: (e as Error).message });
+    }
+  }
 
   const yesterdayDate = new Date(`${date}T00:00:00-03:00`);
   yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
   const yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
 
-  const [{ data: groups }, { data: team }, { data: existing }, { data: yesterday }] = await Promise.all([
+  const [{ data: groups }, { data: existing }, { data: yesterday }] = await Promise.all([
     supabase.from("whatsapp_groups").select("group_jid, clinic_id").not("clinic_id", "is", null),
-    supabase.from("whatsapp_team_members").select("lid, name, kind").not("lid", "is", null),
     force
       ? Promise.resolve({ data: [] as { clinic_id: string }[] })
       : supabase.from("whatsapp_daily_summaries").select("clinic_id").eq("summary_date", date),
     supabase.from("whatsapp_daily_summaries").select("clinic_id, highlights").eq("summary_date", yesterdayStr),
   ]);
 
-  const teamByLid = new Map<string, TeamEntry>(
-    (team ?? []).map((t) => [t.lid as string, t as TeamEntry]),
-  );
   const done = new Set((existing ?? []).map((e) => e.clinic_id as string));
   const yesterdayByClinic = new Map<string, YesterdayDigest>(
     (yesterday ?? []).map((y) => [y.clinic_id as string, (y.highlights ?? {}) as YesterdayDigest]),
@@ -128,7 +200,6 @@ Deno.serve(async (req) => {
   const { data: clinicNames } = await supabase.from("clinics").select("id, name");
   const nameById = new Map((clinicNames ?? []).map((c) => [c.id as string, c.name as string]));
 
-  const dateLabel = date.split("-").reverse().join("/");
   const clinicIds = [...groupsByClinic.keys()];
   let summarized = 0;
   let skipped = 0;
@@ -157,7 +228,10 @@ Deno.serve(async (req) => {
           const { transcript, used } = buildTranscript(messages, teamByLid);
           const clinicName = nameById.get(clinicId) ?? "clínica";
           const yesterdayDigest = buildYesterdayDigest(yesterdayByClinic.get(clinicId));
-          const llm = await callLlm(buildPrompt(clinicName, dateLabel, transcript, yesterdayDigest || undefined));
+          const llm = await callLlm(
+            buildPrompt(clinicName, dateLabel, transcript, yesterdayDigest || undefined, instructions),
+            cfg,
+          );
           const parsed = parseModelSummary(llm.content);
           if (!parsed) throw new Error("resposta do modelo não é o JSON esperado");
 
@@ -169,7 +243,7 @@ Deno.serve(async (req) => {
                 summary_date: date,
                 summary_md: parsed.resumo_md,
                 highlights: parsed.highlights,
-                model: MODEL,
+                model: cfg.model,
                 message_count: used,
                 severity: parsed.highlights.severidade,
                 prompt_tokens: llm.promptTokens,
@@ -183,7 +257,7 @@ Deno.serve(async (req) => {
 
           await supabase.from("ai_usage_log").insert({
             provider: "deepseek",
-            model: MODEL,
+            model: cfg.model,
             purpose: "resumo_diario",
             prompt_tokens: llm.promptTokens,
             completion_tokens: llm.completionTokens,
@@ -201,7 +275,7 @@ Deno.serve(async (req) => {
   return Response.json({
     ok: errors.length === 0,
     date,
-    model: MODEL,
+    model: cfg.model,
     clinics_considered: clinicIds.length,
     summarized,
     skipped_few_messages: skipped,

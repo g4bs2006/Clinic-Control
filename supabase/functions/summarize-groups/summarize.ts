@@ -97,33 +97,44 @@ export function buildYesterdayDigest(y: YesterdayDigest | null | undefined): str
   return parts.length ? `RESUMO DE ONTEM (contexto, não repita literalmente): ${parts.join(" | ")}` : "";
 }
 
+/** Instruções padrão (persona + regras). Editáveis na plataforma (ai_settings). */
+export const DEFAULT_INSTRUCTIONS = [
+  `Você é um analista de sucesso do cliente da Contact.IA, empresa que presta serviço de agendamento por IA para clínicas odontológicas. Resuma objetivamente o que aconteceu no dia.`,
+  ``,
+  `Em "tarefas", liste tudo que gera trabalho para a NOSSA equipe (Contact.IA), sendo abrangente (inclua itens pequenos). Use "tipo": "acao" para algo concreto a executar; "acompanhamento" para itens de só ficar de olho/aguardar/monitorar, sem ação imediata. Inclua um item para dar retorno sobre CADA reclamação do cliente. Não inclua o que depende apenas do cliente nem o que já foi resolvido no próprio dia. "motivo" só quando agregar contexto, senão null.`,
+  ``,
+  `"severidade" = "alta" apenas se houver sinal claro de insatisfação grave, ameaça de cancelamento ou frustração recorrente; "media" para atrito pontual relevante; "baixa" no dia a dia normal.`,
+].join("\n");
+
+// Esqueleto do JSON de saída — FIXO no código (o parser depende dele; não é editável).
+const OUTPUT_SCHEMA = [
+  `Responda APENAS com JSON válido neste formato:`,
+  `{`,
+  `  "resumo_md": "resumo do dia em markdown, 3 a 8 linhas, em português",`,
+  `  "temas": ["tema 1", "tema 2"],`,
+  `  "pendencias": ["pontos que ficaram em aberto no dia, de forma resumida"],`,
+  `  "reclamacoes": ["reclamações ou insatisfações do cliente, se houver"],`,
+  `  "tarefas": [{ "acao": "o que fazer, começando com verbo no infinitivo e específico (ex.: 'Reenviar o link de agendamento configurado')", "motivo": "1 frase de contexto do porquê, SÓ quando ajudar a entender; senão null", "tipo": "acao ou acompanhamento" }],`,
+  `  "sentimento": "positivo" | "neutro" | "negativo",`,
+  `  "severidade": "baixa" | "media" | "alta",`,
+  `  "continuidade": "nota curta se algo do resumo de ontem persiste ou se agravou hoje, senão null"`,
+  `}`,
+].join("\n");
+
 export function buildPrompt(
   clinicName: string,
   dateLabel: string,
   transcript: string,
   yesterdayDigest?: string,
+  instructions: string = DEFAULT_INSTRUCTIONS,
 ): string {
   return [
-    `Você é um analista de sucesso do cliente da Contact.IA, empresa que presta serviço de agendamento por IA para clínicas odontológicas.`,
-    `Abaixo está a conversa de ${dateLabel} no grupo de WhatsApp entre a equipe da Contact.IA e a clínica "${clinicName}".`,
-    `Mensagens marcadas com [equipe] ou "Bot" são do nosso lado; as demais são de pessoas da clínica (cliente).`,
+    instructions.trim(),
+    ``,
+    `A conversa abaixo é de ${dateLabel} no grupo de WhatsApp entre a equipe da Contact.IA e a clínica "${clinicName}". Mensagens marcadas com [equipe] ou "Bot" são do nosso lado; as demais são de pessoas da clínica (cliente).`,
     ``,
     ...(yesterdayDigest ? [yesterdayDigest, ``] : []),
-    `Resuma objetivamente o que aconteceu no dia. Responda APENAS com JSON válido neste formato:`,
-    `{`,
-    `  "resumo_md": "resumo do dia em markdown, 3 a 8 linhas, em português",`,
-    `  "temas": ["tema 1", "tema 2"],`,
-    `  "pendencias": ["pontos que ficaram em aberto no dia, de forma resumida"],`,
-    `  "reclamacoes": ["reclamações ou insatisfações do cliente, se houver"],`,
-    `  "tarefas": [{ "acao": "o que fazer, começando com verbo no infinitivo e específico (ex.: 'Reenviar o link de agendamento configurado')", "motivo": "1 frase de contexto do porquê, SÓ quando ajudar a entender; senão null", "tipo": "acao ou acompanhamento" }],`,
-    `  "sentimento": "positivo" | "neutro" | "negativo",`,
-    `  "severidade": "baixa" | "media" | "alta",`,
-    `  "continuidade": "nota curta se algo do resumo de ontem persiste ou se agravou hoje, senão null"`,
-    `}`,
-    ``,
-    `Em "tarefas", liste tudo que gera trabalho para a NOSSA equipe (Contact.IA), sendo abrangente (inclua itens pequenos). Use "tipo": "acao" para algo concreto a executar; "acompanhamento" para itens de só ficar de olho/aguardar/monitorar, sem ação imediata. Inclua um item para dar retorno sobre CADA reclamação do cliente. Não inclua o que depende apenas do cliente nem o que já foi resolvido no próprio dia. "motivo" só quando agregar contexto, senão null.`,
-    ``,
-    `"severidade" = "alta" apenas se houver sinal claro de insatisfação grave, ameaça de cancelamento ou frustração recorrente; "media" para atrito pontual relevante; "baixa" no dia a dia normal.`,
+    OUTPUT_SCHEMA,
     ``,
     `CONVERSA:`,
     transcript,
