@@ -20,9 +20,12 @@ const ALL = "__all__";
 export function CarteiraSwitcher({
   options,
   selected,
+  onOpenChange,
 }: {
   options: { id: string; name: string }[];
   selected: string | null;
+  /** Avisa a sidebar quando o dropdown abre/fecha, p/ ela não recolher no hover. */
+  onOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -38,6 +41,7 @@ export function CarteiraSwitcher({
   return (
     <Select
       value={selected ?? ALL}
+      onOpenChange={onOpenChange}
       items={{
         [ALL]: "Todas as carteiras",
         ...Object.fromEntries(options.map((o) => [o.id, o.name])),

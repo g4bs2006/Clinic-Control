@@ -66,19 +66,24 @@ export function AppNav({
     () => false,
   );
   const [peek, setPeek] = useState(false);
+  // Dropdown de carteira aberto: o popup é portalado pra fora do <nav>, então
+  // mexer nele dispararia mouseleave/click-outside e recolheria a sidebar,
+  // desmontando o seletor. Enquanto aberto, seguramos a sidebar aberta.
+  const [carteiraOpen, setCarteiraOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
 
   // Click outside collapses the transient peek (when not pinned)
   useEffect(() => {
     if (pinned) return;
     function onPointerDown(e: MouseEvent) {
+      if (carteiraOpen) return;
       if (navRef.current && !navRef.current.contains(e.target as Node)) {
         setPeek(false);
       }
     }
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [pinned]);
+  }, [pinned, carteiraOpen]);
 
   function togglePin() {
     const next = !pinned;
@@ -87,7 +92,7 @@ export function AppNav({
     if (next) setPeek(false);
   }
 
-  const open = pinned || peek;
+  const open = pinned || peek || carteiraOpen;
 
   return (
     <nav
@@ -96,7 +101,7 @@ export function AppNav({
       // Footprint reserved in the flex layout: rail width unless pinned open.
       className={cn("relative shrink-0 transition-[width] duration-200 ease-out", pinned ? FULL : RAIL)}
       onMouseEnter={() => !pinned && setPeek(true)}
-      onMouseLeave={() => !pinned && setPeek(false)}
+      onMouseLeave={() => !pinned && !carteiraOpen && setPeek(false)}
       onFocusCapture={() => !pinned && setPeek(true)}
     >
       {/* The visible panel — overlays content when peeking, so nothing reflows. */}
@@ -206,6 +211,7 @@ export function AppNav({
             <CarteiraSwitcher
               options={carteira.options}
               selected={carteira.selected}
+              onOpenChange={setCarteiraOpen}
             />
           </div>
         )}

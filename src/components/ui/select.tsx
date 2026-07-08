@@ -78,7 +78,9 @@ function SelectContent({
         align={align}
         alignOffset={alignOffset}
         alignItemWithTrigger={alignItemWithTrigger}
-        className="isolate z-50"
+        // z acima da sidebar (z-1200) e do Leaflet (~1000): o popup é portalado
+        // pro body, então precisa vencer o chrome do app — senão abre por trás.
+        className="isolate z-[1300]"
       >
         <SelectPrimitive.Popup
           data-slot="select-content"
