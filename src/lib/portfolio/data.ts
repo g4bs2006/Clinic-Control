@@ -53,9 +53,14 @@ export async function getPortfolioForMonth(
 
   const autoClinics = clinics.filter((c) => c.mode === "auto");
 
+  // O overview (contatos/canais/status da conta) é estado "de agora", não
+  // histórico — só faz sentido (e só vale o custo da chamada à Helena) no mês
+  // corrente. Em meses passados tudo vem do snapshot congelado, sem tocar a Helena.
+  const overviewClinics = isCurrent ? autoClinics : [];
+
   const [liveFunnelResults, accountOverviewResults] = await Promise.all([
     Promise.allSettled(autoClinicsWithoutSnapshot.map((c) => getLiveFunnel(c.id))),
-    Promise.allSettled(autoClinics.map((c) => getHelenaAccountOverview(c.id))),
+    Promise.allSettled(overviewClinics.map((c) => getHelenaAccountOverview(c.id))),
   ]);
 
   const liveFunnelByClinicId = new Map<
@@ -77,7 +82,7 @@ export async function getPortfolioForMonth(
       company: import("@/lib/helena/types").HelenaCompany | null;
     }
   >();
-  autoClinics.forEach((c, idx) => {
+  overviewClinics.forEach((c, idx) => {
     const result = accountOverviewResults[idx];
     if (result.status === "fulfilled" && result.value.ok) {
       overviewByClinicId.set(c.id, {
