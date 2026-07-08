@@ -2,14 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/cookie-name";
 import { verifySessionToken } from "@/lib/auth/token";
 
-// Rotas públicas: login e ativação de conta (e-mail pré-aprovado).
+// Rotas públicas: só o login (usuários são criados pelo gestor em
+// Configurações → Usuários, já com senha temporária).
 // /api/reports/process valida a própria autenticação (assinatura HMAC interna
 // dos ticks de relatório) — ver src/app/api/reports/process/route.ts.
 // /api/form-credentials é um webhook externo (Google Apps Script / n8n) com auth
 // própria via header x-webhook-secret — não pode exigir cookie de sessão.
 const PUBLIC_PREFIXES = [
   "/login",
-  "/ativar-conta",
   "/api/reports/process",
   "/api/form-credentials",
 ];

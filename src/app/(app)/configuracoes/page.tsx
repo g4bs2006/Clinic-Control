@@ -3,14 +3,12 @@ import { listCheckItems } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
 import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
-import { listInvites } from "@/lib/users/invites-actions"
 import { listReportKeywords } from "@/lib/reports/actions"
 import { listTaskCategories } from "@/lib/tasks/category-actions"
 import { getAiUsageStats } from "@/lib/ai-usage/actions"
 import { purposeLabel, formatBrl } from "@/lib/ai-usage/pricing"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { ReportKeywordsEditor } from "@/components/settings/report-keywords-editor"
-import { InvitesEditor } from "@/components/settings/invites-editor"
 import { Panel } from "@/components/dashboard/panel"
 import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
 import { TaskCategoriesEditor } from "@/components/settings/task-categories-editor"
@@ -23,7 +21,7 @@ import { ChangePasswordForm } from "@/components/settings/change-password-form"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, invites, reportKeywords, currentProfile, taskCategories, aiUsage] = await Promise.all([
+  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
@@ -31,7 +29,6 @@ export default async function ConfiguracoesPage() {
     listWhatsappGroups(),
     listTeamMembers(),
     listUserProfiles(),
-    listInvites(),
     listReportKeywords(),
     getCurrentProfile(),
     listTaskCategories(),
@@ -63,7 +60,6 @@ export default async function ConfiguracoesPage() {
           initialProfiles={profiles}
           clinicCountByDeveloper={clinicCountByDeveloper}
         />
-        <InvitesEditor initialInvites={invites} />
       </Panel>
 
       {/* ── Minha conta ────────────────────────────────────────── */}
