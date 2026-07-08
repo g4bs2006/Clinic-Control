@@ -327,7 +327,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
   // Na Lista, esconde concluídas/canceladas por padrão (a menos que o usuário
   // ligue "Mostrar concluídas" ou filtre explicitamente por um status). No Board
   // as colunas Concluída/Cancelada continuam visíveis.
-  const hideDone = view === "list" && !showDone && statusFilter === ALL
+  const hideDone = (view === "list" || view === "board") && !showDone && statusFilter === ALL
   const filtered = tasks
     .filter((t) => statusFilter === ALL || t.status === statusFilter)
     .filter((t) => !(hideDone && DONE_STATUSES.has(t.status)))
@@ -422,7 +422,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
           </>
         )}
 
-        {view === "list" && (
+        {(view === "list" || view === "board") && (
           <Button
             type="button"
             size="sm"
