@@ -6,12 +6,11 @@ import { monthKey, prevMonth, DATA_START_MONTH } from "@/lib/snapshots/month"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { Panel } from "@/components/dashboard/panel"
 import { StatusDonut } from "@/components/dashboard/status-donut"
-import { RankingTable } from "@/components/dashboard/ranking-table"
+import { RankingSection } from "@/components/dashboard/ranking-section"
 import { PortfolioFilters } from "@/components/dashboard/portfolio-filters"
 import { listCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listAttentionSummaries } from "@/lib/whatsapp/actions"
-import { ExportButton } from "@/components/dashboard/export-button"
 import { countMyPendingTasks } from "@/lib/tasks/actions"
 import { CheckCircle2, ListTodo } from "lucide-react"
 
@@ -53,9 +52,6 @@ export default async function HomePage({
   const rawMonth = params.month ?? ""
   const month: string = /^\d{4}-\d{2}$/.test(rawMonth) ? rawMonth : currentMonth
 
-  // Region filter (raw string; will be validated against distinct regions from rows)
-  const rawRegion = params.region ?? ""
-
   // Fetch portfolio data, check items, all checks, raw clinics and WhatsApp stats
   const [portfolioData, checkItems, allChecksMap, rawClinics, rawAttentionSummaries, scope, myPendingTasks] = await Promise.all([
     getPortfolioForMonth(month),
@@ -88,16 +84,11 @@ export default async function HomePage({
     allChecks[clinicId] = Object.fromEntries(checksMap)
   }
 
-  // Derive distinct, sorted regions from all rows (non-null only)
+  // Derive distinct, sorted regions from all rows (non-null only) — o filtro de
+  // região é aplicado NO CLIENTE (RankingSection), sem round-trip ao servidor.
   const regions = Array.from(
     new Set(allRows.map((r) => r.region).filter((r): r is string => !!r))
   ).sort()
-
-  // Validate region param against actual regions
-  const region = regions.includes(rawRegion) ? rawRegion : ""
-
-  // Apply region filter to rows for ranking table (summary uses all rows)
-  const filteredRows = region ? allRows.filter((r) => r.region === region) : allRows
 
   // Month selector options — desde maio/2026 (primeiro mês com dados) até o atual
   const monthOptions = lastNMonths(currentMonth, 12)
@@ -159,8 +150,8 @@ export default async function HomePage({
 
   const nameByClinicId = new Map(allRows.map((r) => [r.clinicId, r.name]))
 
-  // ── Prepare CSV Export Data ─────────────────────────────────
-  const exportData = filteredRows.map((row) => {
+  // ── Prepare CSV Export Data (todas as linhas; a região filtra no cliente) ──
+  const exportData = allRows.map((row) => {
     const checks = allChecks[row.clinicId] ?? {}
     const checkedCount = checkItems.filter((ci) => checks[ci.id] === true).length
     const rawClinic = rawClinics.find((c) => c.id === row.clinicId)
@@ -201,19 +192,15 @@ export default async function HomePage({
             {carteiraLabel && (
               <span className="ml-1 text-primary">· carteira {carteiraLabel}</span>
             )}
-            {region && (
-              <span className="ml-1 text-primary">· {region}</span>
-            )}
           </p>
         </div>
 
-        {/* Action buttons and Filters */}
+        {/* Filtro de mês (região fica no card do ranking, filtrada no cliente) */}
         <div className="flex flex-wrap items-center gap-3">
-          <ExportButton data={exportData} filename={`relatorio-performance-${month}`} />
           <PortfolioFilters
             month={month}
-            region={region}
-            regions={regions}
+            region={null}
+            regions={[]}
             monthOptions={monthOptions}
           />
         </div>
@@ -424,17 +411,13 @@ export default async function HomePage({
 
         </div>
 
-        {/* Ranking Table */}
-        <Panel
-          title="Ranking de clínicas"
-          subtitle={
-            region
-              ? `ordenado por taxa · região ${region}`
-              : "ordenado por taxa de agendamento"
-          }
-        >
-          <RankingTable rows={filteredRows} />
-        </Panel>
+        {/* Ranking + filtro de região (client-side) + exportar */}
+        <RankingSection
+          rows={allRows}
+          regions={regions}
+          exportData={exportData}
+          exportFilename={`relatorio-performance-${month}`}
+        />
       </div>
     </main>
   )
