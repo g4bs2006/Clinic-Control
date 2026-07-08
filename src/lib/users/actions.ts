@@ -154,6 +154,101 @@ export async function resetUserPassword(userId: string) {
   return { ok: true as const, tempPassword: temp };
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Cria um usuário direto (apenas gestor): define nome, e-mail e papel e gera
+ * uma senha temporária que o gestor repassa. A pessoa troca depois em
+ * Configurações → Minha conta. Retorna a senha UMA vez.
+ */
+export async function createUser(
+  name: string,
+  email: string,
+  role: "gestor" | "desenvolvedor",
+) {
+  const gate = await requireGestor();
+  if (!gate.ok) return gate;
+
+  const trimmedName = name.trim();
+  if (trimmedName.length < 2) return { ok: false as const, error: "Informe o nome do usuário" };
+  const normalized = email.trim().toLowerCase();
+  if (!EMAIL_RE.test(normalized)) return { ok: false as const, error: "E-mail inválido" };
+
+  const temp = generateTempPassword();
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("app_users")
+    .insert({ email: normalized, name: trimmedName, password_hash: await hashPassword(temp), role, active: true })
+    .select("id, email, name, role, active")
+    .single();
+  if (error) {
+    if (error.code === "23505") return { ok: false as const, error: "Já existe um usuário com esse e-mail" };
+    return { ok: false as const, error: error.message };
+  }
+  revalidatePath("/configuracoes");
+  return { ok: true as const, tempPassword: temp, user: data as UserProfile };
+}
+
+/** Edita nome e e-mail de um usuário — apenas gestor. (Papel/ativo têm ações próprias.) */
+export async function updateUser(userId: string, patch: { name: string; email: string }) {
+  const gate = await requireGestor();
+  if (!gate.ok) return gate;
+
+  const trimmedName = patch.name.trim();
+  if (trimmedName.length < 2) return { ok: false as const, error: "Informe o nome do usuário" };
+  const normalized = patch.email.trim().toLowerCase();
+  if (!EMAIL_RE.test(normalized)) return { ok: false as const, error: "E-mail inválido" };
+
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("app_users")
+    .update({ name: trimmedName, email: normalized })
+    .eq("id", userId);
+  if (error) {
+    if (error.code === "23505") return { ok: false as const, error: "Já existe um usuário com esse e-mail" };
+    return { ok: false as const, error: error.message };
+  }
+  revalidatePath("/configuracoes");
+  return { ok: true as const };
+}
+
+/**
+ * Exclui um usuário de vez — apenas gestor. Não pode excluir a si mesmo nem o
+ * único gestor ativo. As referências caem por FK: clínicas/tarefas/comentários
+ * ficam com responsável nulo; o checklist PESSOAL do usuário é removido (cascata).
+ */
+export async function deleteUser(userId: string) {
+  const gate = await requireGestor();
+  if (!gate.ok) return gate;
+  if (userId === gate.userId) {
+    return { ok: false as const, error: "Você não pode excluir a si mesmo" };
+  }
+
+  const supabase = createServiceClient();
+  const { data: target } = await supabase
+    .from("app_users")
+    .select("role, active")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (target?.role === "gestor" && target.active) {
+    const { count } = await supabase
+      .from("app_users")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "gestor")
+      .eq("active", true);
+    if ((count ?? 0) <= 1) {
+      return { ok: false as const, error: "Não é possível excluir o único gestor ativo" };
+    }
+  }
+
+  const { error } = await supabase.from("app_users").delete().eq("id", userId);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/configuracoes");
+  revalidatePath("/");
+  return { ok: true as const };
+}
+
 /** Troca a própria senha (exige a senha atual). */
 export async function changeOwnPassword(currentPassword: string, newPassword: string) {
   const user = await getSessionUser();
