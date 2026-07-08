@@ -279,6 +279,43 @@ export async function createTask(
   return { ok: true, id: data.id as string };
 }
 
+/**
+ * Cria a MESMA tarefa para várias clínicas — uma tarefa independente por clínica
+ * (cada uma segue seu próprio ciclo). Sem clínicas selecionadas, cria 1 tarefa
+ * interna (clinic_id null).
+ */
+export async function createTasksForClinics(
+  clinicIds: string[],
+  base: Omit<TaskInput, "clinicId">,
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const title = base.title.trim();
+  if (title.length < 3) return { ok: false, error: "Título muito curto" };
+
+  const user = await getSessionUser();
+  const targets: (string | null)[] = clinicIds.length ? clinicIds : [null];
+  const rows = targets.map((cid) => ({
+    clinic_id: cid,
+    title,
+    description: base.description?.trim() || null,
+    category: base.category,
+    priority: base.priority,
+    assigned_to: base.assignedTo,
+    due_date: base.dueDate || null,
+    source: "manual" as const,
+    created_by: user!.id,
+  }));
+
+  const { error } = await supabase.from("tasks").insert(rows);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/tarefas");
+  revalidatePath("/");
+  return { ok: true, count: rows.length };
+}
+
 export async function updateTask(
   id: string,
   input: Partial<TaskInput>,

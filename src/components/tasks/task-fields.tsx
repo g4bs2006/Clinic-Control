@@ -42,6 +42,8 @@ interface TaskFieldsProps {
   onDueDateChange: (v: string) => void
   /** Trava o select de clínica (ex.: sugestão já veio de uma clínica específica). */
   lockClinic?: boolean
+  /** Oculta o select de clínica (ex.: quando a seleção de clínicas é múltipla, fora daqui). */
+  hideClinic?: boolean
 }
 
 export function TaskFields({
@@ -59,33 +61,36 @@ export function TaskFields({
   dueDate,
   onDueDateChange,
   lockClinic,
+  hideClinic,
 }: TaskFieldsProps) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      <label className="col-span-2 flex flex-col gap-1 text-xs text-muted-foreground">
-        Clínica
-        <Select
-          value={clinicId ?? NO_CLINIC}
-          disabled={lockClinic}
-          items={{
-            [NO_CLINIC]: "Sem clínica (interna)",
-            ...Object.fromEntries(clinics.map((c) => [c.id, c.name])),
-          }}
-          onValueChange={(v) => onClinicIdChange(v && v !== NO_CLINIC ? v : null)}
-        >
-          <SelectTrigger className="h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NO_CLINIC}>Sem clínica (interna)</SelectItem>
-            {clinics.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
+      {!hideClinic && (
+        <label className="col-span-2 flex flex-col gap-1 text-xs text-muted-foreground">
+          Clínica
+          <Select
+            value={clinicId ?? NO_CLINIC}
+            disabled={lockClinic}
+            items={{
+              [NO_CLINIC]: "Sem clínica (interna)",
+              ...Object.fromEntries(clinics.map((c) => [c.id, c.name])),
+            }}
+            onValueChange={(v) => onClinicIdChange(v && v !== NO_CLINIC ? v : null)}
+          >
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_CLINIC}>Sem clínica (interna)</SelectItem>
+              {clinics.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      )}
 
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Categoria

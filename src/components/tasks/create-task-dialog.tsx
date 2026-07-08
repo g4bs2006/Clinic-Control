@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Plus } from "lucide-react"
+import { Plus, Search } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
-import { createTask } from "@/lib/tasks/actions"
+import { createTasksForClinics } from "@/lib/tasks/actions"
 import type { TaskCategory, TaskPriority } from "@/lib/tasks/categories"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
@@ -37,26 +38,36 @@ export function CreateTaskDialog({
   const [pending, startTransition] = useTransition()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [clinicId, setClinicId] = useState<string | null>(defaultClinicId)
+  const [clinicIds, setClinicIds] = useState<string[]>(defaultClinicId ? [defaultClinicId] : [])
+  const [clinicQuery, setClinicQuery] = useState("")
   const [category, setCategory] = useState<TaskCategory>(defaultCategory)
   const [priority, setPriority] = useState<TaskPriority>("media")
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
   const [dueDate, setDueDate] = useState("")
 
+  const filteredClinics = useMemo(() => {
+    const q = clinicQuery.trim().toLowerCase()
+    return q ? clinics.filter((c) => c.name.toLowerCase().includes(q)) : clinics
+  }, [clinics, clinicQuery])
+
   function reset() {
     setTitle("")
     setDescription("")
-    setClinicId(defaultClinicId)
+    setClinicIds(defaultClinicId ? [defaultClinicId] : [])
+    setClinicQuery("")
     setCategory(defaultCategory)
     setPriority("media")
     setAssignedTo(null)
     setDueDate("")
   }
 
+  function toggleClinic(id: string) {
+    setClinicIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
   function submit() {
     startTransition(async () => {
-      const res = await createTask({
-        clinicId,
+      const res = await createTasksForClinics(clinicIds, {
         title,
         description,
         category,
@@ -65,7 +76,7 @@ export function CreateTaskDialog({
         dueDate,
       })
       if (res.ok) {
-        toast.success("Tarefa criada.")
+        toast.success(res.count > 1 ? `${res.count} tarefas criadas.` : "Tarefa criada.")
         setOpen(false)
         reset()
         onCreated()
@@ -111,12 +122,60 @@ export function CreateTaskDialog({
               className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
             />
           </label>
+
+          {/* Clínicas — múltipla seleção (cria uma tarefa por clínica) */}
+          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between">
+              <span>
+                Clínicas{" "}
+                {clinicIds.length > 0 ? (
+                  <span className="text-foreground">· {clinicIds.length} selecionada{clinicIds.length !== 1 ? "s" : ""}</span>
+                ) : (
+                  <span>· vazio = tarefa interna</span>
+                )}
+              </span>
+              {clinicIds.length > 0 && (
+                <button type="button" onClick={() => setClinicIds([])} className="text-primary hover:underline">
+                  limpar
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+              <Input
+                value={clinicQuery}
+                onChange={(e) => setClinicQuery(e.target.value)}
+                placeholder="Buscar clínica…"
+                className="h-8 pl-8"
+              />
+            </div>
+            <div className="max-h-40 overflow-y-auto rounded-md border border-border">
+              {filteredClinics.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-muted-foreground">Nenhuma clínica encontrada.</p>
+              ) : (
+                filteredClinics.map((c) => (
+                  <label
+                    key={c.id}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent/40"
+                  >
+                    <Checkbox checked={clinicIds.includes(c.id)} onCheckedChange={() => toggleClinic(c.id)} />
+                    {c.name}
+                  </label>
+                ))
+              )}
+            </div>
+            <p className="text-[0.7rem] text-muted-foreground/80">
+              Selecione uma ou várias — cada clínica recebe uma tarefa própria.
+            </p>
+          </div>
+
           <TaskFields
             clinics={clinics}
             profiles={profiles}
             categories={categories}
-            clinicId={clinicId}
-            onClinicIdChange={setClinicId}
+            clinicId={null}
+            onClinicIdChange={() => {}}
+            hideClinic
             category={category}
             onCategoryChange={setCategory}
             priority={priority}
@@ -130,7 +189,7 @@ export function CreateTaskDialog({
         <DialogFooter>
           <DialogClose className={buttonVariants({ variant: "outline" })}>Cancelar</DialogClose>
           <Button type="button" disabled={pending || title.trim().length < 3} onClick={submit}>
-            Criar tarefa
+            {clinicIds.length > 1 ? `Criar ${clinicIds.length} tarefas` : "Criar tarefa"}
           </Button>
         </DialogFooter>
       </DialogContent>
