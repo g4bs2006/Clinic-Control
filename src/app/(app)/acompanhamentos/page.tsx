@@ -2,7 +2,6 @@ import { listAcompanhamentos } from "@/lib/acompanhamentos/actions"
 import { listTaskSuggestions } from "@/lib/tasks/actions"
 import { Panel } from "@/components/dashboard/panel"
 import { AcompanhamentosList } from "@/components/acompanhamentos/acompanhamentos-list"
-import { AcompanhamentoSuggestions } from "@/components/acompanhamentos/acompanhamento-suggestions"
 
 export const dynamic = "force-dynamic"
 
@@ -23,10 +22,8 @@ export default async function AcompanhamentosPage() {
       </div>
 
       <Panel>
-        <AcompanhamentosList initialItems={items} />
+        <AcompanhamentosList initialItems={items} initialSuggestions={suggestions} />
       </Panel>
-
-      {suggestions.length > 0 && <AcompanhamentoSuggestions suggestions={suggestions} />}
     </main>
   )
 }
