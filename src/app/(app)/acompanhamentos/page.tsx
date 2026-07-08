@@ -22,11 +22,11 @@ export default async function AcompanhamentosPage() {
         </p>
       </div>
 
-      {suggestions.length > 0 && <AcompanhamentoSuggestions suggestions={suggestions} />}
-
       <Panel>
         <AcompanhamentosList initialItems={items} />
       </Panel>
+
+      {suggestions.length > 0 && <AcompanhamentoSuggestions suggestions={suggestions} />}
     </main>
   )
 }
