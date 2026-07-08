@@ -96,6 +96,21 @@ export async function deleteStatusRule(
   return { ok: true };
 }
 
+/** Reordena as faixas conforme a ordem dos ids (drag-and-drop). Só posições. */
+export async function reorderStatusRules(
+  orderedIds: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const results = await Promise.all(
+    orderedIds.map((id, i) => supabase.from("status_rules").update({ position: i }).eq("id", id)),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export type FunnelStepRow = {
   id: string;
   name: string;

@@ -66,6 +66,21 @@ export async function upsertTaskCategory(input: {
   return { ok: true, data: data as TaskCategoryRow };
 }
 
+/** Reordena as categorias conforme a ordem dos ids (drag-and-drop). Só posições. */
+export async function reorderTaskCategories(
+  orderedIds: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const results = await Promise.all(
+    orderedIds.map((id, i) => supabase.from("task_categories").update({ position: i }).eq("id", id)),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function deleteTaskCategory(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
