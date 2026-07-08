@@ -38,6 +38,8 @@ export type TaskSuggestionRow = {
   summary_id: string;
   summary_date: string;
   text: string;
+  description: string | null;
+  kind: "acao" | "acompanhamento";
   severity: "baixa" | "media" | "alta";
 };
 
@@ -150,7 +152,7 @@ export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
 
   let query = supabase
     .from("task_suggestions")
-    .select("id, clinic_id, summary_id, text, severity, clinics(name), whatsapp_daily_summaries(summary_date)")
+    .select("id, clinic_id, summary_id, text, description, kind, severity, clinics(name), whatsapp_daily_summaries(summary_date)")
     .eq("status", "pending");
   if (clinicIds !== null) {
     if (!clinicIds.length) return [];
@@ -169,6 +171,8 @@ export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
       summary_id: row.summary_id as string,
       summary_date: summaryRow?.summary_date ?? "",
       text: row.text as string,
+      description: (row.description as string | null) ?? null,
+      kind: (row.kind as "acao" | "acompanhamento" | null) ?? "acao",
       severity: (row.severity as "baixa" | "media" | "alta" | null) ?? "media",
     };
   });
@@ -391,7 +395,7 @@ export async function acceptTaskSuggestion(
 
   const { data: suggestion, error: fetchError } = await supabase
     .from("task_suggestions")
-    .select("id, text, clinic_id, status")
+    .select("id, text, description, clinic_id, status")
     .eq("id", suggestionId)
     .maybeSingle();
   if (fetchError) return { ok: false, error: fetchError.message };
@@ -406,7 +410,7 @@ export async function acceptTaskSuggestion(
     .insert({
       clinic_id: input.clinicId ?? (suggestion.clinic_id as string),
       title,
-      description: suggestion.text as string,
+      description: (suggestion.description as string | null) ?? null,
       category: input.category,
       priority: input.priority,
       assigned_to: input.assignedTo,

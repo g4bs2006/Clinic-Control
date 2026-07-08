@@ -19,6 +19,7 @@ import {
   Activity,
   Search,
   LogOut,
+  Eye,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/mensal", label: "Mensal", icon: CalendarDays },
   { href: "/comparativo", label: "Comparativo", icon: BarChart3 },
   { href: "/tarefas", label: "Tarefas", icon: ListTodo },
+  { href: "/acompanhamentos", label: "Acompanhamentos", icon: Eye },
   { href: "/mapa", label: "Mapa", icon: MapIcon },
   { href: "/whatsapp", label: "Gerenciador de grupos", icon: MessageCircle },
   { href: "/churns", label: "Churns", icon: UserMinus },

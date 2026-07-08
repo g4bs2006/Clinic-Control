@@ -16,10 +16,17 @@ export interface TeamEntry {
 
 export type Severidade = "baixa" | "media" | "alta";
 
+export interface SummaryTask {
+  acao: string;
+  motivo: string | null;
+  tipo: "acao" | "acompanhamento";
+}
+
 export interface SummaryHighlights {
   temas: string[];
   pendencias: string[];
   reclamacoes: string[];
+  tarefas: SummaryTask[];
   sentimento: "positivo" | "neutro" | "negativo";
   risco_churn: boolean;
   severidade: Severidade;
@@ -106,12 +113,15 @@ export function buildPrompt(
     `{`,
     `  "resumo_md": "resumo do dia em markdown, 3 a 8 linhas, em português",`,
     `  "temas": ["tema 1", "tema 2"],`,
-    `  "pendencias": ["AÇÕES concretas que a equipe da Contact.IA precisa executar como próximo passo — cada item começando com um verbo no infinitivo e específico o bastante para virar uma tarefa (ex.: 'Reenviar o link de agendamento configurado', 'Retornar para a clínica sobre a reclamação de demora na resposta'). Inclua tanto o que ficou pendente do nosso lado quanto um follow-up para CADA reclamação do cliente. Seja abrangente: liste também pendências pequenas. Não inclua o que depende apenas do cliente nem o que já foi resolvido no próprio dia"],`,
-    `  "reclamacoes": ["reclamações ou insatisfações do cliente, se houver — texto descritivo (o follow-up correspondente deve ir também em pendencias)"],`,
+    `  "pendencias": ["pontos que ficaram em aberto no dia, de forma resumida"],`,
+    `  "reclamacoes": ["reclamações ou insatisfações do cliente, se houver"],`,
+    `  "tarefas": [{ "acao": "o que fazer, começando com verbo no infinitivo e específico (ex.: 'Reenviar o link de agendamento configurado')", "motivo": "1 frase de contexto do porquê, SÓ quando ajudar a entender; senão null", "tipo": "acao ou acompanhamento" }],`,
     `  "sentimento": "positivo" | "neutro" | "negativo",`,
     `  "severidade": "baixa" | "media" | "alta",`,
     `  "continuidade": "nota curta se algo do resumo de ontem persiste ou se agravou hoje, senão null"`,
     `}`,
+    ``,
+    `Em "tarefas", liste tudo que gera trabalho para a NOSSA equipe (Contact.IA), sendo abrangente (inclua itens pequenos). Use "tipo": "acao" para algo concreto a executar; "acompanhamento" para itens de só ficar de olho/aguardar/monitorar, sem ação imediata. Inclua um item para dar retorno sobre CADA reclamação do cliente. Não inclua o que depende apenas do cliente nem o que já foi resolvido no próprio dia. "motivo" só quando agregar contexto, senão null.`,
     ``,
     `"severidade" = "alta" apenas se houver sinal claro de insatisfação grave, ameaça de cancelamento ou frustração recorrente; "media" para atrito pontual relevante; "baixa" no dia a dia normal.`,
     ``,
@@ -129,6 +139,17 @@ export function parseModelSummary(raw: string): ModelSummary | null {
     if (!resumo) return null;
     const arr = (v: unknown): string[] =>
       Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+    const tarefas: SummaryTask[] = Array.isArray(j.tarefas)
+      ? (j.tarefas as unknown[])
+          .filter((t): t is Record<string, unknown> => !!t && typeof t === "object")
+          .filter((t) => typeof t.acao === "string" && (t.acao as string).trim().length > 0)
+          .map((t) => ({
+            acao: (t.acao as string).trim(),
+            motivo:
+              typeof t.motivo === "string" && t.motivo.trim() ? t.motivo.trim() : null,
+            tipo: t.tipo === "acompanhamento" ? ("acompanhamento" as const) : ("acao" as const),
+          }))
+      : [];
     const sentimento =
       j.sentimento === "positivo" || j.sentimento === "negativo" ? j.sentimento : "neutro";
     const severidade: Severidade =
@@ -144,6 +165,7 @@ export function parseModelSummary(raw: string): ModelSummary | null {
         temas: arr(j.temas),
         pendencias: arr(j.pendencias),
         reclamacoes: arr(j.reclamacoes),
+        tarefas,
         sentimento,
         risco_churn: severidade === "alta",
         severidade,

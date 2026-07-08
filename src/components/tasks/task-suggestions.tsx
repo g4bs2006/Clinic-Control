@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Check, X } from "lucide-react"
+import { Check, X, Eye } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
 import { acceptTaskSuggestion, dismissTaskSuggestion, type TaskSuggestionRow } from "@/lib/tasks/actions"
+import { acceptSuggestionAsAcompanhamento } from "@/lib/acompanhamentos/actions"
 import type { TaskCategory, TaskPriority } from "@/lib/tasks/categories"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
@@ -52,11 +53,13 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
   const [priority, setPriority] = useState<TaskPriority>("media")
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
   const [dueDate, setDueDate] = useState("")
-  // Seleção múltipla (ação em lote). Limpa quando a lista muda (após confirmar/descartar).
   const [selected, setSelected] = useState<Set<string>>(new Set())
   useEffect(() => {
     setSelected(new Set())
   }, [suggestions])
+
+  const acoes = suggestions.filter((s) => s.kind !== "acompanhamento")
+  const acomps = suggestions.filter((s) => s.kind === "acompanhamento")
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -67,6 +70,7 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
     })
   }
 
+  // Aceita cada selecionada no destino certo: ação → tarefa; acompanhamento → entidade própria.
   function bulkConfirm() {
     const chosen = suggestions.filter((s) => selected.has(s.id))
     if (!chosen.length) return
@@ -74,6 +78,9 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
       const results = await Promise.all(
         chosen.map((s) => {
           const clinic = clinics.find((c) => c.id === s.clinic_id)
+          if (s.kind === "acompanhamento") {
+            return acceptSuggestionAsAcompanhamento(s.id, { assignedTo: clinic?.developerId ?? null })
+          }
           return acceptTaskSuggestion(s.id, {
             clinicId: s.clinic_id,
             category: defaultCategory,
@@ -85,7 +92,7 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
       )
       const okCount = results.filter((r) => r.ok).length
       const failCount = results.length - okCount
-      if (okCount) toast.success(`${okCount} tarefa(s) criada(s) a partir das sugestões.`)
+      if (okCount) toast.success(`${okCount} sugestão(ões) confirmada(s).`)
       if (failCount) toast.error(`${failCount} sugestão(ões) não puderam ser confirmadas.`)
       setSelected(new Set())
       onChanged()
@@ -133,12 +140,75 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
     })
   }
 
+  // Confirma um acompanhamento direto (sem categoria/prioridade — só o responsável padrão).
+  function confirmAcompanhamento(s: TaskSuggestionRow) {
+    const clinic = clinics.find((c) => c.id === s.clinic_id)
+    startTransition(async () => {
+      const res = await acceptSuggestionAsAcompanhamento(s.id, { assignedTo: clinic?.developerId ?? null })
+      if (res.ok) {
+        toast.success("Acompanhamento criado a partir da sugestão.")
+        onChanged()
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
+
   function dismiss(id: string) {
     startTransition(async () => {
       const res = await dismissTaskSuggestion(id)
       if (res.ok) onChanged()
       else toast.error(res.error)
     })
+  }
+
+  function renderItem(s: TaskSuggestionRow) {
+    const isAcomp = s.kind === "acompanhamento"
+    return (
+      <li key={s.id} className="flex flex-wrap items-start gap-2 py-2">
+        <Checkbox
+          checked={selected.has(s.id)}
+          onCheckedChange={() => toggleSelect(s.id)}
+          aria-label={`Selecionar sugestão ${s.text}`}
+          className="mt-0.5"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm">
+            {s.severity === "alta" && !isAcomp && (
+              <span className="mr-1.5 rounded bg-red-500/15 px-1 py-0.5 text-[0.6rem] font-bold uppercase text-red-400">
+                Urgente
+              </span>
+            )}
+            {s.text}
+          </p>
+          {s.description && (
+            <p className="mt-0.5 text-xs text-muted-foreground/90 italic">{s.description}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            <Link href={`/clinicas/${s.clinic_id}`} className="hover:text-foreground transition-colors">
+              {s.clinic_name}
+            </Link>
+            {s.summary_date && <> · {dateLabel(s.summary_date)}</>}
+          </p>
+        </div>
+        <div className="flex gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            onClick={() => (isAcomp ? confirmAcompanhamento(s) : openReview(s))}
+          >
+            <Check className="size-3.5" />
+            Confirmar
+          </Button>
+          <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => dismiss(s.id)}>
+            <X className="size-3.5" />
+            Descartar
+          </Button>
+        </div>
+      </li>
+    )
   }
 
   return (
@@ -148,7 +218,7 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
           IA sugere
         </span>
         <p className="text-xs text-muted-foreground">
-          Pendências identificadas nos resumos diários — confirme para virar tarefa ou descarte.
+          Extraído dos resumos diários — confirme para criar ou descarte.
         </p>
       </div>
 
@@ -181,55 +251,23 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
         )}
       </div>
 
-      <ul className="flex flex-col divide-y divide-amber-500/15">
-        {suggestions.map((s) => (
-          <li key={s.id} className="flex flex-wrap items-center gap-2 py-2">
-            <Checkbox
-              checked={selected.has(s.id)}
-              onCheckedChange={() => toggleSelect(s.id)}
-              aria-label={`Selecionar sugestão ${s.text}`}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm">
-                {s.severity === "alta" && (
-                  <span className="mr-1.5 rounded bg-red-500/15 px-1 py-0.5 text-[0.6rem] font-bold uppercase text-red-400">
-                    Urgente
-                  </span>
-                )}
-                {s.text}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                <Link href={`/clinicas/${s.clinic_id}`} className="hover:text-foreground transition-colors">
-                  {s.clinic_name}
-                </Link>
-                {s.summary_date && <> · {dateLabel(s.summary_date)}</>}
-              </p>
-            </div>
-            <div className="flex gap-1.5">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={pending}
-                onClick={() => openReview(s)}
-              >
-                <Check className="size-3.5" />
-                Confirmar
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => dismiss(s.id)}
-              >
-                <X className="size-3.5" />
-                Descartar
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {acoes.length > 0 && (
+        <>
+          <p className="mt-1 flex items-center gap-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+            <Check className="size-3" /> Ações sugeridas → viram tarefa
+          </p>
+          <ul className="flex flex-col divide-y divide-amber-500/15">{acoes.map(renderItem)}</ul>
+        </>
+      )}
+
+      {acomps.length > 0 && (
+        <>
+          <p className="mt-2 flex items-center gap-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+            <Eye className="size-3" /> Acompanhamentos sugeridos → viram acompanhamento
+          </p>
+          <ul className="flex flex-col divide-y divide-amber-500/15">{acomps.map(renderItem)}</ul>
+        </>
+      )}
 
       <Dialog open={reviewing != null} onOpenChange={(v) => !v && setReviewing(null)}>
         <DialogContent>
