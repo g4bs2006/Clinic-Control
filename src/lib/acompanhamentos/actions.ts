@@ -153,6 +153,17 @@ export async function acceptSuggestionAsAcompanhamento(
   if (!s) return { ok: false, error: "Sugestão não encontrada" };
   if (s.status !== "pending") return { ok: false, error: "Sugestão já revisada" };
 
+  // Sem responsável explícito → assume o desenvolvedor da clínica (carteira).
+  let assignee = input?.assignedTo ?? null;
+  if (input?.assignedTo === undefined && s.clinic_id) {
+    const { data: clinic } = await supabase
+      .from("clinics")
+      .select("developer_id")
+      .eq("id", s.clinic_id as string)
+      .maybeSingle();
+    assignee = (clinic?.developer_id as string | null) ?? null;
+  }
+
   const { data: created, error: ce } = await supabase
     .from("acompanhamentos")
     .insert({
@@ -161,7 +172,7 @@ export async function acceptSuggestionAsAcompanhamento(
       title: (s.text as string).slice(0, 200),
       description: (s.description as string | null) ?? null,
       severity: (s.severity as "baixa" | "media" | "alta") ?? "media",
-      assigned_to: input?.assignedTo ?? null,
+      assigned_to: assignee,
       source: "ia",
       created_by: user!.id,
     })

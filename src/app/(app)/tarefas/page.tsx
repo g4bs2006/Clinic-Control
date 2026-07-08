@@ -36,7 +36,7 @@ export default async function TarefasPage() {
       <Panel>
         <TaskBoard
           tasks={tasks}
-          suggestions={suggestions}
+          suggestions={suggestions.filter((s) => s.kind !== "acompanhamento")}
           clinics={clinicOptions}
           profiles={profileOptions}
           categories={categories}
