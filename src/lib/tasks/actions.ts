@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth/session";
-import { getCurrentProfile } from "@/lib/users/actions";
+import { getCurrentProfile, getCarteiraScope } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
 import { TASK_STATUS_LABEL, TASK_ATTACHMENTS_BUCKET, type TaskCategory, type TaskPriority, type TaskStatus } from "./categories";
 
@@ -60,12 +60,16 @@ async function requireUser() {
   return createClient();
 }
 
-/** IDs de clínica da carteira do desenvolvedor logado (null se for gestor — sem restrição). */
+/**
+ * IDs de clínica da carteira ativa (null = sem restrição). Desenvolvedor fica
+ * preso à própria carteira; gestor segue o seletor global (cookie): carteira
+ * escolhida restringe, "Todas" devolve null.
+ */
 async function carteiraClinicIds(): Promise<string[] | null> {
-  const profile = await getCurrentProfile();
-  if (!profile || profile.role !== "desenvolvedor") return null;
+  const scope = await getCarteiraScope();
+  if (!scope.developerFilter) return null;
   const clinics = await listClinics();
-  return clinics.filter((c) => c.developer_id === profile.id).map((c) => c.id);
+  return clinics.filter((c) => c.developer_id === scope.developerFilter).map((c) => c.id);
 }
 
 function mapTaskRow(row: Record<string, unknown>): TaskRow {

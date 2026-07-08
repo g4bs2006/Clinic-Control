@@ -1,9 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSessionUser } from "@/lib/auth/session";
 import { hashPassword, verifyPassword, generateTempPassword } from "@/lib/auth/password";
+
+/** Cookie global com a carteira (developer_id) que o gestor escolheu filtrar. */
+const CARTEIRA_COOKIE = "cc-carteira";
 
 export type UserProfile = {
   id: string;
@@ -41,16 +45,25 @@ export type CarteiraScope = {
 
 /**
  * Resolve o escopo de carteira da página: desenvolvedor enxerga só a própria
- * carteira (filtro forçado); gestor enxerga tudo e pode filtrar via ?dev=.
+ * carteira (filtro forçado); gestor enxerga tudo e pode filtrar globalmente.
+ *
+ * Para o gestor, a carteira ativa vem do cookie global `cc-carteira` (definido
+ * pelo seletor da sidebar), persistindo entre navegações. Um `devOverride`
+ * explícito (ex.: deep-link `?dev=`) tem prioridade sobre o cookie.
  */
-export async function getCarteiraScope(devParam?: string): Promise<CarteiraScope> {
+export async function getCarteiraScope(devOverride?: string): Promise<CarteiraScope> {
   const [profile, profiles] = await Promise.all([getCurrentProfile(), listUserProfiles()]);
 
   if (profile?.role === "desenvolvedor") {
     return { profile, developerFilter: profile.id, developerOptions: [] };
   }
 
-  const valid = devParam && profiles.some((p) => p.id === devParam) ? devParam : null;
+  let selected = devOverride;
+  if (selected === undefined) {
+    const store = await cookies();
+    selected = store.get(CARTEIRA_COOKIE)?.value;
+  }
+  const valid = selected && profiles.some((p) => p.id === selected) ? selected : null;
   return {
     profile,
     developerFilter: valid,
@@ -59,6 +72,30 @@ export async function getCarteiraScope(devParam?: string): Promise<CarteiraScope
       name: p.name || p.email || p.id.slice(0, 8),
     })),
   };
+}
+
+/**
+ * Define a carteira ativa do gestor no cookie global. `null` = todas as carteiras.
+ * Só gestor pode filtrar; desenvolvedor tem escopo forçado à própria carteira.
+ */
+export async function setCarteira(devId: string | null) {
+  const gate = await requireGestor();
+  if (!gate.ok) return gate;
+
+  const store = await cookies();
+  if (devId) {
+    store.set(CARTEIRA_COOKIE, devId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  } else {
+    store.delete(CARTEIRA_COOKIE);
+  }
+  revalidatePath("/", "layout");
+  return { ok: true as const };
 }
 
 async function requireGestor(): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {

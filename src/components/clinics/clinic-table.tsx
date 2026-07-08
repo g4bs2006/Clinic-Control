@@ -17,13 +17,6 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -58,14 +51,11 @@ interface ClinicTableProps {
   developers?: { id: string; name: string }[]
 }
 
-const ALL_DEVS = "__all__"
-
 export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }: ClinicTableProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [filter, setFilter] = useState<"all" | "completed" | "pending">("all")
   const [query, setQuery] = useState("")
-  const [devFilter, setDevFilter] = useState<string>(ALL_DEVS)
 
   const devNameById = new Map(developers.map((d) => [d.id, d.name]))
   const showCarteira = developers.length > 0
@@ -110,13 +100,7 @@ export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }:
       if (filter === "pending" && isCompleted) return false
     }
 
-    // 2. Carteira Filter
-    if (devFilter !== ALL_DEVS) {
-      if (devFilter === "__none__" ? c.developer_id != null : c.developer_id !== devFilter)
-        return false
-    }
-
-    // 3. Search Query Filter
+    // 2. Search Query Filter
     if (query.trim()) {
       const term = query.toLowerCase()
       const match =
@@ -193,32 +177,6 @@ export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }:
         )}
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* Filtro de carteira (só gestor) */}
-          {showCarteira && (
-            <Select
-              value={devFilter}
-              items={{
-                [ALL_DEVS]: "Todas as carteiras",
-                __none__: "Sem responsável",
-                ...Object.fromEntries(developers.map((d) => [d.id, d.name])),
-              }}
-              onValueChange={(v) => v && setDevFilter(v)}
-            >
-              <SelectTrigger className="h-9 text-xs min-w-[10rem]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_DEVS}>Todas as carteiras</SelectItem>
-                <SelectItem value="__none__">Sem responsável</SelectItem>
-                {developers.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
           {/* Input de busca local */}
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />

@@ -133,8 +133,6 @@ export default async function MapaPage({
           region={region}
           regions={regions}
           monthOptions={monthOptions}
-          developer={scope.developerFilter}
-          developers={scope.developerOptions}
           basePath="/mapa"
         />
       </div>

@@ -215,8 +215,6 @@ export default async function HomePage({
             region={region}
             regions={regions}
             monthOptions={monthOptions}
-            developer={scope.developerFilter}
-            developers={scope.developerOptions}
           />
         </div>
       </div>

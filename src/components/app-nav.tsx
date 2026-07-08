@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/actions";
+import { CarteiraSwitcher } from "@/components/carteira-switcher";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "Início", icon: LayoutDashboard },
@@ -51,8 +52,11 @@ function subscribePinned(onChange: () => void) {
 
 export function AppNav({
   user,
+  carteira,
 }: {
   user: { name: string; role: "gestor" | "desenvolvedor" } | null;
+  /** Seletor global de carteira — só para gestor (null caso contrário). */
+  carteira: { options: { id: string; name: string }[]; selected: string | null } | null;
 }) {
   const pathname = usePathname();
   // pinned: user locked it open (persisted). peek: transient hover/focus expand.
@@ -192,6 +196,19 @@ export function AppNav({
             );
           })}
         </div>
+
+        {/* Seletor global de carteira — só gestor, visível com a sidebar aberta */}
+        {open && carteira && (
+          <div className="border-t border-sidebar-border px-3 py-2.5">
+            <span className="mb-1.5 block text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
+              Carteira
+            </span>
+            <CarteiraSwitcher
+              options={carteira.options}
+              selected={carteira.selected}
+            />
+          </div>
+        )}
 
         {/* Footer: usuário logado + sair */}
         <div className="border-t border-sidebar-border px-2 py-2">

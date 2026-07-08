@@ -15,11 +15,10 @@ export default async function ClinicasPage() {
     getCarteiraScope(),
   ]);
 
-  // Desenvolvedor enxerga só a própria carteira; gestor vê tudo e filtra na tabela.
-  const clinics =
-    scope.profile?.role === "desenvolvedor"
-      ? allClinics.filter((c) => c.developer_id === scope.profile!.id)
-      : allClinics;
+  // Escopo por carteira: desenvolvedor vê só a sua; gestor filtra pelo seletor global.
+  const clinics = scope.developerFilter
+    ? allClinics.filter((c) => c.developer_id === scope.developerFilter)
+    : allClinics;
 
   // Convert Map<string, Map<string, boolean>> to a serializable Record
   const allChecks: Record<string, Record<string, boolean>> = {};
