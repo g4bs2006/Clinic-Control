@@ -77,11 +77,11 @@ export function ExportButton({ data, filename = "relatorio-carteira" }: ExportBu
     <button
       type="button"
       onClick={downloadCSV}
-      title="Exportar dados da carteira para CSV"
+      title="Exportar dados da carteira"
       className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 cursor-pointer dark:border-input dark:bg-input/30 dark:hover:bg-input/50"
     >
       <Download className="size-3.5" />
-      <span>Exportar CSV</span>
+      <span>Exportar</span>
     </button>
   )
 }
