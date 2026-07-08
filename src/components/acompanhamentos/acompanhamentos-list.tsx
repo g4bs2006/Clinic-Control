@@ -279,11 +279,20 @@ export function AcompanhamentosList({
       {/* Histórico (resolvidos/dispensados) */}
       {fechados.length > 0 && (
         <div>
-          <Button type="button" size="sm" variant="outline" onClick={() => setShowClosed((v) => !v)}>
-            {showClosed ? "Ocultar histórico" : `Histórico — resolvidos/dispensados (${fechados.length})`}
-          </Button>
+          <div className="mb-1 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">Histórico</h2>
+            <span className="text-xs tabular-nums text-muted-foreground/70">{fechados.length}</span>
+            <span className="text-xs text-muted-foreground/60">· resolvidos e dispensados</span>
+            <button
+              type="button"
+              onClick={() => setShowClosed((v) => !v)}
+              className="ml-auto text-xs text-primary hover:underline"
+            >
+              {showClosed ? "ocultar" : "mostrar"}
+            </button>
+          </div>
           {showClosed && (
-            <ul className="mt-2 flex flex-col divide-y divide-border/40">{fechados.map((a) => <Row key={a.id} a={a} />)}</ul>
+            <ul className="flex flex-col divide-y divide-border/40">{fechados.map((a) => <Row key={a.id} a={a} />)}</ul>
           )}
         </div>
       )}
