@@ -110,18 +110,19 @@ export function StatusRulesEditor({ initialRules }: StatusRulesEditorProps) {
   return (
     <div className="flex flex-col gap-3">
       {/* Column headers */}
-      <div className="hidden grid-cols-[1fr_5rem_5rem_3rem_auto] items-center gap-2 px-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:grid">
+      <div className="hidden grid-cols-[1fr_5rem_5rem_3rem_4rem_auto] items-center gap-2 px-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:grid">
         <span>Rótulo</span>
         <span className="text-right">Mín %</span>
         <span className="text-right">Máx %</span>
         <span className="text-center">Cor</span>
+        <span className="text-right">Posição</span>
         <span />
       </div>
 
       {drafts.map((d, i) => (
         <div
           key={d.id ?? `new-${i}`}
-          className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[1fr_5rem_5rem_3rem_auto]"
+          className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[1fr_5rem_5rem_3rem_4rem_auto]"
         >
           <Input
             value={d.label}
@@ -152,6 +153,14 @@ export function StatusRulesEditor({ initialRules }: StatusRulesEditorProps) {
             className="h-8 w-full cursor-pointer rounded-md border border-border bg-transparent"
             title={d.color}
             aria-label="Cor da faixa"
+          />
+          <Input
+            type="number"
+            inputMode="numeric"
+            value={d.position}
+            onChange={(e) => update(i, { position: Number(e.target.value) || 0 })}
+            className="hidden h-8 w-full text-right tabular-nums sm:block"
+            aria-label="Posição"
           />
           <div className="col-span-2 flex justify-end gap-1.5 sm:col-span-1">
             <Button
@@ -186,7 +195,8 @@ export function StatusRulesEditor({ initialRules }: StatusRulesEditorProps) {
         As faixas usam a taxa de conversão (agendados ÷ leads). Uma taxa cai na faixa
         cujo intervalo a contém — mínima inclusiva, máxima exclusiva. As faixas não
         podem se sobrepor: para inserir uma nova no meio, ajuste antes os limites das
-        vizinhas.
+        vizinhas. A coluna <strong>Posição</strong> define a ordem de exibição (menor
+        primeiro).
       </p>
     </div>
   )

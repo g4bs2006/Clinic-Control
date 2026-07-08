@@ -94,17 +94,18 @@ export function TaskCategoriesEditor({ initialCategories }: TaskCategoriesEditor
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="hidden grid-cols-[1fr_1fr_5rem_auto] items-center gap-2 px-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:grid">
+      <div className="hidden grid-cols-[1fr_1fr_5rem_4rem_auto] items-center gap-2 px-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:grid">
         <span>Identificador</span>
         <span>Rótulo</span>
         <span className="text-center">Ativa</span>
+        <span className="text-right">Posição</span>
         <span />
       </div>
 
       {drafts.map((d, i) => (
         <div
           key={d.id ?? `new-${i}`}
-          className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[1fr_1fr_5rem_auto]"
+          className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[1fr_1fr_5rem_4rem_auto]"
         >
           <Input
             value={d.slug}
@@ -123,6 +124,14 @@ export function TaskCategoriesEditor({ initialCategories }: TaskCategoriesEditor
           <div className="flex justify-center">
             <Switch checked={d.active} disabled={pending} onCheckedChange={() => toggleActive(i)} />
           </div>
+          <Input
+            type="number"
+            inputMode="numeric"
+            value={d.position}
+            onChange={(e) => update(i, { position: Number(e.target.value) || 0 })}
+            className="hidden h-8 w-full text-right tabular-nums sm:block"
+            aria-label="Posição"
+          />
           <div className="col-span-2 flex justify-end gap-1.5 sm:col-span-1">
             <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => save(i)}>
               Salvar
@@ -142,7 +151,8 @@ export function TaskCategoriesEditor({ initialCategories }: TaskCategoriesEditor
 
       <p className="text-xs text-muted-foreground">
         Desative uma categoria para tirá-la dos formulários sem afetar as tarefas que já a usam.
-        Remover só é permitido se nenhuma tarefa estiver usando a categoria.
+        Remover só é permitido se nenhuma tarefa estiver usando a categoria. A coluna{" "}
+        <strong>Posição</strong> define a ordem nos formulários (menor primeiro).
       </p>
     </div>
   )
