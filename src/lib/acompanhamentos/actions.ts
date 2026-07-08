@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { getCarteiraScope, getCurrentProfile } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
+import { TASK_ATTACHMENTS_BUCKET } from "@/lib/tasks/categories";
 
 export type AcompanhamentoStatus = "aberto" | "resolvido" | "dispensado";
 
@@ -189,4 +190,159 @@ export async function acceptSuggestionAsAcompanhamento(
   revalidatePath("/acompanhamentos");
   revalidatePath("/tarefas");
   return { ok: true, id: created.id as string };
+}
+
+// ── Detalhe: comentários + anexos ────────────────────────────────────────────
+
+export type AcompanhamentoComment = {
+  id: string;
+  body: string;
+  kind: "comment" | "system";
+  author_name: string | null;
+  created_at: string;
+};
+
+export type AcompanhamentoAttachment = {
+  id: string;
+  file_path: string;
+  file_name: string;
+  content_type: string | null;
+  size_bytes: number | null;
+  uploaded_by_name: string | null;
+  created_at: string;
+};
+
+export async function listAcompanhamentoComments(id: string): Promise<AcompanhamentoComment[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("acompanhamento_comments")
+    .select("id, body, kind, created_at, author:app_users!author_id(name)")
+    .eq("acompanhamento_id", id)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    body: row.body as string,
+    kind: row.kind as "comment" | "system",
+    author_name: unwrapName(row.author as SingleOrArray<{ name: string | null }>),
+    created_at: row.created_at as string,
+  }));
+}
+
+export async function addAcompanhamentoComment(
+  id: string,
+  body: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const text = body.trim();
+  if (!text) return { ok: false, error: "Comentário vazio" };
+  const user = await getSessionUser();
+  const { error } = await supabase
+    .from("acompanhamento_comments")
+    .insert({ acompanhamento_id: id, author_id: user!.id, body: text, kind: "comment" });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/acompanhamentos");
+  return { ok: true };
+}
+
+export async function listAcompanhamentoAttachments(id: string): Promise<AcompanhamentoAttachment[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("acompanhamento_attachments")
+    .select("id, file_path, file_name, content_type, size_bytes, created_at, uploader:app_users!uploaded_by(name)")
+    .eq("acompanhamento_id", id)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    file_path: row.file_path as string,
+    file_name: row.file_name as string,
+    content_type: (row.content_type as string | null) ?? null,
+    size_bytes: (row.size_bytes as number | null) ?? null,
+    uploaded_by_name: unwrapName(row.uploader as SingleOrArray<{ name: string | null }>),
+    created_at: row.created_at as string,
+  }));
+}
+
+/** URL assinada de upload (bucket compartilhado task-attachments, prefixo acomp/). */
+export async function createAcompanhamentoAttachmentUploadUrl(
+  id: string,
+  fileName: string,
+): Promise<{ ok: true; path: string; token: string } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const safeName = fileName.replace(/[^\w.\-]+/g, "_");
+  const path = `acomp/${id}/${Date.now()}_${safeName}`;
+  const { data, error } = await supabase.storage
+    .from(TASK_ATTACHMENTS_BUCKET)
+    .createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, error: error?.message ?? "Falha ao assinar upload" };
+  return { ok: true, path, token: data.token };
+}
+
+export async function confirmAcompanhamentoAttachment(input: {
+  acompanhamentoId: string;
+  filePath: string;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const user = await getSessionUser();
+  const { error } = await supabase.from("acompanhamento_attachments").insert({
+    acompanhamento_id: input.acompanhamentoId,
+    file_path: input.filePath,
+    file_name: input.fileName,
+    content_type: input.contentType,
+    size_bytes: input.sizeBytes,
+    uploaded_by: user!.id,
+  });
+  if (error) return { ok: false, error: error.message };
+  await supabase.from("acompanhamento_comments").insert({
+    acompanhamento_id: input.acompanhamentoId,
+    author_id: user!.id,
+    kind: "system",
+    body: `Anexou o arquivo "${input.fileName}"`,
+  });
+  revalidatePath("/acompanhamentos");
+  return { ok: true };
+}
+
+export async function getAcompanhamentoAttachmentUrl(
+  attachmentId: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data: att, error: fe } = await supabase
+    .from("acompanhamento_attachments")
+    .select("file_path")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (fe) return { ok: false, error: fe.message };
+  if (!att) return { ok: false, error: "Anexo não encontrado" };
+  const { data, error } = await supabase.storage
+    .from(TASK_ATTACHMENTS_BUCKET)
+    .createSignedUrl(att.file_path as string, 300);
+  if (error || !data) return { ok: false, error: error?.message ?? "Falha ao gerar link" };
+  return { ok: true, url: data.signedUrl };
+}
+
+export async function deleteAcompanhamentoAttachment(
+  attachmentId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const { data: att } = await supabase
+    .from("acompanhamento_attachments")
+    .select("file_path")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (att) {
+    await supabase.storage.from(TASK_ATTACHMENTS_BUCKET).remove([att.file_path as string]);
+  }
+  const { error } = await supabase.from("acompanhamento_attachments").delete().eq("id", attachmentId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/acompanhamentos");
+  return { ok: true };
 }

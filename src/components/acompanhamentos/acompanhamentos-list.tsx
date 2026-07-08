@@ -13,6 +13,7 @@ import {
   type AcompanhamentoRow,
 } from "@/lib/acompanhamentos/actions"
 import { dismissTaskSuggestion, type TaskSuggestionRow } from "@/lib/tasks/actions"
+import { AcompanhamentoDetailDialog } from "./acompanhamento-detail-dialog"
 
 const SEVERITY_DOT: Record<AcompanhamentoRow["severity"], string> = {
   alta: "bg-red-400",
@@ -48,6 +49,7 @@ export function AcompanhamentosList({
   const [pending, startTransition] = useTransition()
   const [showClosed, setShowClosed] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [openItem, setOpenItem] = useState<AcompanhamentoRow | null>(null)
 
   const abertos = items.filter((a) => a.status === "aberto")
   const fechados = items.filter((a) => a.status !== "aberto")
@@ -191,7 +193,9 @@ export function AcompanhamentosList({
         />
         <div className="min-w-0 flex-1">
           <p className={`text-sm font-medium ${closed ? "text-muted-foreground line-through" : "text-foreground"}`}>
-            {a.title}
+            <button type="button" onClick={() => setOpenItem(a)} className="text-left hover:underline">
+              {a.title}
+            </button>
             {a.status === "resolvido" && (
               <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.6rem] font-semibold text-emerald-400">
                 Resolvido
@@ -356,6 +360,8 @@ export function AcompanhamentosList({
           </ul>
         </div>
       )}
+
+      <AcompanhamentoDetailDialog item={openItem} onClose={() => setOpenItem(null)} />
     </div>
   )
 }
