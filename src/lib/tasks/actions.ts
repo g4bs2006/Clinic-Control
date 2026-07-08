@@ -174,6 +174,48 @@ export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
   });
 }
 
+/**
+ * Tarefas arquivadas (histórico) — mesmo escopo de carteira das ativas, mais
+ * recentes primeiro. Ficam fora das listagens normais (archived_at not null),
+ * mas seguem no banco; esta função é o que alimenta a visão de histórico.
+ */
+export async function listArchivedTasks(limit = 100): Promise<TaskRow[]> {
+  const supabase = await createClient();
+  const clinicIds = await carteiraClinicIds();
+
+  let query = supabase
+    .from("tasks")
+    .select(TASK_SELECT)
+    .is("parent_task_id", null)
+    .not("archived_at", "is", null);
+
+  if (clinicIds !== null) {
+    const profile = await getCurrentProfile();
+    query = clinicIds.length
+      ? query.or(`assigned_to.eq.${profile!.id},clinic_id.in.(${clinicIds.join(",")})`)
+      : query.eq("assigned_to", profile!.id);
+  }
+
+  const { data, error } = await query
+    .order("archived_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapTaskRow);
+}
+
+/** Restaura uma tarefa arquivada — volta a aparecer nas listagens ativas. */
+export async function unarchiveTask(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const { error } = await supabase.from("tasks").update({ archived_at: null }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/tarefas");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 /** Total de tarefas pendentes atribuídas ao usuário logado (widget da home). */
 export async function countMyPendingTasks(): Promise<number> {
   const profile = await getCurrentProfile();

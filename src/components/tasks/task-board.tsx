@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -23,6 +23,8 @@ import {
   updateTaskStatus,
   bulkUpdateTaskStatus,
   deleteTask,
+  listArchivedTasks,
+  unarchiveTask,
   type TaskRow,
   type TaskSuggestionRow,
 } from "@/lib/tasks/actions"
@@ -208,6 +210,36 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
   const [view, setView] = useState<"list" | "board" | "week">("list")
   const [showDone, setShowDone] = useState(false)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+  // Histórico de arquivadas — carregado sob demanda (null = oculto).
+  const [archived, setArchived] = useState<TaskRow[] | null>(null)
+  const [archivedPending, startArchivedTransition] = useTransition()
+
+  function toggleArchived() {
+    if (archived !== null) {
+      setArchived(null)
+      return
+    }
+    startArchivedTransition(async () => {
+      try {
+        setArchived(await listArchivedTasks())
+      } catch {
+        toast.error("Falha ao carregar arquivadas.")
+      }
+    })
+  }
+
+  function restore(id: string) {
+    startArchivedTransition(async () => {
+      const res = await unarchiveTask(id)
+      if (res.ok) {
+        setArchived((prev) => prev?.filter((t) => t.id !== id) ?? null)
+        toast.success("Tarefa restaurada.")
+        refresh()
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
 
   const categoryLabel = Object.fromEntries(categories.map((c) => [c.slug, c.label]))
   // Inclui categorias desativadas que ainda aparecem em alguma tarefa, senão o filtro não acha elas.
@@ -402,6 +434,20 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
           </Button>
         )}
 
+        {view === "list" && (
+          <Button
+            type="button"
+            size="sm"
+            variant={archived !== null ? "secondary" : "outline"}
+            disabled={archivedPending}
+            onClick={toggleArchived}
+            title="Histórico de tarefas arquivadas"
+          >
+            <Archive className="size-3.5" />
+            {archived !== null ? "Ocultar arquivadas" : "Arquivadas"}
+          </Button>
+        )}
+
         <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
           <Button
             type="button"
@@ -529,6 +575,50 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
               />
             ))}
           </ul>
+        </div>
+      )}
+
+      {view === "list" && archived !== null && (
+        <div className="rounded-lg border border-border/60 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Arquivadas {archived.length > 0 && `(${archived.length})`}
+            <span className="ml-2 font-normal normal-case tracking-normal text-muted-foreground/60">
+              histórico — seguem no banco; restaure para reativar
+            </span>
+          </p>
+          {archived.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma tarefa arquivada.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border/40">
+              {archived.map((t) => (
+                <li key={t.id} className="flex items-center gap-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => setOpenTaskId(t.id)}
+                      className="block truncate text-left text-sm text-muted-foreground line-through hover:text-foreground"
+                    >
+                      {t.title}
+                    </button>
+                    <span className="text-xs text-muted-foreground/70">
+                      {categoryLabel[t.category] ?? t.category}
+                      {t.clinic_name ? ` · ${t.clinic_name}` : ""}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={archivedPending}
+                    onClick={() => restore(t.id)}
+                  >
+                    <RotateCcw className="size-3.5" />
+                    Restaurar
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
