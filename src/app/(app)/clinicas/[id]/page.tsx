@@ -314,6 +314,7 @@ export default async function ClinicDetailPage({
           clinics={[{ id: clinic.id, name: clinic.name, developerId: clinic.developer_id ?? null }]}
           profiles={profiles.map((p) => ({ id: p.id, name: p.name, email: p.email }))}
           categories={taskCategories}
+          currentUserId={currentProfile?.id ?? null}
           defaultClinicId={clinic.id}
         />
       </Panel>

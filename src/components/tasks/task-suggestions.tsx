@@ -42,10 +42,14 @@ interface TaskSuggestionsProps {
   clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
   categories: TaskCategoryRow[]
+  currentUserId?: string | null
   onChanged: () => void
 }
 
-export function TaskSuggestions({ suggestions, clinics, profiles, categories, onChanged }: TaskSuggestionsProps) {
+export function TaskSuggestions({ suggestions, clinics, profiles, categories, currentUserId = null, onChanged }: TaskSuggestionsProps) {
+  // Responsável padrão da sugestão = dev da clínica; fallback = quem confirma.
+  const suggestedAssignee = (clinicId: string | null): string | null =>
+    (clinicId ? clinics.find((c) => c.id === clinicId)?.developerId : null) ?? currentUserId ?? null
   const defaultCategory = categories[0]?.slug ?? "outro"
   const [pending, startTransition] = useTransition()
   const [reviewing, setReviewing] = useState<TaskSuggestionRow | null>(null)
@@ -77,15 +81,15 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
     startTransition(async () => {
       const results = await Promise.all(
         chosen.map((s) => {
-          const clinic = clinics.find((c) => c.id === s.clinic_id)
+          const assignee = suggestedAssignee(s.clinic_id)
           if (s.kind === "acompanhamento") {
-            return acceptSuggestionAsAcompanhamento(s.id, { assignedTo: clinic?.developerId ?? null })
+            return acceptSuggestionAsAcompanhamento(s.id, { assignedTo: assignee })
           }
           return acceptTaskSuggestion(s.id, {
             clinicId: s.clinic_id,
             category: defaultCategory,
             priority: PRIORITY_BY_SEVERITY[s.severity] ?? "media",
-            assignedTo: clinic?.developerId ?? null,
+            assignedTo: assignee,
             dueDate: "",
           })
         }),
@@ -112,10 +116,9 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
   }
 
   function openReview(s: TaskSuggestionRow) {
-    const clinic = clinics.find((c) => c.id === s.clinic_id)
     setCategory(defaultCategory)
     setPriority(PRIORITY_BY_SEVERITY[s.severity] ?? "media")
-    setAssignedTo(clinic?.developerId ?? null)
+    setAssignedTo(suggestedAssignee(s.clinic_id))
     setDueDate("")
     setReviewing(s)
   }
@@ -142,9 +145,8 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, on
 
   // Confirma um acompanhamento direto (sem categoria/prioridade — só o responsável padrão).
   function confirmAcompanhamento(s: TaskSuggestionRow) {
-    const clinic = clinics.find((c) => c.id === s.clinic_id)
     startTransition(async () => {
-      const res = await acceptSuggestionAsAcompanhamento(s.id, { assignedTo: clinic?.developerId ?? null })
+      const res = await acceptSuggestionAsAcompanhamento(s.id, { assignedTo: suggestedAssignee(s.clinic_id) })
       if (res.ok) {
         toast.success("Acompanhamento criado a partir da sugestão.")
         onChanged()

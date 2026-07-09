@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useCallback, useMemo, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { Plus, Search } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -25,25 +25,54 @@ export function CreateTaskDialog({
   profiles,
   categories,
   defaultClinicId = null,
+  currentUserId = null,
   onCreated,
 }: {
-  clinics: ClinicOption[]
+  clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
   categories: TaskCategoryRow[]
   defaultClinicId?: string | null
+  currentUserId?: string | null
   onCreated: () => void
 }) {
   const defaultCategory = categories[0]?.slug ?? "outro"
+  const initialClinicIds = useMemo(() => (defaultClinicId ? [defaultClinicId] : []), [defaultClinicId])
+
+  // Responsável sugerido = dev da clínica; fallback (sem clínica, ou clínica sem
+  // dev) = quem está criando. Multi-clínica: se todas compartilham o mesmo dev
+  // usa ele, senão cai no criador (o campo é único; cada tarefa nasce com esse
+  // responsável, editável antes de salvar).
+  const suggestAssignee = useCallback(
+    (ids: string[]): string | null => {
+      if (ids.length === 0) return currentUserId
+      const devs = ids.map((id) => clinics.find((c) => c.id === id)?.developerId ?? null)
+      if (ids.length === 1) return devs[0] ?? currentUserId
+      const uniq = [...new Set(devs)]
+      return uniq.length === 1 && uniq[0] ? uniq[0] : currentUserId
+    },
+    [clinics, currentUserId],
+  )
+
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [clinicIds, setClinicIds] = useState<string[]>(defaultClinicId ? [defaultClinicId] : [])
+  const [clinicIds, setClinicIds] = useState<string[]>(initialClinicIds)
   const [clinicQuery, setClinicQuery] = useState("")
   const [category, setCategory] = useState<TaskCategory>(defaultCategory)
   const [priority, setPriority] = useState<TaskPriority>("media")
-  const [assignedTo, setAssignedTo] = useState<string | null>(null)
+  const [assignedTo, setAssignedTo] = useState<string | null>(() => suggestAssignee(initialClinicIds))
+  const [assigneeTouched, setAssigneeTouched] = useState(false)
   const [dueDate, setDueDate] = useState("")
+
+  // Sincroniza o responsável sugerido conforme a seleção de clínicas muda,
+  // enquanto o usuário não escolher manualmente (padrão render-time, sem efeito).
+  const suggested = suggestAssignee(clinicIds)
+  const [prevSuggested, setPrevSuggested] = useState(suggested)
+  if (suggested !== prevSuggested) {
+    setPrevSuggested(suggested)
+    if (!assigneeTouched) setAssignedTo(suggested)
+  }
 
   const filteredClinics = useMemo(() => {
     const q = clinicQuery.trim().toLowerCase()
@@ -53,11 +82,12 @@ export function CreateTaskDialog({
   function reset() {
     setTitle("")
     setDescription("")
-    setClinicIds(defaultClinicId ? [defaultClinicId] : [])
+    setClinicIds(initialClinicIds)
     setClinicQuery("")
     setCategory(defaultCategory)
     setPriority("media")
-    setAssignedTo(null)
+    setAssignedTo(suggestAssignee(initialClinicIds))
+    setAssigneeTouched(false)
     setDueDate("")
   }
 
@@ -181,7 +211,10 @@ export function CreateTaskDialog({
             priority={priority}
             onPriorityChange={setPriority}
             assignedTo={assignedTo}
-            onAssignedToChange={setAssignedTo}
+            onAssignedToChange={(v) => {
+              setAssignedTo(v)
+              setAssigneeTouched(true)
+            }}
             dueDate={dueDate}
             onDueDateChange={setDueDate}
           />

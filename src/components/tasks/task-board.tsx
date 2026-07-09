@@ -484,6 +484,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
           profiles={profiles}
           categories={categories}
           defaultClinicId={defaultClinicId}
+          currentUserId={currentUserId}
           onCreated={refresh}
         />
       </div>
@@ -628,6 +629,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
           clinics={clinics}
           profiles={profiles}
           categories={categories}
+          currentUserId={currentUserId}
           onChanged={refresh}
         />
       )}
