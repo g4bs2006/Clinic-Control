@@ -101,15 +101,16 @@ Pontos centrais dessa arquitetura:
 |---|---|---|
 | `/` | Dashboard | KPIs da carteira, distribuição por faixa de status, ranking de clínicas, alertas de atenção vindos dos resumos de IA, progresso de onboarding, exportação CSV. |
 | `/clinicas` | Clínicas | Cadastro, edição e busca. Provisionamento automático de conta na Helena ao criar uma clínica nova. |
-| `/clinicas/[id]` | Perfil da clínica | Funil de conversão, taxa de agendamento dia a dia, agentes de IA (personas e estágios), repositório de arquivos, credenciais de formulário, relatório de conversas, tarefas da clínica. |
+| `/clinicas/[id]` | Perfil da clínica | Funil de conversão (com mapeamento de colunas configurável por clínica), taxa de agendamento dia a dia, agentes de IA (personas e estágios), repositório de arquivos, credenciais de formulário, relatório de conversas, tarefas e checklist da clínica. |
 | `/mensal` | Grade mensal | Edição manual de leads/agendados por clínica (clínicas manuais) ou leitura ao vivo (clínicas automáticas). |
 | `/comparativo` | Comparativo | Taxa de conversão mês a mês, multi-clínica, gráfico e tabela. |
 | `/mapa` | Mapa | Geolocalização das clínicas coloridas por faixa de status. |
 | `/whatsapp` | Gerenciador de grupos | Tempo de resposta humano por clínica, resumos diários por IA, saúde da instância Evolution, canais e operadores da Helena. |
 | `/tarefas` | Tarefas | Gestão de tarefas da carteira — ver detalhes abaixo. |
+| `/acompanhamentos` | Acompanhamentos | Itens de "ficar de olho" (follow-ups passivos: aguardar/monitorar) extraídos pela IA, com ciclo próprio (aberto → resolvido/dispensado) — entidade separada das tarefas de ação. |
 | `/churns` | Churns | Registro de desligamento de clínicas, motivos, receita perdida. |
 | `/helena` | Contas Helena | Visão consolidada de todas as contas do parceiro na Helena, vinculadas ou não a uma clínica. |
-| `/configuracoes` | Configurações | Faixas de status, keywords do relatório de conversas, catálogo de categorias/checklist, usuários e papéis (carteira). |
+| `/configuracoes` | Configurações | Faixas de status, keywords do relatório de conversas (painel recolhível), categorias de tarefa, checklist (itens pessoais + fixos globais), usuários e papéis (carteira), custo e instruções de IA, grupos/equipe de WhatsApp. |
 
 ### Relatório de conversas
 
@@ -119,12 +120,17 @@ Job assíncrono por clínica e período: coleta as conversas da API da Helena em
 
 Sistema completo de gestão de pendências da carteira, com escopo por carteira (desenvolvedor vê as tarefas das próprias clínicas; gestor vê todas):
 
-- Criação manual ou automática — os resumos diários de IA identificam pendências, que entram numa fila de sugestões revisável (confirma ou descarta, nunca cria direto). A sugestão não é gerada se já existe uma tarefa aberta parecida na mesma clínica (deduplicação por similaridade de texto, `pg_trgm`).
+- Criação manual ou automática — os resumos diários de IA identificam pendências, que entram numa fila de sugestões revisável (confirma ou descarta, nunca cria direto). Cada sugestão tem um tipo: **ação** vira tarefa; **acompanhamento** vira um item da entidade `acompanhamentos`. A sugestão não é gerada se já existe um item aberto parecido na mesma clínica (deduplicação por similaridade de texto, `pg_trgm`).
 - Categoria, prioridade, responsável, prazo, clínica vinculada (opcional). A prioridade sugerida vem da severidade do resumo que originou a pendência (severidade alta → tarefa urgente).
+- **Responsável padrão = dev da clínica.** Ao criar uma tarefa/acompanhamento vinculado a uma clínica, o responsável já vem pré-selecionado com o desenvolvedor dono da carteira daquela clínica (`clinics.developer_id`), editável antes de salvar; sem clínica (ou clínica sem dev), cai em quem está criando.
 - Subtarefas reais (não um checklist): a descrição de uma tarefa pode ser enviada ao DeepSeek, que propõe uma quebra em passos menores; a lista é revisada antes de virar tarefas de fato.
 - Anexos de arquivo por tarefa.
 - Linha do tempo de atividade unificando comentários manuais e o histórico automático de mudança de status.
 - Visualização em lista, board Kanban (arrastar e soltar entre colunas de status) ou **agenda "Minha semana"** — só as tarefas atribuídas a você, em aberto, agrupadas por prazo (Atrasadas, Hoje, Esta semana, Mais tarde, Sem prazo).
+
+### Checklist de clínicas
+
+Checkboxes que aparecem no perfil de cada clínica e como resumo de progresso na listagem. Dois tipos de item: **pessoais** (cada usuário cria e vê só os seus) e **fixos/globais** (definidos apenas pelo gestor, via um switch "Fixo" no editor de Configurações; aparecem em todas as clínicas, para todos, independentemente de carteira). O estado marcado é **individual por usuário** — inclusive nos itens fixos, cada um acompanha o próprio progresso.
 
 ## Fluxos de dados principais
 
@@ -132,15 +138,17 @@ Sistema completo de gestão de pendências da carteira, com escopo por carteira 
 
 ```mermaid
 flowchart LR
-    Cards["Cards do painel CRM<br/>(Helena)"] --> Bucket["Agrupamento por dia<br/>de criação do card"]
-    Bucket --> Rule{{"Etapa conta<br/>como agendado?"}}
-    Rule -->|"Agendados, Reagendados, Faltosos,<br/>Compareceram e (Não) Fecharam,<br/>Orçamento em Aberto"| Scheduled[Agendado]
-    Rule -->|"Leads, Não Agendados,<br/>Cancelados"| NotScheduled[Não agendado]
+    Cards["Cards do painel CRM<br/>(Helena)"] --> Map["Mapeamento de colunas<br/>da clínica"]
+    Map --> Rule{{"Coluna do card<br/>configurada como agendado?"}}
+    Rule -->|"colunas de agendado<br/>(inclui fechamento)"| Scheduled[Agendado]
+    Rule -->|"demais colunas"| NotScheduled[Não agendado]
     Scheduled --> Rate["Taxa = agendados / leads"]
     NotScheduled --> Rate
 ```
 
-A taxa é cumulativa: um card avança uma única etapa por vez no Kanban da Helena, então contar exclusivamente quem está parado em "Agendados" subestima a conversão real de quem já avançou no funil dentro do mesmo mês.
+Cada clínica define **quais colunas (steps) do painel Helena** correspondem a chegada de leads, agendados e fechamento — salvo em `clinic_integrations` (`lead_step_ids`, `scheduled_step_ids`, `closing_step_ids`). Isso resolve painéis com colunas nomeadas fora do padrão. Quando uma clínica não tem mapeamento salvo, cai no **fallback canônico** por título de etapa (as 9 etapas padrão em português). Regras: leads = todos os cards do painel; fechamento é subconjunto de agendado; o faturamento é a soma do valor (`monetaryAmount`) dos cards nas colunas de fechamento.
+
+A taxa é cumulativa: um card avança uma única etapa por vez no Kanban da Helena, então contar exclusivamente quem está parado na primeira coluna de agendamento subestima a conversão real de quem já avançou no funil dentro do mesmo mês. O mapeamento vale do mês corrente em diante — snapshots mensais já congelados não são recalculados.
 
 ### Resumos diários por IA → sugestão de tarefa
 
@@ -148,13 +156,14 @@ A taxa é cumulativa: um card avança uma única etapa por vez no Kanban da Hele
 flowchart LR
     Evolution["Evolution API<br/>(grupos de WhatsApp)"] -->|"collect-groups<br/>(pg_cron, 4x/dia)"| Raw[("whatsapp_group_messages")]
     Raw -->|"summarize-groups<br/>(pg_cron, 18h45 BRT)"| DeepSeek1["DeepSeek"]
-    DeepSeek1 --> Summaries[("whatsapp_daily_summaries<br/>highlights.pendencias[]")]
-    Summaries -->|trigger de banco| Suggestions[("task_suggestions")]
+    DeepSeek1 --> Summaries[("whatsapp_daily_summaries<br/>highlights.tarefas[]")]
+    Summaries -->|trigger de banco| Suggestions[("task_suggestions<br/>kind: ação | acompanhamento")]
     Suggestions -->|revisão humana| Decision{{"Confirma ou descarta"}}
-    Decision -->|confirma| Tasks[("tasks")]
+    Decision -->|ação| Tasks[("tasks")]
+    Decision -->|acompanhamento| Acomp[("acompanhamentos")]
 ```
 
-Cada resumo recebe no prompt um digest do dia anterior (para o modelo notar continuidade de problemas) e classifica a severidade do dia (`baixa`/`media`/`alta`), que define a prioridade sugerida da tarefa. O consumo de tokens de cada chamada de IA (resumo diário, quebra de subtarefas etc.) é registrado em `ai_usage_log`, alimentando um card de custo estimado em Configurações (preços em `src/lib/ai-usage/pricing.ts`).
+Cada resumo recebe no prompt um digest do dia anterior (para o modelo notar continuidade de problemas) e classifica a severidade do dia (`baixa`/`media`/`alta`), que define a prioridade sugerida da tarefa. As mensagens são lidas por `group_jid` pelo mapeamento atual de `whatsapp_groups`, então revincular um grupo a outra clínica passa a valer imediatamente para o próximo resumo. O consumo de tokens de cada chamada de IA (resumo diário, quebra de subtarefas etc.) é registrado em `ai_usage_log`, alimentando um card de custo estimado em Configurações (preços em `src/lib/ai-usage/pricing.ts`).
 
 ### Job de relatório de conversas
 
@@ -205,6 +214,8 @@ erDiagram
         uuid clinic_id FK
         text helena_token_encrypted
         text panel_id
+        uuid_array scheduled_step_ids "mapeamento do funil"
+        uuid_array closing_step_ids "faturamento"
     }
     MONTHLY_SNAPSHOTS {
         uuid clinic_id FK
@@ -246,9 +257,10 @@ Domínios de tabelas por área:
 | Agentes de IA e arquivos | `clinic_agents`, `agent_stages`, arquivos no Storage |
 | WhatsApp | `whatsapp_groups`, `whatsapp_group_messages`, `whatsapp_team_members`, `whatsapp_daily_summaries`, `evolution_health_checks` |
 | Relatório de conversas | `report_jobs`, `report_raw_sessions`, `report_keywords` |
-| Tarefas | `tasks`, `task_suggestions`, `task_attachments`, `task_comments` |
+| Tarefas e acompanhamentos | `tasks`, `task_suggestions`, `task_attachments`, `task_comments`, `acompanhamentos` |
 | IA e segurança | `ai_usage_log` (consumo de tokens/custo), `login_attempts` (rate limit de login) |
-| Outros | `clinic_churns`, `check_items`, `clinic_checks`, `form_credentials` |
+| Checklist | `check_items` (pessoal ou fixo/global, via `is_global`), `clinic_checks` (estado por clínica **e** por usuário) |
+| Outros | `clinic_churns`, `form_credentials` |
 
 ## Autenticação e autorização
 
@@ -290,12 +302,13 @@ src/
     snapshots/, portfolio/  motor de funil, faixas de status, agregações
     reports/                job de relatório de conversas
     tasks/                  tarefas, sugestões, categorias
+    acompanhamentos/        follow-ups passivos (entidade separada das tarefas)
     whatsapp/               tempo de resposta, resumos
     crypto/                 criptografia de tokens (AES-256-GCM)
     supabase/               clients Supabase (browser, server, service role)
 supabase/
   migrations/               histórico incremental do schema (SQL puro, numerado)
-  functions/                Edge Functions (Deno): collect-groups, summarize-groups, health-evolution
+  functions/                Edge Functions (Deno): collect-groups, summarize-groups, health-evolution, notify (digest ao grupo interno)
 tests/                      testes Vitest, um arquivo por módulo de lógica pura
 docs/                       documentação de apoio (API da Helena, planos de fase)
 ```
@@ -367,6 +380,11 @@ O norte é transformar o Clinic Control de "painel que a equipe consulta" em **c
 
 ### Concluído recentemente (julho/2026)
 
+- **Mapeamento dinâmico do funil** — cada clínica escolhe quais colunas do painel Helena são leads/agendados/fechamento (com fallback canônico), resolvendo painéis fora do padrão.
+- **Responsável padrão nas tarefas/acompanhamentos** — pré-seleciona o dev da clínica (editável); o filtro de carteira passou a recortar pelo dono da carteira, não pelo usuário logado.
+- **Checklist com itens fixos (globais)** — o gestor marca um item como "Fixo" (aparece em todas as clínicas, para todos); estado marcado passou a ser individual por usuário.
+- **Configurações mais enxutas** — painel de keywords do relatório agora é recolhível (fechado por padrão).
+- **Digest ao grupo interno** — Edge Function `notify` envia os resumos de pendências/acompanhamentos ao grupo de WhatsApp da equipe (primeiro canal da frente de Notificações).
 - **Agenda "Minha semana"** — 3º modo em /tarefas com as tarefas do usuário agrupadas por prazo (primeiro passo de "matar o ClickUp").
 - **Melhorias nos resumos de IA** — comparação com o dia anterior (continuidade de problemas), classificação de severidade que define a prioridade sugerida da tarefa, e deduplicação de sugestões contra tarefas já abertas (`pg_trgm`).
 - **Custo de IA** — registro de consumo de tokens (`ai_usage_log`) e card de custo estimado em Configurações.
