@@ -19,8 +19,55 @@ const SCHEDULED_TITLES = new Set([
   "Compareceram e Fecharam",
 ]);
 
-export function buildLiveFunnel(steps: HelenaStep[], monthCards: HelenaCard[]) {
+/**
+ * Mapeamento por clínica de quais colunas (steps) do painel correspondem a cada
+ * bucket do funil. Substitui a classificação canônica por título quando presente.
+ * - scheduledStepIds: colunas que contam como "agendado".
+ * - closingStepIds:   colunas de fechamento (faturamento = soma do valor dos cards).
+ *   Fechamento é tratado como subconjunto de "agendado": um card em coluna de
+ *   fechamento também conta como agendado, mesmo que a coluna não esteja em
+ *   scheduledStepIds — evita subcontar a taxa.
+ * - leadStepIds:      colunas de "chegada de leads" (informativo; leads = todos
+ *   os cards do painel, então não altera a contagem de leads).
+ */
+export type FunnelMapping = {
+  scheduledStepIds: string[];
+  closingStepIds?: string[];
+  leadStepIds?: string[];
+};
+
+// Resolve as funções de classificação a partir do mapping (por stepId) ou, na
+// ausência dele, do comportamento canônico por título de etapa.
+function resolveClassifier(
+  steps: HelenaStep[],
+  mapping?: FunnelMapping | null,
+): {
+  isScheduled: (stepId: string, title: string | undefined) => boolean;
+  isClosing: (stepId: string, title: string | undefined) => boolean;
+} {
+  if (mapping && mapping.scheduledStepIds) {
+    const scheduled = new Set(mapping.scheduledStepIds);
+    const closing = new Set(mapping.closingStepIds ?? []);
+    return {
+      // Fechamento entra em "agendado" automaticamente (subconjunto).
+      isScheduled: (stepId) => scheduled.has(stepId) || closing.has(stepId),
+      isClosing: (stepId) => closing.has(stepId),
+    };
+  }
+  // Fallback canônico: classifica pelo TÍTULO da etapa.
+  return {
+    isScheduled: (_stepId, title) => title !== undefined && SCHEDULED_TITLES.has(title),
+    isClosing: (_stepId, title) => title === CLOSING,
+  };
+}
+
+export function buildLiveFunnel(
+  steps: HelenaStep[],
+  monthCards: HelenaCard[],
+  mapping?: FunnelMapping | null,
+) {
   const titleByStepId = new Map(steps.map((s) => [s.id, s.title]));
+  const { isScheduled, isClosing } = resolveClassifier(steps, mapping);
   const countByTitle = new Map<string, number>();
   let revenue = 0;
   let leads = 0;
@@ -30,10 +77,16 @@ export function buildLiveFunnel(steps: HelenaStep[], monthCards: HelenaCard[]) {
     if (!title) continue;
     leads++;
     countByTitle.set(title, (countByTitle.get(title) ?? 0) + 1);
-    if (SCHEDULED_TITLES.has(title)) scheduled++;
-    if (title === CLOSING) revenue += card.monetaryAmount ?? 0;
+    if (isScheduled(card.stepId, title)) scheduled++;
+    if (isClosing(card.stepId, title)) revenue += card.monetaryAmount ?? 0;
   }
-  const outSteps = CANONICAL_STEPS.map((title) => ({ title, count: countByTitle.get(title) ?? 0 }));
+  // Com mapping, exibe as etapas reais do painel (na ordem do Kanban); sem
+  // mapping, mantém as 9 etapas canônicas para compatibilidade de exibição.
+  const outSteps = mapping
+    ? [...steps]
+        .sort((a, b) => a.position - b.position)
+        .map((s) => ({ title: s.title, count: countByTitle.get(s.title) ?? 0 }))
+    : CANONICAL_STEPS.map((title) => ({ title, count: countByTitle.get(title) ?? 0 }));
   const rate = leads === 0 ? 0 : scheduled / leads;
   return { steps: outSteps, leads, scheduled, rate, revenue };
 }
@@ -50,8 +103,10 @@ export function buildDailyFunnel(
   monthCards: HelenaCard[],
   yearMonth: string,
   today: Date = new Date(),
+  mapping?: FunnelMapping | null,
 ): DailyFunnelPoint[] {
   const titleByStepId = new Map(steps.map((s) => [s.id, s.title]));
+  const { isScheduled } = resolveClassifier(steps, mapping);
   const byDay = new Map<string, { leads: number; scheduled: number }>();
   for (const card of monthCards) {
     const title = titleByStepId.get(card.stepId);
@@ -59,7 +114,7 @@ export function buildDailyFunnel(
     const day = card.createdAt.slice(0, 10);
     const bucket = byDay.get(day) ?? { leads: 0, scheduled: 0 };
     bucket.leads++;
-    if (SCHEDULED_TITLES.has(title)) bucket.scheduled++;
+    if (isScheduled(card.stepId, title)) bucket.scheduled++;
     byDay.set(day, bucket);
   }
 

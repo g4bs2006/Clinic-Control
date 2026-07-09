@@ -15,8 +15,27 @@ import {
   listUsers,
   listChannels,
 } from "@/lib/helena/client";
-import { buildLiveFunnel, buildDailyFunnel, type DailyFunnelPoint } from "@/lib/helena/funnel";
+import { buildLiveFunnel, buildDailyFunnel, type DailyFunnelPoint, type FunnelMapping } from "@/lib/helena/funnel";
 import { monthKey, monthRangeUtc } from "@/lib/snapshots/month";
+
+// Converte as colunas de mapeamento da linha de clinic_integrations no
+// FunnelMapping consumido pela lógica pura. NULL nas duas colunas-chave
+// (scheduled/closing) = clínica nunca configurada → retorna null e a lógica
+// cai no fallback canônico por título. Um array vazio é config explícita.
+function rowToMapping(row: {
+  lead_step_ids?: string[] | null;
+  scheduled_step_ids?: string[] | null;
+  closing_step_ids?: string[] | null;
+}): FunnelMapping | null {
+  const scheduled = row.scheduled_step_ids ?? null;
+  const closing = row.closing_step_ids ?? null;
+  if (scheduled === null && closing === null) return null;
+  return {
+    scheduledStepIds: scheduled ?? [],
+    closingStepIds: closing ?? [],
+    leadStepIds: row.lead_step_ids ?? [],
+  };
+}
 
 // Auth design note: these actions gate on "is there an authenticated user?" only.
 // They do NOT check per-clinic membership/ownership because the app model treats every
@@ -91,7 +110,7 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
-      .select("helena_token_encrypted, panel_id")
+      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids")
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
@@ -102,7 +121,7 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
     const panelId = data.panel_id as string;
     const { steps } = await getPanelWithSteps(token, panelId);
     const cards = await listCards(token, panelId, monthRangeUtc(yearMonth));
-    return { ok: true as const, funnel: buildLiveFunnel(steps, cards) };
+    return { ok: true as const, funnel: buildLiveFunnel(steps, cards, rowToMapping(data)) };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao ler o funil" };
   }
@@ -127,7 +146,7 @@ export async function getDailyFunnelForMonth(
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
-      .select("helena_token_encrypted, panel_id")
+      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids")
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
@@ -138,9 +157,117 @@ export async function getDailyFunnelForMonth(
     const panelId = data.panel_id as string;
     const { steps } = await getPanelWithSteps(token, panelId);
     const cards = await listCards(token, panelId, monthRangeUtc(yearMonth));
-    return { ok: true as const, days: buildDailyFunnel(steps, cards, yearMonth) };
+    return {
+      ok: true as const,
+      days: buildDailyFunnel(steps, cards, yearMonth, new Date(), rowToMapping(data)),
+    };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao ler o funil diário" };
+  }
+}
+
+// ── Configuração do mapeamento de colunas do funil ──────────────────────────
+
+export type FunnelStepOption = { id: string; title: string; position: number; cardCount: number };
+export type FunnelMappingSetup = {
+  steps: FunnelStepOption[];
+  leadStepIds: string[];
+  scheduledStepIds: string[];
+  closingStepIds: string[];
+};
+
+// Títulos usados como default quando a clínica ainda não tem mapeamento salvo,
+// espelhando a classificação canônica (fallback) para que a UI já venha
+// pré-marcada de forma sensata em painéis canônicos.
+const DEFAULT_LEAD_TITLES = new Set(["Leads"]);
+const DEFAULT_SCHEDULED_TITLES = new Set([
+  "Agendados", "Reagendados", "Faltosos",
+  "Compareceram e Não Fecharam", "Orçamento em Aberto", "Compareceram e Fecharam",
+]);
+const DEFAULT_CLOSING_TITLES = new Set(["Compareceram e Fecharam"]);
+
+/**
+ * Carrega as etapas do painel vinculado + o mapeamento salvo, para a tela de
+ * configuração das colunas. Se a clínica ainda não tem mapeamento, pré-preenche
+ * a partir dos títulos canônicos (quando existirem no painel).
+ */
+export async function getFunnelMappingSetup(
+  clinicId: string,
+): Promise<{ ok: true; setup: FunnelMappingSetup } | { ok: false; error: string }> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("clinic_integrations")
+      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids")
+      .eq("clinic_id", clinicId)
+      .single();
+    if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+    if (!data.panel_id)
+      return { ok: false as const, error: "Painel ainda não vinculado — crie na Helena e reprocesse" };
+
+    const token = decryptToken(data.helena_token_encrypted as string);
+    const { steps } = await getPanelWithSteps(token, data.panel_id as string);
+    const options: FunnelStepOption[] = steps.map((s) => ({
+      id: s.id,
+      title: s.title,
+      position: s.position,
+      cardCount: s.cardCount,
+    }));
+
+    const saved = rowToMapping(data);
+    const setup: FunnelMappingSetup = saved
+      ? {
+          steps: options,
+          leadStepIds: saved.leadStepIds ?? [],
+          scheduledStepIds: saved.scheduledStepIds,
+          closingStepIds: saved.closingStepIds ?? [],
+        }
+      : {
+          steps: options,
+          leadStepIds: options.filter((s) => DEFAULT_LEAD_TITLES.has(s.title)).map((s) => s.id),
+          scheduledStepIds: options.filter((s) => DEFAULT_SCHEDULED_TITLES.has(s.title)).map((s) => s.id),
+          closingStepIds: options.filter((s) => DEFAULT_CLOSING_TITLES.has(s.title)).map((s) => s.id),
+        };
+
+    return { ok: true as const, setup };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao carregar colunas do painel" };
+  }
+}
+
+/** Persiste o mapeamento de colunas escolhido pelo gestor para a clínica. */
+export async function saveFunnelMapping(
+  clinicId: string,
+  mapping: { leadStepIds: string[]; scheduledStepIds: string[]; closingStepIds: string[] },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data: existing } = await supabase
+      .from("clinic_integrations")
+      .select("clinic_id")
+      .eq("clinic_id", clinicId)
+      .maybeSingle();
+    if (!existing)
+      return { ok: false as const, error: "Integração não encontrada — salve a integração Helena primeiro" };
+
+    const { error } = await supabase
+      .from("clinic_integrations")
+      .update({
+        lead_step_ids: mapping.leadStepIds,
+        scheduled_step_ids: mapping.scheduledStepIds,
+        closing_step_ids: mapping.closingStepIds,
+      })
+      .eq("clinic_id", clinicId);
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao salvar mapeamento de colunas" };
   }
 }
 

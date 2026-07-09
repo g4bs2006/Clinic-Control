@@ -53,6 +53,67 @@ describe("buildLiveFunnel", () => {
   });
 });
 
+describe("buildLiveFunnel com mapping por coluna", () => {
+  // Painel não-canônico: títulos arbitrários, classificação por stepId.
+  const custom = [
+    { id: "c1", title: "Novo contato", position: 1, cardCount: 0, monetaryAmount: 0 },
+    { id: "c2", title: "Consulta marcada", position: 2, cardCount: 0, monetaryAmount: 0 },
+    { id: "c3", title: "Compareceu", position: 3, cardCount: 0, monetaryAmount: 0 },
+    { id: "c4", title: "Fechado", position: 4, cardCount: 0, monetaryAmount: 0 },
+  ];
+
+  it("classifica agendado/fechamento por stepId, ignorando títulos", () => {
+    const r = buildLiveFunnel(
+      custom,
+      [
+        card("a", "c1"), // lead puro
+        card("b", "c2"), // agendado
+        card("c", "c3"), // agendado
+        card("d", "c4", 800), // fechado (também conta como agendado)
+      ],
+      { scheduledStepIds: ["c2", "c3"], closingStepIds: ["c4"], leadStepIds: ["c1"] },
+    );
+    expect(r.leads).toBe(4); // todos os cards
+    expect(r.scheduled).toBe(3); // c2, c3 e c4 (fechamento entra em agendado)
+    expect(r.revenue).toBe(800); // só o valor do card em coluna de fechamento
+    expect(r.rate).toBeCloseTo(3 / 4);
+  });
+
+  it("fechamento é subconjunto de agendado mesmo sem estar em scheduledStepIds", () => {
+    const r = buildLiveFunnel(
+      custom,
+      [card("a", "c1"), card("b", "c4", 500)],
+      { scheduledStepIds: [], closingStepIds: ["c4"] },
+    );
+    expect(r.scheduled).toBe(1); // o card em c4 conta como agendado
+    expect(r.revenue).toBe(500);
+  });
+
+  it("step_counts reflete as etapas reais do painel na ordem de posição", () => {
+    const r = buildLiveFunnel(
+      custom,
+      [card("a", "c1"), card("b", "c1"), card("c", "c2")],
+      { scheduledStepIds: ["c2"] },
+    );
+    expect(r.steps).toEqual([
+      { title: "Novo contato", count: 2 },
+      { title: "Consulta marcada", count: 1 },
+      { title: "Compareceu", count: 0 },
+      { title: "Fechado", count: 0 },
+    ]);
+  });
+
+  it("sem mapping cai no comportamento canônico por título", () => {
+    // mesmos steps canônicos: passar mapping=null preserva a classificação antiga
+    const cards = [card("a", "s1"), card("b", "s2"), card("c", "s9", 1000)];
+    const canonical = buildLiveFunnel(steps, cards);
+    const explicitNull = buildLiveFunnel(steps, cards, null);
+    expect(explicitNull).toEqual(canonical);
+    expect(canonical.scheduled).toBe(2); // s2 (Agendados) + s9 (Compareceram e Fecharam)
+    expect(canonical.revenue).toBe(1000);
+  });
+});
+
 describe("buildDailyFunnel", () => {
   const today = new Date("2026-06-15T12:00:00Z");
 
@@ -88,5 +149,24 @@ describe("buildDailyFunnel", () => {
     );
     const day5 = points.find((p) => p.day === "2026-06-05");
     expect(day5).toEqual({ day: "2026-06-05", leads: 1, scheduled: 1, rate: 1 });
+  });
+
+  it("aplica o mapping por coluna também no diário", () => {
+    const custom = [
+      { id: "c1", title: "Novo", position: 1, cardCount: 0, monetaryAmount: 0 },
+      { id: "c2", title: "Marcado", position: 2, cardCount: 0, monetaryAmount: 0 },
+    ];
+    const points = buildDailyFunnel(
+      custom,
+      [
+        card("a", "c1", null, "2026-06-05T08:00:00Z"),
+        card("b", "c2", null, "2026-06-05T09:00:00Z"),
+      ],
+      "2026-06",
+      today,
+      { scheduledStepIds: ["c2"] },
+    );
+    const day5 = points.find((p) => p.day === "2026-06-05");
+    expect(day5).toEqual({ day: "2026-06-05", leads: 2, scheduled: 1, rate: 0.5 });
   });
 });

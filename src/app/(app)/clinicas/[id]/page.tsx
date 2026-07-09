@@ -31,6 +31,7 @@ import { ClinicChecks } from "@/components/clinics/clinic-checks"
 import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
 import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
 import { ClinicFunnelSetup } from "@/components/clinics/clinic-funnel-setup"
+import { ClinicFunnelMapping } from "@/components/clinics/clinic-funnel-mapping"
 import { listReportJobs } from "@/lib/reports/actions"
 import { ReportPanel } from "@/components/reports/report-panel"
 import { getDailyFunnelForMonth } from "@/lib/clinics/integration-actions"
@@ -407,6 +408,7 @@ export default async function ClinicDetailPage({
         {liveFunnel ? (
           <Panel title="Funil de leads" subtitle="mês corrente · ao vivo da Helena">
             <FunnelView steps={liveFunnel.steps} />
+            <ClinicFunnelMapping clinicId={id} />
           </Panel>
         ) : (
           <Panel
