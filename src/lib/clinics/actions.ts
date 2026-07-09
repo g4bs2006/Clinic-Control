@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth/session";
+import { getCarteiraScope } from "@/lib/users/actions";
 import { clinicInputSchema, type ClinicInput, type Clinic } from "./schema";
 import { regionFromState } from "./region";
 import { geocodeAddress } from "@/lib/geocoding/nominatim";
@@ -27,6 +28,18 @@ export async function listClinics(): Promise<Clinic[]> {
     .order("name");
   if (error) throw new Error(error.message);
   return (data ?? []) as Clinic[];
+}
+
+/**
+ * Clínicas dentro do escopo de carteira do usuário — mesmo recorte das páginas
+ * com dado por clínica: desenvolvedor vê só as suas; gestor segue o seletor
+ * global (cookie), "Todas" devolve tudo. Usado na busca global (Ctrl+K) para não
+ * expor/navegar clínicas fora da carteira.
+ */
+export async function listClinicsInScope(): Promise<Clinic[]> {
+  const [all, scope] = await Promise.all([listClinics(), getCarteiraScope()]);
+  if (!scope.developerFilter) return all;
+  return all.filter((c) => c.developer_id === scope.developerFilter);
 }
 
 export async function getClinic(id: string): Promise<Clinic | null> {

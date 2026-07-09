@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Building2, MapPin, X } from "lucide-react";
-import { listClinics } from "@/lib/clinics/actions";
+import { listClinicsInScope } from "@/lib/clinics/actions";
 import type { Clinic } from "@/lib/clinics/schema";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +26,9 @@ export function GlobalSearch() {
     setIsOpen(true);
     setQuery("");
     setActiveIndex(0);
+    // Recarrega a cada abertura para refletir a carteira atual (o gestor pode ter
+    // trocado o seletor global desde a última vez).
+    setClinics(null);
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
@@ -61,7 +64,7 @@ export function GlobalSearch() {
   useEffect(() => {
     if (!isOpen || clinics !== null) return;
     let cancelled = false;
-    listClinics()
+    listClinicsInScope()
       .then((data) => {
         if (!cancelled) setClinics(data);
       })
