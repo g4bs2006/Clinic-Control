@@ -133,16 +133,27 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
                             {s.cardCount}
                           </span>
                         </td>
-                        {BUCKETS.map((b) => (
-                          <td key={b.key} className="px-3 py-2 text-center">
-                            <Checkbox
-                              checked={sel[b.key].has(s.id)}
-                              onCheckedChange={(checked) =>
-                                toggleCell(b.key, s.id, checked === true)
-                              }
-                            />
-                          </td>
-                        ))}
+                        {BUCKETS.map((b) => {
+                          const checked = sel[b.key].has(s.id);
+                          return (
+                            <td key={b.key} className="p-0 text-center">
+                              {/* Célula inteira clicável — alvo grande e fácil de acertar */}
+                              <button
+                                type="button"
+                                onClick={() => toggleCell(b.key, s.id, !checked)}
+                                aria-pressed={checked}
+                                aria-label={`${b.label}: ${s.title}`}
+                                className="flex w-full items-center justify-center px-3 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  tabIndex={-1}
+                                  className="size-5 pointer-events-none"
+                                />
+                              </button>
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>

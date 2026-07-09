@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { getHelenaSetupOverview, getLiveFunnel, saveIntegration } from "@/lib/clinics/integration-actions";
 import type { HelenaChannel, HelenaCompany } from "@/lib/helena/types";
+import { ClinicFunnelMapping } from "@/components/clinics/clinic-funnel-mapping";
 
 interface Panel {
   id: string;
@@ -276,6 +277,10 @@ export function HelenaIntegrationFields({
           </div>
         </div>
       )}
+
+      {/* Configuração das colunas do funil — só faz sentido para clínica já
+          existente com integração salva (lê o painel vinculado). */}
+      {clinicId && <ClinicFunnelMapping clinicId={clinicId} />}
 
       {/* Create-mode note */}
       {!clinicId && selectedPanelId && (
