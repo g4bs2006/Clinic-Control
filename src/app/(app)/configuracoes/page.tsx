@@ -1,5 +1,6 @@
 import { listStatusRules, listFunnelSteps } from "@/lib/snapshots/rules-actions"
 import { listCheckItems } from "@/lib/clinics/check-items-actions"
+import { listCheckCategories } from "@/lib/clinics/check-categories-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
 import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
@@ -16,6 +17,7 @@ import { CollapsiblePanel } from "@/components/dashboard/collapsible-panel"
 import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
 import { TaskCategoriesEditor } from "@/components/settings/task-categories-editor"
 import { CheckItemsEditor } from "@/components/settings/check-items-editor"
+import { CheckCategoriesEditor } from "@/components/settings/check-categories-editor"
 import { WhatsappGroupsEditor } from "@/components/settings/whatsapp-groups-editor"
 import { WhatsappTeamEditor } from "@/components/settings/whatsapp-team-editor"
 import { UsersEditor } from "@/components/settings/users-editor"
@@ -24,10 +26,11 @@ import { ChangePasswordForm } from "@/components/settings/change-password-form"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats] = await Promise.all([
+  const [rules, steps, checkItems, checkCategories, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
+    listCheckCategories(),
     listClinics(),
     listWhatsappGroups(),
     listTeamMembers(),
@@ -186,9 +189,20 @@ export default async function ConfiguracoesPage() {
       >
         <CheckItemsEditor
           initialItems={checkItems}
+          categories={checkCategories}
           canMakeGlobal={currentProfile?.role === "gestor"}
         />
       </Panel>
+
+      {/* ── Categorias do checklist (gestor) ───────────────────── */}
+      {currentProfile?.role === "gestor" && (
+        <Panel
+          title="Categorias do checklist"
+          subtitle="organizam os itens por etapa (ex.: Painéis, n8n, Agente de IA, Chatbot)"
+        >
+          <CheckCategoriesEditor initialCategories={checkCategories} />
+        </Panel>
+      )}
 
       {/* ── WhatsApp: grupos → clínicas ────────────────────────── */}
       <Panel

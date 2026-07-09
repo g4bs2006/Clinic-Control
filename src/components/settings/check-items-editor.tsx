@@ -7,29 +7,47 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   upsertCheckItem,
   deleteCheckItem,
   type CheckItemRow,
 } from "@/lib/clinics/check-items-actions"
+import type { CheckCategoryRow } from "@/lib/clinics/check-categories-actions"
+
+const NO_CATEGORY = "__none__"
 
 interface DraftItem {
   id?: string
   label: string
   position: number
   isGlobal: boolean
+  categoryId: string | null
 }
 
 function toDraft(item: CheckItemRow): DraftItem {
-  return { id: item.id, label: item.label, position: item.position, isGlobal: item.is_global }
+  return {
+    id: item.id,
+    label: item.label,
+    position: item.position,
+    isGlobal: item.is_global,
+    categoryId: item.category_id,
+  }
 }
 
 interface CheckItemsEditorProps {
   initialItems: CheckItemRow[]
+  categories: CheckCategoryRow[]
   /** Mostra o switch "Fixo" por linha (marca o item como global). Só gestor. */
   canMakeGlobal?: boolean
 }
 
-export function CheckItemsEditor({ initialItems, canMakeGlobal = false }: CheckItemsEditorProps) {
+export function CheckItemsEditor({ initialItems, categories, canMakeGlobal = false }: CheckItemsEditorProps) {
   const router = useRouter()
   const [drafts, setDrafts] = useState<DraftItem[]>(initialItems.map(toDraft))
   const [pending, startTransition] = useTransition()
@@ -42,7 +60,7 @@ export function CheckItemsEditor({ initialItems, canMakeGlobal = false }: CheckI
 
   function addRow() {
     const nextPos = drafts.reduce((max, d) => Math.max(max, d.position), 0) + 1
-    setDrafts((prev) => [...prev, { label: "", position: nextPos, isGlobal: false }])
+    setDrafts((prev) => [...prev, { label: "", position: nextPos, isGlobal: false, categoryId: null }])
   }
 
   function save(index: number) {
@@ -57,6 +75,7 @@ export function CheckItemsEditor({ initialItems, canMakeGlobal = false }: CheckI
         label: d.label,
         position: d.position,
         isGlobal: d.isGlobal,
+        categoryId: d.categoryId,
       })
       if (res.ok) {
         toast.success("Item salvo.")
@@ -113,6 +132,26 @@ export function CheckItemsEditor({ initialItems, canMakeGlobal = false }: CheckI
             placeholder="Ex.: Contrato assinado"
             className="h-8 min-w-40 flex-1"
           />
+          <Select
+            value={d.categoryId ?? NO_CATEGORY}
+            items={{
+              [NO_CATEGORY]: "Sem categoria",
+              ...Object.fromEntries(categories.map((c) => [c.id, c.label])),
+            }}
+            onValueChange={(v) => update(i, { categoryId: v && v !== NO_CATEGORY ? v : null })}
+          >
+            <SelectTrigger className="h-8 w-40 shrink-0">
+              <SelectValue placeholder="Categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_CATEGORY}>Sem categoria</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input
             type="number"
             inputMode="numeric"

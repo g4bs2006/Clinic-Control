@@ -12,6 +12,7 @@ export type CheckItemRow = {
   label: string;
   position: number;
   is_global: boolean;
+  category_id: string | null;
 };
 
 export type ClinicCheckRow = {
@@ -20,6 +21,9 @@ export type ClinicCheckRow = {
   position: number;
   checked: boolean;
   is_global: boolean;
+  category_id: string | null;
+  category_label: string | null;
+  category_position: number | null;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -55,7 +59,7 @@ export async function listCheckItems(ownerId?: string): Promise<CheckItemRow[]> 
   if (!owner) return [];
   const { data, error } = await supabase
     .from("check_items")
-    .select("id, label, position, is_global")
+    .select("id, label, position, is_global, category_id")
     .eq("owner_id", owner)
     .order("position");
   if (error) throw new Error(error.message);
@@ -69,7 +73,7 @@ export async function listVisibleCheckItems(userId?: string): Promise<CheckItemR
   if (!owner) return [];
   const { data, error } = await supabase
     .from("check_items")
-    .select("id, label, position, is_global")
+    .select("id, label, position, is_global, category_id")
     .or(`owner_id.eq.${owner},is_global.eq.true`)
     .order("position");
   if (error) throw new Error(error.message);
@@ -81,6 +85,7 @@ export async function upsertCheckItem(item: {
   label: string;
   position: number;
   isGlobal?: boolean;
+  categoryId?: string | null;
 }): Promise<{ ok: true; data?: CheckItemRow } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
@@ -94,7 +99,12 @@ export async function upsertCheckItem(item: {
   const label = item.label.trim();
   if (label.length < 2) return { ok: false, error: "Rótulo muito curto" };
 
-  const payload = { label, position: item.position, is_global: isGlobal };
+  const payload = {
+    label,
+    position: item.position,
+    is_global: isGlobal,
+    category_id: item.categoryId ?? null,
+  };
 
   // Criação: nasce com o dono (criador) e o flag is_global.
   if (!item.id) {
@@ -175,7 +185,7 @@ export async function listClinicChecks(
   const [itemsRes, checksRes] = await Promise.all([
     supabase
       .from("check_items")
-      .select("id, label, position, is_global")
+      .select("id, label, position, is_global, category_id, check_item_categories(label, position)")
       .or(`owner_id.eq.${owner},is_global.eq.true`)
       .order("position"),
     supabase
@@ -192,13 +202,23 @@ export async function listClinicChecks(
     (checksRes.data ?? []).map((c) => [c.check_item_id, c.checked as boolean]),
   );
 
-  return (itemsRes.data ?? []).map((item) => ({
-    check_item_id: item.id as string,
-    label: item.label as string,
-    position: item.position as number,
-    is_global: item.is_global as boolean,
-    checked: checkedMap.get(item.id as string) ?? false,
-  }));
+  return (itemsRes.data ?? []).map((item) => {
+    const catRaw = item.check_item_categories as
+      | { label: string; position: number }
+      | { label: string; position: number }[]
+      | null;
+    const cat = Array.isArray(catRaw) ? catRaw[0] ?? null : catRaw;
+    return {
+      check_item_id: item.id as string,
+      label: item.label as string,
+      position: item.position as number,
+      is_global: item.is_global as boolean,
+      category_id: (item.category_id as string | null) ?? null,
+      category_label: cat?.label ?? null,
+      category_position: cat?.position ?? null,
+      checked: checkedMap.get(item.id as string) ?? false,
+    };
+  });
 }
 
 /** clinic_checks de um usuário (default: logado) em todas as clínicas, p/ a listagem. */
