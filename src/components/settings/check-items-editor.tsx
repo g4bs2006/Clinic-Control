@@ -23,9 +23,11 @@ function toDraft(item: CheckItemRow): DraftItem {
 
 interface CheckItemsEditorProps {
   initialItems: CheckItemRow[]
+  /** Quando true, os itens criados/editados aqui são fixos (globais). */
+  isGlobal?: boolean
 }
 
-export function CheckItemsEditor({ initialItems }: CheckItemsEditorProps) {
+export function CheckItemsEditor({ initialItems, isGlobal = false }: CheckItemsEditorProps) {
   const router = useRouter()
   const [drafts, setDrafts] = useState<DraftItem[]>(initialItems.map(toDraft))
   const [pending, startTransition] = useTransition()
@@ -52,6 +54,7 @@ export function CheckItemsEditor({ initialItems }: CheckItemsEditorProps) {
         id: d.id,
         label: d.label,
         position: d.position,
+        isGlobal,
       })
       if (res.ok) {
         toast.success("Item salvo.")

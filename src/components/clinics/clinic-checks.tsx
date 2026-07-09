@@ -123,6 +123,11 @@ export function ClinicChecks({ clinicId, checks }: ClinicChecksProps) {
               {item.checked && <Check className="size-3" strokeWidth={3} />}
             </span>
             <span className="truncate">{item.label}</span>
+            {item.is_global && (
+              <span className="ml-auto shrink-0 rounded bg-brand/15 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-brand">
+                fixo
+              </span>
+            )}
           </button>
         ))}
       </div>

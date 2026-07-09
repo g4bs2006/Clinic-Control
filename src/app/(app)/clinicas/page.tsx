@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { listClinics } from "@/lib/clinics/actions";
-import { listCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-actions";
+import { listVisibleCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-actions";
 import { getCarteiraScope } from "@/lib/users/actions";
 import { ClinicTable } from "@/components/clinics/clinic-table";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function ClinicasPage() {
   const [allClinics, checkItems, allChecksMap, scope] = await Promise.all([
     listClinics(),
-    listCheckItems(),
+    listVisibleCheckItems(),
     listAllClinicChecks(),
     getCarteiraScope(),
   ]);

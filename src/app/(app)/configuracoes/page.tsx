@@ -1,5 +1,5 @@
 import { listStatusRules, listFunnelSteps } from "@/lib/snapshots/rules-actions"
-import { listCheckItems } from "@/lib/clinics/check-items-actions"
+import { listCheckItems, listGlobalCheckItems } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
 import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
@@ -12,6 +12,7 @@ import { purposeLabel, formatBrl } from "@/lib/ai-usage/pricing"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { ReportKeywordsEditor } from "@/components/settings/report-keywords-editor"
 import { Panel } from "@/components/dashboard/panel"
+import { CollapsiblePanel } from "@/components/dashboard/collapsible-panel"
 import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
 import { TaskCategoriesEditor } from "@/components/settings/task-categories-editor"
 import { CheckItemsEditor } from "@/components/settings/check-items-editor"
@@ -23,10 +24,11 @@ import { ChangePasswordForm } from "@/components/settings/change-password-form"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats] = await Promise.all([
+  const [rules, steps, checkItems, globalCheckItems, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
+    listGlobalCheckItems(),
     listClinics(),
     listWhatsappGroups(),
     listTeamMembers(),
@@ -163,8 +165,8 @@ export default async function ConfiguracoesPage() {
         </p>
       </Panel>
 
-      {/* ── Keywords do relatório de conversas ─────────────────── */}
-      <Panel
+      {/* ── Keywords do relatório de conversas (recolhível, fechado) ── */}
+      <CollapsiblePanel
         title="Keywords do relatório de conversas"
         subtitle="termos que classificam cada estágio do funil E0-E8 na análise das conversas"
       >
@@ -172,7 +174,17 @@ export default async function ConfiguracoesPage() {
           initialRows={reportKeywords}
           readOnly={currentProfile?.role !== "gestor"}
         />
-      </Panel>
+      </CollapsiblePanel>
+
+      {/* ── Checklist fixo (global, gerenciado pelo gestor) ────── */}
+      {currentProfile?.role === "gestor" && (
+        <Panel
+          title="Checklist fixo (global)"
+          subtitle="itens que aparecem em todas as clínicas, para todos os usuários — cada um marca o próprio progresso"
+        >
+          <CheckItemsEditor initialItems={globalCheckItems} isGlobal />
+        </Panel>
+      )}
 
       {/* ── Checklist items (pessoais do usuário logado) ───────── */}
       <Panel
