@@ -66,6 +66,23 @@ export async function listCheckItems(ownerId?: string): Promise<CheckItemRow[]> 
   return (data ?? []) as CheckItemRow[];
 }
 
+/**
+ * Itens do EDITOR de Configurações. O checklist fixo é compartilhado, então
+ * qualquer gestor deve poder gerenciar TODOS os fixos (não só os que criou):
+ * gestor vê os pessoais dele + todos os fixos; dev vê só os pessoais dele.
+ */
+export async function listManagedCheckItems(): Promise<CheckItemRow[]> {
+  const supabase = await createClient();
+  const owner = await currentUserId();
+  if (!owner) return [];
+  const gestor = await isGestor();
+  let query = supabase.from("check_items").select("id, label, position, is_global, category_id");
+  query = gestor ? query.or(`owner_id.eq.${owner},is_global.eq.true`) : query.eq("owner_id", owner);
+  const { data, error } = await query.order("position");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CheckItemRow[];
+}
+
 /** Itens VISÍVEIS para um usuário: os pessoais dele + todos os fixos. */
 export async function listVisibleCheckItems(userId?: string): Promise<CheckItemRow[]> {
   const supabase = await createClient();

@@ -1,5 +1,5 @@
 import { listStatusRules, listFunnelSteps } from "@/lib/snapshots/rules-actions"
-import { listCheckItems } from "@/lib/clinics/check-items-actions"
+import { listManagedCheckItems } from "@/lib/clinics/check-items-actions"
 import { listCheckCategories } from "@/lib/clinics/check-categories-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
@@ -29,7 +29,7 @@ export default async function ConfiguracoesPage() {
   const [rules, steps, checkItems, checkCategories, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
-    listCheckItems(),
+    listManagedCheckItems(),
     listCheckCategories(),
     listClinics(),
     listWhatsappGroups(),
@@ -183,7 +183,7 @@ export default async function ConfiguracoesPage() {
         title="Meu checklist de clínicas"
         subtitle={
           currentProfile?.role === "gestor"
-            ? "seus itens (só você vê) — marque “Fixo” para valer em todas as clínicas, para todos"
+            ? "seus itens pessoais + todos os fixos (compartilhados entre gestores) — marque “Fixo” para valer em todas as clínicas, para todos"
             : "itens pessoais — cada usuário tem os seus; aparecem em todas as clínicas só para você"
         }
       >
