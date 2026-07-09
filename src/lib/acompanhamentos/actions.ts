@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth/session";
-import { getCarteiraScope, getCurrentProfile } from "@/lib/users/actions";
+import { getCarteiraScope } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
 import { TASK_ATTACHMENTS_BUCKET } from "@/lib/tasks/categories";
 
@@ -39,12 +39,14 @@ async function requireUser() {
   return createClient();
 }
 
-/** IDs de clínica da carteira ativa (null = sem restrição). Mesma regra das tarefas. */
-async function carteiraClinicIds(): Promise<string[] | null> {
+/** Escopo de carteira ativa (mesma regra das tarefas). `clinicIds=null` = sem
+ *  restrição; `filter` é o dev da carteira, usado no "OR" de atribuídos. */
+async function carteiraScope(): Promise<{ filter: string | null; clinicIds: string[] | null }> {
   const scope = await getCarteiraScope();
-  if (!scope.developerFilter) return null;
+  if (!scope.developerFilter) return { filter: null, clinicIds: null };
   const clinics = await listClinics();
-  return clinics.filter((c) => c.developer_id === scope.developerFilter).map((c) => c.id);
+  const clinicIds = clinics.filter((c) => c.developer_id === scope.developerFilter).map((c) => c.id);
+  return { filter: scope.developerFilter, clinicIds };
 }
 
 function mapRow(row: Record<string, unknown>): AcompanhamentoRow {
@@ -67,15 +69,16 @@ function mapRow(row: Record<string, unknown>): AcompanhamentoRow {
 /** Lista os acompanhamentos respeitando a carteira (mesma regra das tarefas). */
 export async function listAcompanhamentos(): Promise<AcompanhamentoRow[]> {
   const supabase = await createClient();
-  const clinicIds = await carteiraClinicIds();
+  const { filter, clinicIds } = await carteiraScope();
 
   let query = supabase.from("acompanhamentos").select(SELECT);
   if (clinicIds !== null) {
-    const profile = await getCurrentProfile();
+    const devId = filter as string;
     query = clinicIds.length
-      ? query.or(`assigned_to.eq.${profile!.id},clinic_id.in.(${clinicIds.join(",")})`)
-      : query.eq("assigned_to", profile!.id);
+      ? query.or(`assigned_to.eq.${devId},clinic_id.in.(${clinicIds.join(",")})`)
+      : query.eq("assigned_to", devId);
   }
+
 
   const { data, error } = await query
     .order("status", { ascending: true })

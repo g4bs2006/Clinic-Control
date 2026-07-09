@@ -63,15 +63,17 @@ async function requireUser() {
 }
 
 /**
- * IDs de clínica da carteira ativa (null = sem restrição). Desenvolvedor fica
- * preso à própria carteira; gestor segue o seletor global (cookie): carteira
- * escolhida restringe, "Todas" devolve null.
+ * Escopo de carteira ativa. `clinicIds=null` = sem restrição (gestor em "Todas").
+ * `filter` é o dev da carteira (developerFilter): desenvolvedor fica preso ao
+ * próprio id; gestor segue o seletor global (cookie). Usado tanto para o recorte
+ * por clínica quanto para o "OR" de tarefas atribuídas ao dono da carteira.
  */
-async function carteiraClinicIds(): Promise<string[] | null> {
+async function carteiraScope(): Promise<{ filter: string | null; clinicIds: string[] | null }> {
   const scope = await getCarteiraScope();
-  if (!scope.developerFilter) return null;
+  if (!scope.developerFilter) return { filter: null, clinicIds: null };
   const clinics = await listClinics();
-  return clinics.filter((c) => c.developer_id === scope.developerFilter).map((c) => c.id);
+  const clinicIds = clinics.filter((c) => c.developer_id === scope.developerFilter).map((c) => c.id);
+  return { filter: scope.developerFilter, clinicIds };
 }
 
 function mapTaskRow(row: Record<string, unknown>): TaskRow {
@@ -105,7 +107,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
  */
 export async function listTasks(filters: TaskFilters = {}): Promise<TaskRow[]> {
   const supabase = await createClient();
-  const clinicIds = await carteiraClinicIds();
+  const { filter, clinicIds } = await carteiraScope();
 
   let query = supabase
     .from("tasks")
@@ -114,10 +116,10 @@ export async function listTasks(filters: TaskFilters = {}): Promise<TaskRow[]> {
     .is("archived_at", null);
 
   if (clinicIds !== null) {
-    const profile = await getCurrentProfile();
+    const devId = filter as string;
     query = clinicIds.length
-      ? query.or(`assigned_to.eq.${profile!.id},clinic_id.in.(${clinicIds.join(",")})`)
-      : query.eq("assigned_to", profile!.id);
+      ? query.or(`assigned_to.eq.${devId},clinic_id.in.(${clinicIds.join(",")})`)
+      : query.eq("assigned_to", devId);
   }
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.category) query = query.eq("category", filters.category);
@@ -148,7 +150,7 @@ export async function listClinicTasks(clinicId: string): Promise<TaskRow[]> {
 /** Sugestões pendentes de revisão (escopo: mesma regra de carteira). */
 export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
   const supabase = await createClient();
-  const clinicIds = await carteiraClinicIds();
+  const { clinicIds } = await carteiraScope();
 
   let query = supabase
     .from("task_suggestions")
@@ -185,7 +187,7 @@ export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
  */
 export async function listArchivedTasks(limit = 100): Promise<TaskRow[]> {
   const supabase = await createClient();
-  const clinicIds = await carteiraClinicIds();
+  const { filter, clinicIds } = await carteiraScope();
 
   let query = supabase
     .from("tasks")
@@ -194,10 +196,10 @@ export async function listArchivedTasks(limit = 100): Promise<TaskRow[]> {
     .not("archived_at", "is", null);
 
   if (clinicIds !== null) {
-    const profile = await getCurrentProfile();
+    const devId = filter as string;
     query = clinicIds.length
-      ? query.or(`assigned_to.eq.${profile!.id},clinic_id.in.(${clinicIds.join(",")})`)
-      : query.eq("assigned_to", profile!.id);
+      ? query.or(`assigned_to.eq.${devId},clinic_id.in.(${clinicIds.join(",")})`)
+      : query.eq("assigned_to", devId);
   }
 
   const { data, error } = await query
