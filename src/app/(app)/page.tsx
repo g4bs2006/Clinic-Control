@@ -12,10 +12,7 @@ import { listCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-a
 import { listClinics } from "@/lib/clinics/actions"
 import { listAttentionSummaries } from "@/lib/whatsapp/actions"
 import { countMyPendingTasks } from "@/lib/tasks/actions"
-import { getCarteiraHealth } from "@/lib/health/data"
-import { HEALTH_HINT } from "@/lib/health/score"
-import { HealthBadge } from "@/components/dashboard/health-badge"
-import { CheckCircle2, ListTodo, ArrowDown, ArrowUp } from "lucide-react"
+import { CheckCircle2, ListTodo } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -136,41 +133,22 @@ export default async function HomePage({
     ? (totalCheckedChecks / (totalClinics * totalCheckItemsCount)) * 100
     : 0
 
-  const nameByClinicId = new Map(allRows.map((r) => [r.clinicId, r.name]))
-
-  // ── Health score da carteira (snapshot diário, sob demanda) ─────────────────
-  // Passa a taxa do mês corrente já resolvida (evita rebuscar a Helena) só quando
-  // o dashboard está no mês atual; em meses passados o health lê o snapshot do dia.
-  const currentRateOverride =
-    month === currentMonth
-      ? new Map(allRows.filter((r) => r.source !== "none").map((r) => [r.clinicId, r.rate]))
-      : null
-  const healthMap = await getCarteiraHealth(
-    allRows.map((r) => r.clinicId),
-    currentRateOverride,
-  )
-
-  // Clínicas que precisam de atenção: Risco primeiro, depois Atenção, por score
-  // crescente. Cada uma com o principal motivo e o delta desde ontem.
-  const bandRank: Record<string, number> = { risco: 0, atencao: 1, saudavel: 2 }
-  const healthAttention = [...healthMap.values()]
-    .filter((h) => h.status === "scored" && (h.band === "risco" || h.band === "atencao"))
-    .sort((a, b) => (bandRank[a.band!] - bandRank[b.band!]) || (a.score! - b.score!))
-    .slice(0, 6)
-    .map((h) => {
-      const worst = h.factors.filter((f) => f.score < 50).sort((a, b) => b.drag - a.drag)[0]
-      const delta = h.prevScore != null && h.score != null ? h.score - h.prevScore : null
+  // ── Calculate Churn Risk Alerts (Bottom 4 active clinics by scheduling rate) ──
+  const riskRows = allRows
+    .filter((r) => r.source !== "none") // only active clinics with data in this period
+    .map((r) => {
+      const checks = allChecks[r.clinicId] ?? {}
+      const checkedCount = checkItems.filter((ci) => checks[ci.id] === true).length
       return {
-        clinicId: h.clinicId,
-        name: nameByClinicId.get(h.clinicId) ?? rawClinics.find((c) => c.id === h.clinicId)?.name ?? "Clínica",
-        score: h.score,
-        band: h.band,
-        confidence: h.confidence,
-        reason: worst ? HEALTH_HINT[worst.key] : null,
-        delta,
-        droppedBand: h.prevBand && h.band && bandRank[h.band] < bandRank[h.prevBand],
+        ...r,
+        checkedCount,
+        totalChecks: totalCheckItemsCount,
       }
     })
+    .sort((a, b) => a.rate - b.rate)
+    .slice(0, 4)
+
+  const nameByClinicId = new Map(allRows.map((r) => [r.clinicId, r.name]))
 
   // ── Prepare CSV Export Data (todas as linhas; a região filtra no cliente) ──
   const exportData = allRows.map((row) => {
@@ -389,45 +367,40 @@ export default async function HomePage({
             )}
           </Panel>
 
-          {/* ── Saúde da carteira ────────────────────────────────── */}
-          <Panel title="Saúde da carteira" subtitle="prioridade de atenção · o que mudou desde ontem">
-            {healthAttention.length === 0 ? (
+          {/* ── Churn Risk Alerts ────────────────────────────────── */}
+          <Panel title="Alertas de risco" subtitle="as 4 menores taxas de agendamento">
+            {riskRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-6 text-center">
                 <CheckCircle2 className="size-8 text-emerald-500/80 mb-2" />
-                <p className="text-xs text-muted-foreground">Nenhuma clínica em risco ou atenção.</p>
+                <p className="text-xs text-muted-foreground">Nenhuma clínica ativa no período.</p>
               </div>
             ) : (
-              <ul className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
-                {healthAttention.map((h) => (
+              <ul className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                {riskRows.map((r) => (
                   <li
-                    key={h.clinicId}
+                    key={r.clinicId}
                     className="flex flex-col gap-1.5 rounded-md border border-border/50 bg-accent/30 p-2.5 hover:bg-accent/60 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <Link href={`/clinicas/${h.clinicId}`} className="text-xs font-semibold text-foreground hover:underline truncate">
-                        {h.name}
+                      <Link href={`/clinicas/${r.clinicId}`} className="text-xs font-semibold text-foreground hover:underline truncate">
+                        {r.name}
                       </Link>
-                      <HealthBadge score={h.score} band={h.band} confidence={h.confidence} />
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide shrink-0"
+                        style={{
+                          color: "#0f172a",
+                          background: r.statusColor ?? "#f97316",
+                        }}
+                      >
+                        {r.status}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-[0.7rem] text-muted-foreground">
-                      <span className="truncate">{h.reason ?? "—"}</span>
-                      <span className="flex items-center gap-1 shrink-0 tabular-nums">
-                        {h.droppedBand ? (
-                          <span className="text-red-400 font-medium">piorou de banda</span>
-                        ) : h.delta != null && h.delta !== 0 ? (
-                          <>
-                            {h.delta < 0 ? (
-                              <ArrowDown className="size-3 text-red-400" />
-                            ) : (
-                              <ArrowUp className="size-3 text-emerald-400" />
-                            )}
-                            <span className={h.delta < 0 ? "text-red-400" : "text-emerald-400"}>
-                              {Math.abs(h.delta)}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground/60">estável</span>
-                        )}
+                      <span>
+                        Taxa: <strong className="text-foreground tabular-nums">{fmtRate(r.rate)}</strong>
+                      </span>
+                      <span className="tabular-nums">
+                        Checklist: {r.checkedCount}/{r.totalChecks}
                       </span>
                     </div>
                   </li>
