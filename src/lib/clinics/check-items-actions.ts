@@ -44,7 +44,11 @@ async function isGestor(): Promise<boolean> {
 // FIXOS/GLOBAIS (is_global=true) — aparecem em toda clínica, para todos, e só o
 // gestor os gerencia. O estado marcado é sempre individual por usuário.
 
-/** Itens PESSOAIS de `ownerId` (default: o usuário logado). */
+/**
+ * Itens que `ownerId` (default: logado) GERENCIA no editor — todos os que ele
+ * possui, pessoais e fixos. Como só o gestor cria fixos (owner = gestor), um dev
+ * vê só os pessoais dele; o gestor vê os pessoais + os fixos que criou.
+ */
 export async function listCheckItems(ownerId?: string): Promise<CheckItemRow[]> {
   const supabase = await createClient();
   const owner = ownerId ?? (await currentUserId());
@@ -53,19 +57,6 @@ export async function listCheckItems(ownerId?: string): Promise<CheckItemRow[]> 
     .from("check_items")
     .select("id, label, position, is_global")
     .eq("owner_id", owner)
-    .eq("is_global", false)
-    .order("position");
-  if (error) throw new Error(error.message);
-  return (data ?? []) as CheckItemRow[];
-}
-
-/** Itens FIXOS/GLOBAIS (aparecem em todas as clínicas, para todos). */
-export async function listGlobalCheckItems(): Promise<CheckItemRow[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("check_items")
-    .select("id, label, position, is_global")
-    .eq("is_global", true)
     .order("position");
   if (error) throw new Error(error.message);
   return (data ?? []) as CheckItemRow[];
@@ -103,16 +94,39 @@ export async function upsertCheckItem(item: {
   const label = item.label.trim();
   if (label.length < 2) return { ok: false, error: "Rótulo muito curto" };
 
-  const payload = { label, position: item.position };
+  const payload = { label, position: item.position, is_global: isGlobal };
 
-  // Global: gestor já autorizado, casa pelo id + is_global. Pessoal: casa pelo
-  // dono. Insert nasce com o dono (criador) e o flag is_global.
-  const { data, error } = item.id
-    ? await (isGlobal
-        ? supabase.from("check_items").update(payload).eq("id", item.id).eq("is_global", true).select()
-        : supabase.from("check_items").update(payload).eq("id", item.id).eq("owner_id", owner).eq("is_global", false).select())
-    : await supabase.from("check_items").insert({ ...payload, owner_id: owner, is_global: isGlobal }).select();
+  // Criação: nasce com o dono (criador) e o flag is_global.
+  if (!item.id) {
+    const { data, error } = await supabase
+      .from("check_items")
+      .insert({ ...payload, owner_id: owner })
+      .select();
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/", "layout");
+    return { ok: true, data: data?.[0] as CheckItemRow };
+  }
 
+  // Edição: autoriza pelo estado atual. Mexer em item fixo (origem OU destino)
+  // exige gestor; item pessoal só o próprio dono edita. Permite ALTERNAR o flag.
+  const { data: existing } = await supabase
+    .from("check_items")
+    .select("owner_id, is_global")
+    .eq("id", item.id)
+    .maybeSingle();
+  if (!existing) return { ok: false, error: "Item não encontrado" };
+  if ((existing.is_global || isGlobal) && !(await isGestor())) {
+    return { ok: false, error: "Apenas o gestor gerencia itens fixos" };
+  }
+  if (!existing.is_global && existing.owner_id !== owner) {
+    return { ok: false, error: "Este item pertence ao checklist de outro usuário" };
+  }
+
+  const { data, error } = await supabase
+    .from("check_items")
+    .update(payload)
+    .eq("id", item.id)
+    .select();
   if (error) return { ok: false, error: error.message };
   revalidatePath("/", "layout");
   return { ok: true, data: data?.[0] as CheckItemRow };

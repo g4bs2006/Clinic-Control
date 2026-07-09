@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import {
   upsertCheckItem,
   deleteCheckItem,
@@ -15,19 +16,20 @@ interface DraftItem {
   id?: string
   label: string
   position: number
+  isGlobal: boolean
 }
 
 function toDraft(item: CheckItemRow): DraftItem {
-  return { id: item.id, label: item.label, position: item.position }
+  return { id: item.id, label: item.label, position: item.position, isGlobal: item.is_global }
 }
 
 interface CheckItemsEditorProps {
   initialItems: CheckItemRow[]
-  /** Quando true, os itens criados/editados aqui são fixos (globais). */
-  isGlobal?: boolean
+  /** Mostra o switch "Fixo" por linha (marca o item como global). Só gestor. */
+  canMakeGlobal?: boolean
 }
 
-export function CheckItemsEditor({ initialItems, isGlobal = false }: CheckItemsEditorProps) {
+export function CheckItemsEditor({ initialItems, canMakeGlobal = false }: CheckItemsEditorProps) {
   const router = useRouter()
   const [drafts, setDrafts] = useState<DraftItem[]>(initialItems.map(toDraft))
   const [pending, startTransition] = useTransition()
@@ -40,7 +42,7 @@ export function CheckItemsEditor({ initialItems, isGlobal = false }: CheckItemsE
 
   function addRow() {
     const nextPos = drafts.reduce((max, d) => Math.max(max, d.position), 0) + 1
-    setDrafts((prev) => [...prev, { label: "", position: nextPos }])
+    setDrafts((prev) => [...prev, { label: "", position: nextPos, isGlobal: false }])
   }
 
   function save(index: number) {
@@ -54,7 +56,7 @@ export function CheckItemsEditor({ initialItems, isGlobal = false }: CheckItemsE
         id: d.id,
         label: d.label,
         position: d.position,
-        isGlobal,
+        isGlobal: d.isGlobal,
       })
       if (res.ok) {
         toast.success("Item salvo.")
@@ -94,13 +96,6 @@ export function CheckItemsEditor({ initialItems, isGlobal = false }: CheckItemsE
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Column headers */}
-      <div className="hidden grid-cols-[1fr_4rem_auto] items-center gap-2 px-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:grid">
-        <span>Rótulo</span>
-        <span className="text-right">Posição</span>
-        <span />
-      </div>
-
       {drafts.length === 0 && (
         <p className="text-sm text-muted-foreground py-4 text-center">
           Nenhum item de checklist configurado. Clique em &ldquo;Adicionar item&rdquo; para começar.
@@ -110,24 +105,32 @@ export function CheckItemsEditor({ initialItems, isGlobal = false }: CheckItemsE
       {drafts.map((d, i) => (
         <div
           key={d.id ?? `new-${i}`}
-          className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[1fr_4rem_auto]"
+          className="flex flex-wrap items-center gap-2"
         >
           <Input
             value={d.label}
             onChange={(e) => update(i, { label: e.target.value })}
             placeholder="Ex.: Contrato assinado"
-            className="h-8"
+            className="h-8 min-w-40 flex-1"
           />
           <Input
             type="number"
             inputMode="numeric"
             value={d.position}
-            onChange={(e) =>
-              update(i, { position: Number(e.target.value) || 0 })
-            }
-            className="hidden h-8 w-full text-right tabular-nums sm:block"
+            onChange={(e) => update(i, { position: Number(e.target.value) || 0 })}
+            title="Posição (ordem)"
+            className="h-8 w-16 shrink-0 text-right tabular-nums"
           />
-          <div className="flex justify-end gap-1.5">
+          {canMakeGlobal && (
+            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-xs text-muted-foreground">
+              <Switch
+                checked={d.isGlobal}
+                onCheckedChange={(checked) => update(i, { isGlobal: checked === true })}
+              />
+              Fixo
+            </label>
+          )}
+          <div className="flex shrink-0 justify-end gap-1.5">
             <Button
               type="button"
               size="sm"
@@ -163,8 +166,9 @@ export function CheckItemsEditor({ initialItems, isGlobal = false }: CheckItemsE
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Os itens definidos aqui aparecem como checkboxes na página de cada clínica
-        e como resumo visual na listagem.
+        Os itens aparecem como checkboxes na página de cada clínica e como resumo na
+        listagem.
+        {canMakeGlobal && " Marque “Fixo” para que o item apareça em todas as clínicas, para todos os usuários (cada um marca o próprio progresso)."}
       </p>
     </div>
   )

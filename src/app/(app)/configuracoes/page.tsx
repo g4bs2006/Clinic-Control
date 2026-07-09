@@ -1,5 +1,5 @@
 import { listStatusRules, listFunnelSteps } from "@/lib/snapshots/rules-actions"
-import { listCheckItems, listGlobalCheckItems } from "@/lib/clinics/check-items-actions"
+import { listCheckItems } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
 import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
@@ -24,11 +24,10 @@ import { ChangePasswordForm } from "@/components/settings/change-password-form"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, globalCheckItems, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats] = await Promise.all([
+  const [rules, steps, checkItems, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listCheckItems(),
-    listGlobalCheckItems(),
     listClinics(),
     listWhatsappGroups(),
     listTeamMembers(),
@@ -176,22 +175,19 @@ export default async function ConfiguracoesPage() {
         />
       </CollapsiblePanel>
 
-      {/* ── Checklist fixo (global, gerenciado pelo gestor) ────── */}
-      {currentProfile?.role === "gestor" && (
-        <Panel
-          title="Checklist fixo (global)"
-          subtitle="itens que aparecem em todas as clínicas, para todos os usuários — cada um marca o próprio progresso"
-        >
-          <CheckItemsEditor initialItems={globalCheckItems} isGlobal />
-        </Panel>
-      )}
-
-      {/* ── Checklist items (pessoais do usuário logado) ───────── */}
+      {/* ── Checklist de clínicas ──────────────────────────────── */}
       <Panel
         title="Meu checklist de clínicas"
-        subtitle="itens pessoais — cada usuário tem os seus; aparecem em todas as clínicas só para você"
+        subtitle={
+          currentProfile?.role === "gestor"
+            ? "seus itens (só você vê) — marque “Fixo” para valer em todas as clínicas, para todos"
+            : "itens pessoais — cada usuário tem os seus; aparecem em todas as clínicas só para você"
+        }
       >
-        <CheckItemsEditor initialItems={checkItems} />
+        <CheckItemsEditor
+          initialItems={checkItems}
+          canMakeGlobal={currentProfile?.role === "gestor"}
+        />
       </Panel>
 
       {/* ── WhatsApp: grupos → clínicas ────────────────────────── */}
