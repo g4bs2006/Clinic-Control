@@ -94,6 +94,46 @@ export function CheckItemsEditor({ initialItems, categories, canMakeGlobal = fal
     })
   }
 
+  function saveAll() {
+    const valid = drafts.map((d, i) => ({ d, i })).filter(({ d }) => d.label.trim().length >= 2)
+    if (valid.length === 0) {
+      toast.error("Nenhum item com rótulo válido para salvar.")
+      return
+    }
+    startTransition(async () => {
+      const results = await Promise.all(
+        valid.map(({ d }) =>
+          upsertCheckItem({
+            id: d.id,
+            label: d.label,
+            position: d.position,
+            isGlobal: d.isGlobal,
+            categoryId: d.categoryId,
+          }),
+        ),
+      )
+      let ok = 0
+      let fail = 0
+      const idByIndex = new Map<number, string>()
+      valid.forEach(({ i }, k) => {
+        const r = results[k]
+        if (r.ok) {
+          ok++
+          if (r.data) idByIndex.set(i, r.data.id)
+        } else {
+          fail++
+        }
+      })
+      setDrafts((prev) => prev.map((d, idx) => (idByIndex.has(idx) ? { ...d, id: idByIndex.get(idx)! } : d)))
+
+      const skipped = drafts.length - valid.length
+      if (ok) toast.success(`${ok} item(ns) salvo(s).`)
+      if (fail) toast.error(`${fail} não puderam ser salvos.`)
+      if (skipped) toast.warning(`${skipped} sem rótulo válido — ignorado(s).`)
+      router.refresh()
+    })
+  }
+
   function remove(index: number) {
     const d = drafts[index]
     if (!d.id) {
@@ -192,7 +232,7 @@ export function CheckItemsEditor({ initialItems, categories, canMakeGlobal = fal
         </div>
       ))}
 
-      <div>
+      <div className="flex items-center justify-between gap-2">
         <Button
           type="button"
           size="sm"
@@ -202,6 +242,11 @@ export function CheckItemsEditor({ initialItems, categories, canMakeGlobal = fal
         >
           + Adicionar item
         </Button>
+        {drafts.length > 0 && (
+          <Button type="button" size="sm" onClick={saveAll} disabled={pending}>
+            {pending ? "Salvando…" : "Salvar todos"}
+          </Button>
+        )}
       </div>
 
       <p className="text-xs text-muted-foreground">
