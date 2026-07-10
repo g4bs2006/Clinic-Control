@@ -29,5 +29,6 @@ export type Clinic = ClinicInput & {
   lat: number | null;
   lng: number | null;
   developer_id: string | null; // carteira: usuário responsável pela clínica
+  onboarded_at: string | null; // âncora do onboarding (null = em andamento)
   created_at: string;
 };

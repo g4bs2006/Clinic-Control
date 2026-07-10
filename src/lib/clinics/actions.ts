@@ -42,6 +42,23 @@ export async function listClinicsInScope(): Promise<Clinic[]> {
   return all.filter((c) => c.developer_id === scope.developerFilter);
 }
 
+/**
+ * Marca/desfaz a conclusão do onboarding — âncora do diagnóstico pós-onboarding
+ * (tarefas dos primeiros 30 dias). Data no fuso operacional (America/Sao_Paulo).
+ */
+export async function setClinicOnboarded(clinicId: string, onboarded: boolean) {
+  if (!(await getSessionUser())) return { ok: false as const, error: "Não autenticado" };
+  const supabase = await createClient();
+  const today = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+  const { error } = await supabase
+    .from("clinics")
+    .update({ onboarded_at: onboarded ? today : null })
+    .eq("id", clinicId);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath(`/clinicas/${clinicId}`);
+  return { ok: true as const };
+}
+
 export async function getClinic(id: string): Promise<Clinic | null> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("clinics").select("*").eq("id", id).single();

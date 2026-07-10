@@ -23,13 +23,14 @@ export type TaskRow = {
   due_date: string | null;
   source: "manual" | "ia";
   parent_task_id: string | null;
+  recurrence_id: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
 };
 
 const TASK_SELECT =
-  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
+  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, recurrence_id, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
 
 export type TaskSuggestionRow = {
   id: string;
@@ -91,6 +92,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     due_date: row.due_date as string | null,
     source: row.source as "manual" | "ia",
     parent_task_id: row.parent_task_id as string | null,
+    recurrence_id: (row.recurrence_id as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     completed_at: row.completed_at as string | null,

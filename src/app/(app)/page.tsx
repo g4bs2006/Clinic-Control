@@ -12,6 +12,7 @@ import { listCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-a
 import { listClinics } from "@/lib/clinics/actions"
 import { listAttentionSummaries } from "@/lib/whatsapp/actions"
 import { countMyPendingTasks } from "@/lib/tasks/actions"
+import { materializeRecurrences } from "@/lib/tasks/recurrence-actions"
 import { CheckCircle2, ListTodo } from "lucide-react"
 
 export const dynamic = "force-dynamic"
@@ -51,6 +52,10 @@ export default async function HomePage({
   // Validate month param (same pattern as /mensal)
   const rawMonth = params.month ?? ""
   const month: string = /^\d{4}-\d{2}$/.test(rawMonth) ? rawMonth : currentMonth
+
+  // Ocorrências recorrentes devidas nascem na abertura do dia (o dashboard é a
+  // porta de entrada da manhã) — idempotente, nunca lança.
+  await materializeRecurrences()
 
   // Fetch portfolio data, check items, all checks, raw clinics and WhatsApp stats
   const [portfolioData, checkItems, allChecksMap, rawClinics, rawAttentionSummaries, scope, myPendingTasks] = await Promise.all([

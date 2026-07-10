@@ -18,6 +18,7 @@ import { StatusRulesEditor } from "@/components/settings/status-rules-editor"
 import { TaskCategoriesEditor } from "@/components/settings/task-categories-editor"
 import { CheckItemsEditor } from "@/components/settings/check-items-editor"
 import { CheckCategoriesEditor } from "@/components/settings/check-categories-editor"
+import { OnboardingDiagnostic } from "@/components/settings/onboarding-diagnostic"
 import { WhatsappGroupsEditor } from "@/components/settings/whatsapp-groups-editor"
 import { WhatsappTeamEditor } from "@/components/settings/whatsapp-team-editor"
 import { UsersEditor } from "@/components/settings/users-editor"
@@ -202,6 +203,16 @@ export default async function ConfiguracoesPage() {
         >
           <CheckCategoriesEditor initialCategories={checkCategories} />
         </Panel>
+      )}
+
+      {/* ── Diagnóstico pós-onboarding (gestor) ────────────────── */}
+      {currentProfile?.role === "gestor" && (
+        <CollapsiblePanel
+          title="Diagnóstico pós-onboarding"
+          subtitle="temas de tarefa que se repetem nas clínicas novas — onde o processo de implantação está falhando"
+        >
+          <OnboardingDiagnostic />
+        </CollapsiblePanel>
       )}
 
       {/* ── WhatsApp: grupos → clínicas ────────────────────────── */}

@@ -23,6 +23,7 @@ import remarkGfm from "remark-gfm"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { ClinicFunnelExplorer } from "@/components/clinics/clinic-funnel-explorer"
+import { ClinicOnboardingStatus } from "@/components/clinics/clinic-onboarding-status"
 import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart"
 import { ClinicAgents } from "@/components/clinics/clinic-agents"
 import { ClinicFiles } from "@/components/clinics/clinic-files"
@@ -318,6 +319,7 @@ export default async function ClinicDetailPage({
           profiles={profiles.map((p) => ({ id: p.id, name: p.name, email: p.email }))}
           categories={taskCategories}
           currentUserId={currentProfile?.id ?? null}
+          isGestor={currentProfile?.role === "gestor"}
           defaultClinicId={clinic.id}
         />
       </Panel>
@@ -748,6 +750,11 @@ export default async function ClinicDetailPage({
         title="Meu checklist"
         subtitle="seus itens para esta clínica · edite-os em Configurações"
       >
+        <ClinicOnboardingStatus
+          clinicId={id}
+          onboardedAt={clinic.onboarded_at ?? null}
+          createdAt={clinic.created_at}
+        />
         {clinicChecks.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Você ainda não tem itens de checklist — crie os seus em Configurações.

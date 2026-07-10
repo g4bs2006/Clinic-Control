@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CreateTaskDialog } from "./create-task-dialog"
+import { RecurrencesDialog } from "./recurrences-dialog"
 import { TaskSuggestions } from "./task-suggestions"
 import { TaskDetailDialog } from "./task-detail-dialog"
 import { KanbanBoard } from "./kanban-board"
@@ -142,6 +143,12 @@ function TaskListItem({
               IA
             </span>
           )}
+          {t.recurrence_id && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-brand">
+              <Repeat className="size-2.5" />
+              recorrente
+            </span>
+          )}
         </p>
       </div>
 
@@ -186,11 +193,13 @@ interface TaskBoardProps {
   categories: TaskCategoryRow[]
   /** Usuário logado — usado na aba "Semana" (agenda pessoal). */
   currentUserId?: string | null
+  /** Gestor pode criar regras recorrentes de carteira (fan-out). */
+  isGestor?: boolean
   /** Pré-seleciona a clínica no formulário de nova tarefa (painel embutido no perfil da clínica). */
   defaultClinicId?: string | null
 }
 
-export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles, categories, currentUserId = null, defaultClinicId = null }: TaskBoardProps) {
+export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles, categories, currentUserId = null, isGestor = false, defaultClinicId = null }: TaskBoardProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   // Cópia local para atualização otimista (arrastar no board / trocar status na
@@ -507,6 +516,13 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
         </div>
 
         <div className="flex-1" />
+        <RecurrencesDialog
+          clinics={clinics}
+          profiles={profiles}
+          categories={categories}
+          isGestor={isGestor}
+          onChanged={refresh}
+        />
         <CreateTaskDialog
           clinics={clinics}
           profiles={profiles}
