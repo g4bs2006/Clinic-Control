@@ -84,6 +84,7 @@ Pontos centrais dessa arquitetura:
 | Framework | Next.js 16 (App Router, Server Components, Server Actions, Turbopack) |
 | Linguagem | TypeScript |
 | UI | React 19, Tailwind CSS 4, Base UI (primitivos headless), lucide-react |
+| Mobile / PWA | Layout responsivo (navegação em drawer, diálogos em bottom-sheet, tabelas viram cards no mobile) + PWA instalável (manifest + service worker) |
 | Gráficos e mapas | Recharts, react-leaflet (tiles CARTO dark) |
 | Banco de dados | Supabase Postgres (schema dedicado `clinic_control`) |
 | Armazenamento de arquivos | Supabase Storage (buckets privados, acesso via URL assinada) |
@@ -380,6 +381,9 @@ O norte é transformar o Clinic Control de "painel que a equipe consulta" em **c
 
 ### Concluído recentemente (julho/2026)
 
+- **Overhaul mobile + PWA** — auditoria completa e correção em tiers: navegação vira drawer (hambúrguer), diálogos viram bottom-sheet, tabelas (clínicas, ranking, grade mensal) viram cards no mobile, alvos de toque maiores nos fluxos de tarefa; app instalável na tela inicial (PWA).
+- **Checklist por etapa** — categorias editáveis (Painéis, n8n, Agente de IA, Chatbot…) que agrupam os checkboxes na página da clínica; itens fixos gerenciáveis por qualquer gestor; "Salvar todos".
+- **Resumos de IA menos ruidosos** — "regra de fechamento" no prompt (não gera tarefa para o que já foi resolvido na conversa) + temperatura reduzida; busca global (Ctrl+K) passou a respeitar o escopo de carteira.
 - **Mapeamento dinâmico do funil** — cada clínica escolhe quais colunas do painel Helena são leads/agendados/fechamento (com fallback canônico), resolvendo painéis fora do padrão.
 - **Responsável padrão nas tarefas/acompanhamentos** — pré-seleciona o dev da clínica (editável); o filtro de carteira passou a recortar pelo dono da carteira, não pelo usuário logado.
 - **Checklist com itens fixos (globais)** — o gestor marca um item como "Fixo" (aparece em todas as clínicas, para todos); estado marcado passou a ser individual por usuário.
