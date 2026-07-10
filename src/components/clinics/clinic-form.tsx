@@ -142,7 +142,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label htmlFor="city">Cidade</Label>
             <Input
@@ -234,7 +234,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
               </span>
             )}
           </p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="owner_name">Nome do dono</Label>
               <Input
@@ -335,7 +335,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
 
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Apps habilitados na conta</p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
                     {HELENA_APPS.map((app) => (
                       <label key={app.value} className="flex items-center gap-2 text-sm cursor-pointer">
                         <Checkbox
@@ -355,7 +355,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
 
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Recursos avançados</p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
                     {HELENA_RESOURCERS.map((r) => (
                       <label key={r.value} className="flex items-center gap-2 text-sm cursor-pointer">
                         <Checkbox

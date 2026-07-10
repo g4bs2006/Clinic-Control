@@ -164,7 +164,7 @@ export function CheckItemsEditor({ initialItems, categories, canMakeGlobal = fal
       {drafts.map((d, i) => (
         <div
           key={d.id ?? `new-${i}`}
-          className="flex flex-wrap items-center gap-2"
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 p-2 sm:border-0 sm:p-0"
         >
           <Input
             value={d.label}

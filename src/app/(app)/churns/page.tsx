@@ -52,7 +52,7 @@ export default async function ChurnsPage() {
   const maxReasonCount = Math.max(1, ...topReasons.map(([, n]) => n))
 
   return (
-    <main className="p-6 space-y-6 max-w-screen-xl mx-auto">
+    <main className="p-4 space-y-6 sm:p-6 max-w-screen-xl mx-auto">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div>
         <h1 className="text-2xl font-bold brand-header">Churns</h1>

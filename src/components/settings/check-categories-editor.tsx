@@ -76,7 +76,7 @@ export function CheckCategoriesEditor({ initialCategories }: { initialCategories
       )}
 
       {drafts.map((d, i) => (
-        <div key={d.id ?? `new-${i}`} className="flex flex-wrap items-center gap-2">
+        <div key={d.id ?? `new-${i}`} className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 p-2 sm:border-0 sm:p-0">
           <Input
             value={d.label}
             onChange={(e) => update(i, { label: e.target.value })}

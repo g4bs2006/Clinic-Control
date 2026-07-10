@@ -115,7 +115,7 @@ export default async function MapaPage({
   const devQuery = scope.developerFilter ? `&dev=${scope.developerFilter}` : ""
 
   return (
-    <main className="p-6 space-y-6 max-w-screen-2xl mx-auto">
+    <main className="p-4 space-y-6 sm:p-6 max-w-screen-2xl mx-auto">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>

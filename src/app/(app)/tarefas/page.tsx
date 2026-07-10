@@ -25,7 +25,7 @@ export default async function TarefasPage() {
   const profileOptions = profiles.map((p) => ({ id: p.id, name: p.name, email: p.email }))
 
   return (
-    <main className="p-6 space-y-6 max-w-screen-xl mx-auto">
+    <main className="p-4 space-y-6 sm:p-6 max-w-screen-xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold brand-header">Tarefas</h1>
         <p className="text-sm text-muted-foreground mt-0.5">

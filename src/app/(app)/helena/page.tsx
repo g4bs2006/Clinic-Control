@@ -27,7 +27,7 @@ export default async function HelenaAccountsPage() {
   )
 
   return (
-    <main className="p-6 space-y-6 max-w-screen-2xl mx-auto">
+    <main className="p-4 space-y-6 sm:p-6 max-w-screen-2xl mx-auto">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold brand-header">Contas Helena</h1>

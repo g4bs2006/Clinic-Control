@@ -51,7 +51,7 @@ export default async function ConfiguracoesPage() {
   }
 
   return (
-    <main className="p-6 space-y-6 max-w-screen-lg mx-auto">
+    <main className="p-4 space-y-6 sm:p-6 max-w-screen-lg mx-auto">
       <div>
         <h1 className="text-2xl font-bold brand-header">Configurações</h1>
         <p className="text-sm text-muted-foreground mt-0.5">

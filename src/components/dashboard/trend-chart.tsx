@@ -170,6 +170,8 @@ export function TrendChart({ data, series, formatValue = fmtPct, xKey }: TrendCh
             tick={{ fill: "oklch(0.64 0 0)", fontSize: 11 }}
             tickLine={false}
             axisLine={{ stroke: "oklch(0.27 0.006 286)" }}
+            interval="preserveStartEnd"
+            minTickGap={24}
           />
           <YAxis
             tickFormatter={(v: number) => formatValue(v)}
@@ -220,7 +222,9 @@ export function TrendChart({ data, series, formatValue = fmtPct, xKey }: TrendCh
                 border: "none",
                 cursor: "pointer",
                 opacity: off ? 0.4 : 1,
-                padding: "0.125rem 0.25rem",
+                padding: "0.375rem 0.5rem",
+                minHeight: "2rem",
+                borderRadius: "6px",
                 transition: "opacity 0.12s ease",
               }}
               aria-pressed={!off}

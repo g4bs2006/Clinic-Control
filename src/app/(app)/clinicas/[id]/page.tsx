@@ -205,7 +205,7 @@ export default async function ClinicDetailPage({
   const cityUf = [clinic.city, clinic.state].filter(Boolean).join("/")
 
   return (
-    <main className="p-6 space-y-6 max-w-screen-2xl mx-auto">
+    <main className="p-4 space-y-6 sm:p-6 max-w-screen-2xl mx-auto">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -220,7 +220,7 @@ export default async function ClinicDetailPage({
               <Link
                 href={`/clinicas/${prevClinic.id}`}
                 title={prevClinic.name}
-                className="inline-flex items-center justify-center rounded-md border border-border bg-card px-2.5 py-1.2 text-[0.7rem] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                className="inline-flex items-center justify-center rounded-md border border-border bg-card px-2.5 py-1.5 text-[0.7rem] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               >
                 ← Anterior
               </Link>
@@ -229,7 +229,7 @@ export default async function ClinicDetailPage({
               <Link
                 href={`/clinicas/${nextClinic.id}`}
                 title={nextClinic.name}
-                className="inline-flex items-center justify-center rounded-md border border-border bg-card px-2.5 py-1.2 text-[0.7rem] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                className="inline-flex items-center justify-center rounded-md border border-border bg-card px-2.5 py-1.5 text-[0.7rem] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               >
                 Próxima →
               </Link>

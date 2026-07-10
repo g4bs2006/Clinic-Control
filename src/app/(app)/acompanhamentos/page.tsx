@@ -13,7 +13,7 @@ export default async function AcompanhamentosPage() {
   const suggestions = allSuggestions.filter((s) => s.kind === "acompanhamento")
 
   return (
-    <main className="p-6 space-y-6 max-w-screen-xl mx-auto">
+    <main className="p-4 space-y-6 sm:p-6 max-w-screen-xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold brand-header">Acompanhamentos</h1>
         <p className="text-sm text-muted-foreground mt-0.5">

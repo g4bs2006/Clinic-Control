@@ -151,7 +151,7 @@ export default async function MensalPage({
   });
 
   return (
-    <main className="p-8 space-y-6">
+    <main className="p-4 space-y-6 sm:p-8">
       <div>
         <h1 className="text-2xl font-bold capitalize brand-header">{monthLabel}</h1>
         <p className="text-sm text-muted-foreground mt-1">

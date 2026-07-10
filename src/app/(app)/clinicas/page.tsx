@@ -27,7 +27,7 @@ export default async function ClinicasPage() {
   }
 
   return (
-    <main className="p-8 space-y-6">
+    <main className="p-4 space-y-6 sm:p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold brand-header">Clínicas</h1>
         <Button render={<Link href="/clinicas/nova">Nova clínica</Link>} />
