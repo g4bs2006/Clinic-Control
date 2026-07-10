@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -89,12 +89,14 @@ function TaskListItem({
 }) {
   const isDone = t.status === "concluida"
   return (
-    <li className="flex flex-wrap items-center gap-3 py-2.5">
+    // Mobile: card com borda (edição de status via detalhe/sheet); desktop: linha densa.
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5">
       {selectable && (
         <Checkbox
           checked={selected}
           onCheckedChange={() => onToggleSelect?.(t.id)}
           aria-label={`Selecionar tarefa ${t.title}`}
+          className="hidden sm:inline-flex"
         />
       )}
       {/* Concluir/reabrir num clique (otimista) */}
@@ -148,7 +150,8 @@ function TaskListItem({
         items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
         onValueChange={(v) => v && onChangeStatus(t.id, v as TaskStatus)}
       >
-        <SelectTrigger className="h-9 min-w-[9rem] text-xs sm:h-7">
+        {/* Select inline só no desktop — no mobile o status muda pelo detalhe (sheet) */}
+        <SelectTrigger className="hidden min-w-[9rem] text-xs sm:flex sm:h-7">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -210,6 +213,8 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
   const [view, setView] = useState<"list" | "board" | "week">("list")
   const [showDone, setShowDone] = useState(false)
+  // Mobile: filtros recolhidos num botão "Filtros" (no desktop ficam sempre visíveis).
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   // Histórico de arquivadas — carregado sob demanda (null = oculto).
   const [archived, setArchived] = useState<TaskRow[] | null>(null)
@@ -365,6 +370,24 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-2">
+        {/* Toggle de filtros — só mobile (no desktop os filtros ficam inline) */}
+        {view !== "week" && (
+          <Button
+            type="button"
+            size="sm"
+            variant={filtersOpen ? "secondary" : "outline"}
+            className="h-9 sm:hidden"
+            onClick={() => setFiltersOpen((v) => !v)}
+          >
+            <SlidersHorizontal className="size-3.5" />
+            Filtros
+            {(statusFilter !== ALL || categoryFilter !== ALL || priorityFilter !== ALL) &&
+              ` (${[statusFilter, categoryFilter, priorityFilter].filter((v) => v !== ALL).length})`}
+          </Button>
+        )}
+
+        {/* sm:contents: no desktop o wrapper some e os filtros fluem como antes */}
+        <div className={filtersOpen ? "flex w-full flex-col gap-2 sm:contents" : "hidden sm:contents"}>
         {view !== "week" && (
           <>
             <Select
@@ -448,6 +471,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
             {archived !== null ? "Ocultar arquivadas" : "Arquivadas"}
           </Button>
         )}
+        </div>
 
         <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
           <Button
@@ -511,7 +535,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
                     </span>
                     <span className="tabular-nums text-[0.68rem] text-muted-foreground/70">{items.length}</span>
                   </h3>
-                  <ul className="flex flex-col divide-y divide-border/40">
+                  <ul className="flex flex-col gap-2 sm:gap-0 sm:divide-y sm:divide-border/40">
                     {items.map((t) => (
                       <TaskListItem
                         key={t.id}
@@ -537,8 +561,9 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
         <KanbanBoard tasks={filtered} categoryLabel={categoryLabel} onOpen={setOpenTaskId} onStatusChange={changeStatus} />
       ) : (
         <div className="flex flex-col">
-          {/* Cabeçalho de seleção + barra de ação em lote */}
-          <div className="flex flex-wrap items-center gap-3 border-b border-border/40 pb-2">
+          {/* Cabeçalho de seleção + barra de ação em lote (desktop; no mobile a
+              seleção múltipla sai de cena — ações item a item ou pelo detalhe) */}
+          <div className="hidden flex-wrap items-center gap-3 border-b border-border/40 pb-2 sm:flex">
             <Checkbox
               checked={filtered.length > 0 && filtered.every((t) => selected.has(t.id))}
               onCheckedChange={(checked) =>
@@ -564,7 +589,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
             )}
           </div>
 
-          <ul className="flex flex-col divide-y divide-border/40">
+          <ul className="flex flex-col gap-2 sm:gap-0 sm:divide-y sm:divide-border/40">
             {filtered.map((t) => (
               <TaskListItem
                 key={t.id}

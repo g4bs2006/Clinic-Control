@@ -80,8 +80,9 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
               {items.map((t) => (
                 <div
                   key={t.id}
+                  // No touch não há hover — o card fica com opacidade cheia no mobile.
                   className={`rounded-md p-px transition-opacity hover:opacity-100 ${
-                    draggingId === t.id ? "opacity-40" : "opacity-70"
+                    draggingId === t.id ? "opacity-40" : "opacity-100 sm:opacity-70"
                   }`}
                   style={{ background: "var(--brand)" }}
                 >
