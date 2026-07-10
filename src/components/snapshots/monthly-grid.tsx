@@ -181,6 +181,74 @@ function EditableRow({
   );
 }
 
+/** Versão em card (mobile) da linha editável — edição empilhada, sem tabela. */
+function EditableCard({ row, month, rules }: { row: GridRow; month: string; rules: StatusRule[] }) {
+  const router = useRouter();
+  const [leads, setLeads] = useState<number | null>(row.leads);
+  const [scheduled, setScheduled] = useState<number | null>(row.scheduled);
+  const [saving, setSaving] = useState(false);
+  const localRate = leads === null || scheduled === null ? null : leads === 0 ? 0 : scheduled / leads;
+
+  async function handleSave() {
+    if (leads === null || scheduled === null) return;
+    setSaving(true);
+    try {
+      const result = await upsertManualSnapshot(row.clinicId, month, leads, scheduled);
+      if (!result.ok) toast.error(`Erro ao salvar ${row.name}: ${result.error}`);
+      else {
+        toast.success(`${row.name} salvo`);
+        router.refresh();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls =
+    "h-9 w-full rounded border border-border bg-input px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50";
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">{row.name}</span>
+        <StatusBadge rate={localRate} override={row.statusOverride} rules={rules} />
+      </div>
+      {row.cityUf && <p className="mt-0.5 text-xs text-muted-foreground">{row.cityUf}</p>}
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Leads
+          <input
+            type="number"
+            min={0}
+            value={leads ?? ""}
+            disabled={saving}
+            onChange={(e) => setLeads(parseSafeInt(e.target.value))}
+            onBlur={handleSave}
+            className={inputCls}
+            placeholder="0"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Agendados
+          <input
+            type="number"
+            min={0}
+            value={scheduled ?? ""}
+            disabled={saving}
+            onChange={(e) => setScheduled(parseSafeInt(e.target.value))}
+            onBlur={handleSave}
+            className={inputCls}
+            placeholder="0"
+          />
+        </label>
+      </div>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        Taxa: <strong className="text-foreground">{fmtRate(localRate)}</strong>
+      </p>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // MonthlyGrid
 // ---------------------------------------------------------------------------
@@ -233,8 +301,33 @@ export function MonthlyGrid({ month, rows, rules }: Props) {
         </button>
       </div>
 
-      {/* Grid */}
-      <div className="rounded-lg border border-border overflow-hidden">
+      {/* Cards no mobile */}
+      <div className="space-y-2 sm:hidden">
+        {rows.length === 0 && (
+          <p className="py-6 text-center text-sm text-muted-foreground">Nenhuma clínica encontrada.</p>
+        )}
+        {rows.map((row) =>
+          row.editable ? (
+            <EditableCard key={`${month}:${row.clinicId}`} row={row} month={month} rules={rules} />
+          ) : (
+            <div key={`${month}:${row.clinicId}`} className="rounded-lg border border-border/60 bg-card p-3 opacity-90">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{row.name}</span>
+                <StatusBadge rate={row.rate} override={row.statusOverride} rules={rules} />
+              </div>
+              {row.cityUf && <p className="mt-0.5 text-xs text-muted-foreground">{row.cityUf}</p>}
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-muted-foreground">
+                <span>Leads <strong className="text-foreground">{fmtNum(row.leads)}</strong></span>
+                <span>Agendados <strong className="text-foreground">{fmtNum(row.scheduled)}</strong></span>
+                <span>Taxa <strong className="text-foreground">{fmtRate(row.rate)}</strong></span>
+              </div>
+            </div>
+          ),
+        )}
+      </div>
+
+      {/* Grid (desktop) */}
+      <div className="hidden overflow-hidden rounded-lg border border-border sm:block">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">

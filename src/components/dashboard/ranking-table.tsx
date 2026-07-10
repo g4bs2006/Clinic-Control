@@ -190,7 +190,40 @@ export function RankingTable({ rows }: RankingTableProps) {
         </div>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
+      {/* Cards no mobile */}
+      <div className="flex flex-col gap-2 sm:hidden">
+        {sorted.map((row) => {
+          const isNone = row.source === "none"
+          const cityUf = row.city || row.state ? [row.city, row.state].filter(Boolean).join("/") : null
+          return (
+            <div key={row.clinicId} className="rounded-lg border border-border/60 bg-card p-3">
+              <div className="flex items-start justify-between gap-2">
+                <Link href={`/clinicas/${row.clinicId}`} className="text-brand-gradient font-medium">
+                  {row.name}
+                </Link>
+                {row.status && row.statusColor && (
+                  <span
+                    className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[0.65rem] font-semibold"
+                    style={{ background: row.statusColor, color: contrastText(row.statusColor) }}
+                  >
+                    {row.status}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums text-muted-foreground">
+                <span>
+                  Taxa <strong className="text-foreground">{isNone ? EM_DASH : formatRate(row.rate)}</strong>
+                </span>
+                <span>Leads {isNone ? EM_DASH : formatNumber(row.leads)}</span>
+                <span>Agendados {isNone ? EM_DASH : formatNumber(row.scheduled)}</span>
+              </div>
+              {cityUf && <p className="mt-1 text-[0.7rem] text-muted-foreground">{cityUf}</p>}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="hidden sm:block" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>

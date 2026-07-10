@@ -197,7 +197,74 @@ export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }:
           <p className="text-sm font-medium text-foreground">Nenhuma clínica encontrada para este filtro</p>
         </div>
       ) : (
-        <Table>
+        <>
+          {/* Cards no mobile */}
+          <div className="space-y-2 sm:hidden">
+            {filteredClinics.map((clinic) => {
+              const clinicChecks = allChecks[clinic.id] ?? {}
+              const checkedCount = checkItems.filter((ci) => clinicChecks[ci.id] === true).length
+              const loc =
+                clinic.city && clinic.state
+                  ? `${clinic.city}/${clinic.state}`
+                  : clinic.city ?? clinic.state ?? "—"
+              return (
+                <div key={clinic.id} className="rounded-lg border border-border/60 bg-card p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <Link href={`/clinicas/${clinic.id}`} className="text-brand-gradient font-semibold">
+                      {clinic.name}
+                    </Link>
+                    {hasCheckItems && (
+                      <span className="shrink-0 text-[0.7rem] tabular-nums text-muted-foreground">
+                        {checkedCount}/{checkItems.length}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {loc}
+                    {clinic.region ? ` · ${clinic.region}` : ""}
+                    {showCarteira && clinic.developer_id
+                      ? ` · ${devNameById.get(clinic.developer_id) ?? "—"}`
+                      : ""}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${modeColors[clinic.mode]}`}>
+                      {modeLabels[clinic.mode]}
+                    </span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[clinic.contract_status]}`}>
+                      {statusLabels[clinic.contract_status]}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Link
+                      href={`/clinicas/${clinic.id}`}
+                      className="flex h-9 flex-1 items-center justify-center rounded-md border border-border bg-background text-sm font-medium hover:bg-muted"
+                    >
+                      Ver
+                    </Link>
+                    <Link
+                      href={`/clinicas/${clinic.id}/editar`}
+                      className="flex h-9 flex-1 items-center justify-center rounded-md border border-border bg-background text-sm font-medium hover:bg-muted"
+                    >
+                      Editar
+                    </Link>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-9"
+                      disabled={pending}
+                      onClick={() => handleArchive(clinic.id, clinic.name)}
+                    >
+                      Arquivar
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Tabela no desktop */}
+          <div className="hidden sm:block">
+            <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Nome</TableHead>
@@ -307,7 +374,9 @@ export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }:
               )
             })}
           </TableBody>
-        </Table>
+            </Table>
+          </div>
+        </>
       )}
     </div>
   )
