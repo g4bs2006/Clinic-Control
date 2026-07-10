@@ -176,7 +176,7 @@ export async function materializeRecurrences(): Promise<void> {
 
     const { data: rules } = await supabase
       .from("task_recurrences")
-      .select("id, title, description, category, priority, freq, weekday, monthday, clinic_id, all_clinics, assigned_to, created_by")
+      .select("id, title, description, category, priority, freq, weekday, monthday, clinic_id, all_clinics, assigned_to, created_by, created_at")
       .eq("active", true);
     if (!rules || rules.length === 0) return;
 
@@ -187,7 +187,9 @@ export async function materializeRecurrences(): Promise<void> {
         { freq: r.freq as RecurrenceFreq, weekday: r.weekday as number | null, monthday: r.monthday as number | null },
         today,
       );
-      if (due) dueByRule.set(r.id as string, due);
+      // A primeira ocorrência é a PRÓXIMA data devida após a criação da regra —
+      // nunca a retroativa (criar "toda segunda" numa sexta não nasce atrasada).
+      if (due && due >= (r.created_at as string).slice(0, 10)) dueByRule.set(r.id as string, due);
     }
     if (dueByRule.size === 0) return;
 
