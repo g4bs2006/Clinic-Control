@@ -54,7 +54,7 @@ export function KpiCard({
   className,
 }: KpiCardProps) {
   return (
-    <Panel className={cn("min-w-[160px]", className)}>
+    <Panel className={cn("min-w-0 sm:min-w-[160px]", className)}>
       <div className="flex flex-col gap-2">
         {/* Label */}
         <span className="text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">

@@ -1,4 +1,5 @@
 import { AppNav } from "@/components/app-nav";
+import { MobileTopBar } from "@/components/mobile-top-bar";
 import { GlobalSearch } from "@/components/global-search";
 import { getSessionUser } from "@/lib/auth/session";
 import { getCarteiraScope } from "@/lib/users/actions";
@@ -19,7 +20,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             : null
         }
       />
-      <main className="flex-1">{children}</main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <MobileTopBar />
+        <main className="flex-1">{children}</main>
+      </div>
       <GlobalSearch />
     </div>
   );

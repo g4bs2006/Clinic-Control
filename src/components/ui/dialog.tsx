@@ -33,8 +33,13 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border/60 bg-popover p-6 text-popover-foreground shadow-lg outline-none duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className
+          // Base = bottom-sheet no mobile (cola embaixo, largura cheia, rola).
+          "fixed z-50 flex flex-col overflow-y-auto border border-border/60 bg-popover text-popover-foreground shadow-lg outline-none",
+          "inset-x-0 bottom-0 max-h-[90dvh] rounded-t-2xl p-5",
+          // sm+ = diálogo centralizado clássico.
+          "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:bottom-auto sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-h-[85vh] sm:rounded-lg sm:p-6",
+          "duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 sm:data-open:zoom-in-95 sm:data-closed:zoom-out-95",
+          className,
         )}
         {...props}
       >
@@ -42,7 +47,7 @@ function DialogContent({
         {showClose && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-4 right-4 rounded-md opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="absolute top-3 right-3 flex size-9 items-center justify-center rounded-md opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <XIcon className="size-4" />
             <span className="sr-only">Fechar</span>
