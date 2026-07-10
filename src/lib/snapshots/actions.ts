@@ -246,6 +246,12 @@ export async function ensureFrozen(
           rate: f.rate,
           revenue: f.revenue,
           step_counts: f.steps,
+          // Métricas derivadas do funil (mapping-aware) — congeladas junto para
+          // o histórico acumular (tendência de no-show/comparecimento etc.).
+          no_show: f.noShow,
+          attended: f.attended,
+          closed: f.closed,
+          not_scheduled: f.notScheduled,
           source: "auto",
           frozen: true,
           status,

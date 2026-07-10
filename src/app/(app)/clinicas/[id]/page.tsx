@@ -411,7 +411,7 @@ export default async function ClinicDetailPage({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {liveFunnel ? (
           <Panel title="Funil de leads" subtitle="mês corrente · ao vivo da Helena">
-            <FunnelView steps={liveFunnel.steps} />
+            <FunnelView steps={liveFunnel.steps} totals={liveFunnel} />
           </Panel>
         ) : (
           <Panel

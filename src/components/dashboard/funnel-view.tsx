@@ -5,41 +5,40 @@ interface FunnelStep {
   count: number
 }
 
+/** Totais do funil (mapping-aware) — vêm de buildLiveFunnel, então respeitam o
+ *  mapeamento de colunas da clínica com fallback canônico. Substituem a antiga
+ *  derivação por título canônico, que zerava em painéis fora do padrão. */
+interface FunnelTotals {
+  leads: number
+  scheduled: number
+  attended: number
+  closed: number
+  noShow: number
+  notScheduled: number
+}
+
 interface FunnelViewProps {
   steps: FunnelStep[]
+  totals: FunnelTotals
 }
 
 const fmt = (n: number) => n.toLocaleString("pt-BR")
 const pct = (n: number, d: number) =>
   d > 0 ? ((n / d) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%" : "0%"
 
-export function FunnelView({ steps }: FunnelViewProps) {
-  const by = new Map(steps.map((s) => [s.title, s.count]))
-  const g = (t: string) => by.get(t) ?? 0
-
-  const leads = g("Leads")
-  const agendados = g("Agendados")
-  const compareceram = g("Compareceram e Não Fecharam") + g("Compareceram e Fecharam")
-  const fecharam = g("Compareceram e Fecharam")
-
+export function FunnelView({ steps, totals }: FunnelViewProps) {
   // Monotonic levels of the funnel with corresponding icons
   const levels = [
-    { name: "Leads", count: leads, prev: null as number | null, icon: Users, color: "from-violet-600 to-fuchsia-500" },
-    { name: "Agendados", count: agendados, prev: leads, icon: Calendar, color: "from-fuchsia-500 to-pink-500" },
-    { name: "Compareceram", count: compareceram, prev: agendados, icon: Eye, color: "from-pink-500 to-rose-500" },
-    { name: "Fecharam", count: fecharam, prev: compareceram, icon: CheckCircle2, color: "from-rose-500 to-red-500" },
+    { name: "Leads", count: totals.leads, prev: null as number | null, icon: Users, color: "from-violet-600 to-fuchsia-500" },
+    { name: "Agendaram", count: totals.scheduled, prev: totals.leads, icon: Calendar, color: "from-fuchsia-500 to-pink-500" },
+    { name: "Compareceram", count: totals.attended, prev: totals.scheduled, icon: Eye, color: "from-pink-500 to-rose-500" },
+    { name: "Fecharam", count: totals.closed, prev: totals.attended, icon: CheckCircle2, color: "from-rose-500 to-red-500" },
   ]
 
-  const top = Math.max(1, leads)
+  const top = Math.max(1, totals.leads)
 
-  // Other outcomes (non-core funnel stages)
-  const CORE = new Set([
-    "Leads",
-    "Agendados",
-    "Compareceram e Não Fecharam",
-    "Compareceram e Fecharam",
-  ])
-  const outcomes = steps.filter((s) => !CORE.has(s.title) && s.count > 0)
+  // Detalhamento: todas as colunas reais do painel com card no mês.
+  const outcomes = steps.filter((s) => s.count > 0)
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,11 +115,29 @@ export function FunnelView({ steps }: FunnelViewProps) {
         })}
       </div>
 
+      {/* ── Vazamentos do funil ── */}
+      {(totals.noShow > 0 || totals.notScheduled > 0) && (
+        <div className="-mt-2 flex flex-wrap gap-2">
+          {totals.notScheduled > 0 && (
+            <span className="flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-400">
+              Não agendaram: <strong className="tabular-nums">{fmt(totals.notScheduled)}</strong>
+              <span className="text-amber-400/70">· {pct(totals.notScheduled, totals.leads)} dos leads</span>
+            </span>
+          )}
+          {totals.noShow > 0 && (
+            <span className="flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-400">
+              No-show: <strong className="tabular-nums">{fmt(totals.noShow)}</strong>
+              <span className="text-rose-400/70">· {pct(totals.noShow, totals.scheduled)} dos agendados</span>
+            </span>
+          )}
+        </div>
+      )}
+
       {/* ── Outcomes / Detalhamento ── */}
       {outcomes.length > 0 && (
         <div className="border-t border-border/40 pt-4 mt-2">
           <h4 className="mb-3 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Para onde foram os leads
+            Detalhamento por coluna do painel
           </h4>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {outcomes.map((o) => (
