@@ -6,6 +6,8 @@ export const CANONICAL_STEPS = [
 ];
 
 const CLOSING = "Compareceram e Fecharam";
+const NOSHOW = "Faltosos";
+const NOT_SCHEDULED = "Não Agendados";
 
 // Etapas que implicam "já agendou" em algum momento. O card ocupa uma única
 // etapa por vez (Kanban) — quem avança sai de "Agendados", então contar só
@@ -27,12 +29,19 @@ const SCHEDULED_TITLES = new Set([
  *   Fechamento é tratado como subconjunto de "agendado": um card em coluna de
  *   fechamento também conta como agendado, mesmo que a coluna não esteja em
  *   scheduledStepIds — evita subcontar a taxa.
+ * - noshowStepIds:    colunas de "faltou" (agendou e não compareceu). Também
+ *   subconjunto de "agendado" (quem faltou agendou em algum momento); alimentam
+ *   o No-show = faltas / agendados.
+ * - notScheduledStepIds: colunas de "não agendou" (lead que não chegou a
+ *   agendar). NÃO contam como agendado; alimentam Não agendados / leads.
  * - leadStepIds:      colunas de "chegada de leads" (informativo; leads = todos
  *   os cards do painel, então não altera a contagem de leads).
  */
 export type FunnelMapping = {
   scheduledStepIds: string[];
   closingStepIds?: string[];
+  noshowStepIds?: string[];
+  notScheduledStepIds?: string[];
   leadStepIds?: string[];
 };
 
@@ -44,20 +53,28 @@ function resolveClassifier(
 ): {
   isScheduled: (stepId: string, title: string | undefined) => boolean;
   isClosing: (stepId: string, title: string | undefined) => boolean;
+  isNoShow: (stepId: string, title: string | undefined) => boolean;
+  isNotScheduled: (stepId: string, title: string | undefined) => boolean;
 } {
   if (mapping && mapping.scheduledStepIds) {
     const scheduled = new Set(mapping.scheduledStepIds);
     const closing = new Set(mapping.closingStepIds ?? []);
+    const noshow = new Set(mapping.noshowStepIds ?? []);
+    const notScheduled = new Set(mapping.notScheduledStepIds ?? []);
     return {
-      // Fechamento entra em "agendado" automaticamente (subconjunto).
-      isScheduled: (stepId) => scheduled.has(stepId) || closing.has(stepId),
+      // Fechamento e no-show entram em "agendado" automaticamente (subconjuntos).
+      isScheduled: (stepId) => scheduled.has(stepId) || closing.has(stepId) || noshow.has(stepId),
       isClosing: (stepId) => closing.has(stepId),
+      isNoShow: (stepId) => noshow.has(stepId),
+      isNotScheduled: (stepId) => notScheduled.has(stepId),
     };
   }
   // Fallback canônico: classifica pelo TÍTULO da etapa.
   return {
     isScheduled: (_stepId, title) => title !== undefined && SCHEDULED_TITLES.has(title),
     isClosing: (_stepId, title) => title === CLOSING,
+    isNoShow: (_stepId, title) => title === NOSHOW,
+    isNotScheduled: (_stepId, title) => title === NOT_SCHEDULED,
   };
 }
 
@@ -67,11 +84,13 @@ export function buildLiveFunnel(
   mapping?: FunnelMapping | null,
 ) {
   const titleByStepId = new Map(steps.map((s) => [s.id, s.title]));
-  const { isScheduled, isClosing } = resolveClassifier(steps, mapping);
+  const { isScheduled, isClosing, isNoShow, isNotScheduled } = resolveClassifier(steps, mapping);
   const countByTitle = new Map<string, number>();
   let revenue = 0;
   let leads = 0;
   let scheduled = 0;
+  let noShow = 0;
+  let notScheduled = 0;
   for (const card of monthCards) {
     const title = titleByStepId.get(card.stepId);
     if (!title) continue;
@@ -79,6 +98,8 @@ export function buildLiveFunnel(
     countByTitle.set(title, (countByTitle.get(title) ?? 0) + 1);
     if (isScheduled(card.stepId, title)) scheduled++;
     if (isClosing(card.stepId, title)) revenue += card.monetaryAmount ?? 0;
+    if (isNoShow(card.stepId, title)) noShow++;
+    if (isNotScheduled(card.stepId, title)) notScheduled++;
   }
   // Com mapping, exibe as etapas reais do painel (na ordem do Kanban); sem
   // mapping, mantém as 9 etapas canônicas para compatibilidade de exibição.
@@ -88,7 +109,7 @@ export function buildLiveFunnel(
         .map((s) => ({ title: s.title, count: countByTitle.get(s.title) ?? 0 }))
     : CANONICAL_STEPS.map((title) => ({ title, count: countByTitle.get(title) ?? 0 }));
   const rate = leads === 0 ? 0 : scheduled / leads;
-  return { steps: outSteps, leads, scheduled, rate, revenue };
+  return { steps: outSteps, leads, scheduled, rate, revenue, noShow, notScheduled };
 }
 
 export type DailyFunnelPoint = { day: string; leads: number; scheduled: number; rate: number | null };

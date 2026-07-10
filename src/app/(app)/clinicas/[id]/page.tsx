@@ -182,12 +182,16 @@ export default async function ClinicDetailPage({
   const rate = liveFunnel?.rate ?? currentSnap?.rate ?? 0
   const status = resolveStatus({ rate, rules })
 
-  // Derived funnel metrics (auto only)
+  // Derived funnel metrics (auto only). Comparecimento/Fechamento ainda são por
+  // título canônico; No-show e Não agendados vêm do funil, que respeita o
+  // mapeamento de colunas da clínica (com fallback canônico por título).
   const stepCounts: Record<string, number> = {}
   if (liveFunnel) {
     for (const s of liveFunnel.steps) stepCounts[s.title] = s.count
   }
   const derived = liveFunnel ? derivedMetrics(stepCounts) : null
+  const noShowRate = liveFunnel && liveFunnel.scheduled > 0 ? liveFunnel.noShow / liveFunnel.scheduled : 0
+  const notScheduledRate = liveFunnel && liveFunnel.leads > 0 ? liveFunnel.notScheduled / liveFunnel.leads : 0
 
   // Trend chart: começa em maio/2026 (primeiro mês com dados); patch do mês
   // corrente com a taxa ao vivo nas clínicas auto.
@@ -398,7 +402,8 @@ export default async function ClinicDetailPage({
           <>
             <KpiCard label="Comparecimento" value={fmtPct(derived.attendance)} hint="compareceram / agendados" />
             <KpiCard label="Fechamento" value={fmtPct(derived.closing)} hint="fecharam / compareceram" />
-            <KpiCard label="No-show" value={fmtPct(derived.noShow)} hint="faltosos / agendados" />
+            <KpiCard label="No-show" value={fmtPct(noShowRate)} hint="faltas / agendados" />
+            <KpiCard label="Não agendados" value={fmtPct(notScheduledRate)} hint="não agendaram / leads" />
           </>
         )}
       </div>

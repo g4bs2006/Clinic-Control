@@ -103,6 +103,40 @@ describe("buildLiveFunnel com mapping por coluna", () => {
     ]);
   });
 
+  it("no-show conta como agendado; não-agendou fica fora de agendado", () => {
+    const painel = [
+      { id: "n1", title: "Entrada", position: 1, cardCount: 0, monetaryAmount: 0 },
+      { id: "n2", title: "Marcou", position: 2, cardCount: 0, monetaryAmount: 0 },
+      { id: "n3", title: "Furou", position: 3, cardCount: 0, monetaryAmount: 0 },
+      { id: "n4", title: "Desistiu", position: 4, cardCount: 0, monetaryAmount: 0 },
+    ];
+    const r = buildLiveFunnel(
+      painel,
+      [
+        card("a", "n1"), // lead puro
+        card("b", "n2"), // agendado
+        card("c", "n3"), // no-show (⊂ agendado)
+        card("d", "n4"), // não agendou
+      ],
+      { scheduledStepIds: ["n2"], noshowStepIds: ["n3"], notScheduledStepIds: ["n4"] },
+    );
+    expect(r.leads).toBe(4);
+    expect(r.scheduled).toBe(2); // n2 + n3 (no-show agendou em algum momento)
+    expect(r.noShow).toBe(1);
+    expect(r.notScheduled).toBe(1);
+  });
+
+  it("fallback canônico: no-show = Faltosos, não agendou = Não Agendados", () => {
+    const r = buildLiveFunnel(steps, [
+      card("a", "s3"), // Não Agendados
+      card("b", "s6"), // Faltosos
+      card("c", "s2"), // Agendados
+    ]);
+    expect(r.noShow).toBe(1);
+    expect(r.notScheduled).toBe(1);
+    expect(r.scheduled).toBe(2); // Faltosos + Agendados; Não Agendados fora
+  });
+
   it("sem mapping cai no comportamento canônico por título", () => {
     // mesmos steps canônicos: passar mapping=null preserva a classificação antiga
     const cards = [card("a", "s1"), card("b", "s2"), card("c", "s9", 1000)];

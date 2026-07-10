@@ -16,12 +16,14 @@ interface ClinicFunnelMappingProps {
   clinicId: string;
 }
 
-type Bucket = "lead" | "scheduled" | "closing";
+type Bucket = "lead" | "scheduled" | "closing" | "noshow" | "notscheduled";
 
 const BUCKETS: { key: Bucket; label: string; hint: string }[] = [
   { key: "lead", label: "Chegada", hint: "colunas de entrada de leads" },
   { key: "scheduled", label: "Agendado", hint: "colunas que contam como agendamento" },
   { key: "closing", label: "Fechamento", hint: "faturamento = valor dos cards nessas colunas" },
+  { key: "noshow", label: "No-show", hint: "agendou e não compareceu — conta também como agendado" },
+  { key: "notscheduled", label: "Não agendou", hint: "lead que não chegou a agendar — não conta como agendado" },
 ];
 
 export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
@@ -32,6 +34,8 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
     lead: new Set(),
     scheduled: new Set(),
     closing: new Set(),
+    noshow: new Set(),
+    notscheduled: new Set(),
   });
   const [isLoading, startLoad] = useTransition();
   const [isSaving, startSave] = useTransition();
@@ -52,6 +56,8 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
           lead: new Set(res.setup.leadStepIds),
           scheduled: new Set(res.setup.scheduledStepIds),
           closing: new Set(res.setup.closingStepIds),
+          noshow: new Set(res.setup.noshowStepIds),
+          notscheduled: new Set(res.setup.notScheduledStepIds),
         });
         setLoaded(true);
       });
@@ -73,6 +79,8 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
         leadStepIds: [...sel.lead],
         scheduledStepIds: [...sel.scheduled],
         closingStepIds: [...sel.closing],
+        noshowStepIds: [...sel.noshow],
+        notScheduledStepIds: [...sel.notscheduled],
       });
       if (!res.ok) {
         toast.error(res.error);
