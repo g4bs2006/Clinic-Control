@@ -126,6 +126,28 @@ describe("buildLiveFunnel com mapping por coluna", () => {
     expect(r.notScheduled).toBe(1);
   });
 
+  it("compareceu: fechamento conta como compareceu; taxa de fechamento = fechados/compareceu", () => {
+    const painel = [
+      { id: "c1", title: "Novo", position: 1, cardCount: 0, monetaryAmount: 0 },
+      { id: "c2", title: "Marcado", position: 2, cardCount: 0, monetaryAmount: 0 },
+      { id: "c3", title: "Veio", position: 3, cardCount: 0, monetaryAmount: 0 },
+      { id: "c4", title: "Contratou", position: 4, cardCount: 0, monetaryAmount: 0 },
+    ];
+    const r = buildLiveFunnel(
+      painel,
+      [
+        card("a", "c2"), // agendado
+        card("b", "c3"), // compareceu (não fechou)
+        card("c", "c4", 900), // fechou (⊂ compareceu ⊂ agendado)
+      ],
+      { scheduledStepIds: ["c2"], attendedStepIds: ["c3"], closingStepIds: ["c4"] },
+    );
+    expect(r.scheduled).toBe(3); // c2 + c3 + c4 (hierarquia de subconjuntos)
+    expect(r.attended).toBe(2); // c3 + c4
+    expect(r.closed).toBe(1);
+    expect(r.revenue).toBe(900);
+  });
+
   it("fallback canônico: no-show = Faltosos, não agendou = Não Agendados", () => {
     const r = buildLiveFunnel(steps, [
       card("a", "s3"), // Não Agendados

@@ -28,6 +28,7 @@ function rowToMapping(row: {
   closing_step_ids?: string[] | null;
   noshow_step_ids?: string[] | null;
   notscheduled_step_ids?: string[] | null;
+  attended_step_ids?: string[] | null;
 }): FunnelMapping | null {
   const scheduled = row.scheduled_step_ids ?? null;
   const closing = row.closing_step_ids ?? null;
@@ -37,6 +38,7 @@ function rowToMapping(row: {
     closingStepIds: closing ?? [],
     noshowStepIds: row.noshow_step_ids ?? [],
     notScheduledStepIds: row.notscheduled_step_ids ?? [],
+    attendedStepIds: row.attended_step_ids ?? [],
     leadStepIds: row.lead_step_ids ?? [],
   };
 }
@@ -114,7 +116,7 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
-      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids, noshow_step_ids, notscheduled_step_ids")
+      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids, noshow_step_ids, notscheduled_step_ids, attended_step_ids")
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
@@ -150,7 +152,7 @@ export async function getDailyFunnelForMonth(
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
-      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids, noshow_step_ids, notscheduled_step_ids")
+      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids, noshow_step_ids, notscheduled_step_ids, attended_step_ids")
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
@@ -180,6 +182,7 @@ export type FunnelMappingSetup = {
   closingStepIds: string[];
   noshowStepIds: string[];
   notScheduledStepIds: string[];
+  attendedStepIds: string[];
 };
 
 // Títulos usados como default quando a clínica ainda não tem mapeamento salvo,
@@ -193,6 +196,7 @@ const DEFAULT_SCHEDULED_TITLES = new Set([
 const DEFAULT_CLOSING_TITLES = new Set(["Compareceram e Fecharam"]);
 const DEFAULT_NOSHOW_TITLES = new Set(["Faltosos"]);
 const DEFAULT_NOTSCHEDULED_TITLES = new Set(["Não Agendados"]);
+const DEFAULT_ATTENDED_TITLES = new Set(["Compareceram e Não Fecharam", "Compareceram e Fecharam"]);
 
 /**
  * Carrega as etapas do painel vinculado + o mapeamento salvo, para a tela de
@@ -209,7 +213,7 @@ export async function getFunnelMappingSetup(
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
-      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids, noshow_step_ids, notscheduled_step_ids")
+      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids, noshow_step_ids, notscheduled_step_ids, attended_step_ids")
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
@@ -234,6 +238,7 @@ export async function getFunnelMappingSetup(
           closingStepIds: saved.closingStepIds ?? [],
           noshowStepIds: saved.noshowStepIds ?? [],
           notScheduledStepIds: saved.notScheduledStepIds ?? [],
+          attendedStepIds: saved.attendedStepIds ?? [],
         }
       : {
           steps: options,
@@ -242,6 +247,7 @@ export async function getFunnelMappingSetup(
           closingStepIds: options.filter((s) => DEFAULT_CLOSING_TITLES.has(s.title)).map((s) => s.id),
           noshowStepIds: options.filter((s) => DEFAULT_NOSHOW_TITLES.has(s.title)).map((s) => s.id),
           notScheduledStepIds: options.filter((s) => DEFAULT_NOTSCHEDULED_TITLES.has(s.title)).map((s) => s.id),
+          attendedStepIds: options.filter((s) => DEFAULT_ATTENDED_TITLES.has(s.title)).map((s) => s.id),
         };
 
     return { ok: true as const, setup };
@@ -259,6 +265,7 @@ export async function saveFunnelMapping(
     closingStepIds: string[];
     noshowStepIds: string[];
     notScheduledStepIds: string[];
+    attendedStepIds: string[];
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
@@ -282,6 +289,7 @@ export async function saveFunnelMapping(
         closing_step_ids: mapping.closingStepIds,
         noshow_step_ids: mapping.noshowStepIds,
         notscheduled_step_ids: mapping.notScheduledStepIds,
+        attended_step_ids: mapping.attendedStepIds,
       })
       .eq("clinic_id", clinicId);
     if (error) return { ok: false as const, error: error.message };

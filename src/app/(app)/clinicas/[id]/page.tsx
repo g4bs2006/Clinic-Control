@@ -3,7 +3,6 @@ import { notFound } from "next/navigation"
 import { getClinic, listClinics } from "@/lib/clinics/actions"
 import { getClinicHistory } from "@/lib/portfolio/data"
 import { getLiveFunnel, getHelenaAccountOverview, getHelenaCustomFieldsAggregation, getHelenaTakeoverStats } from "@/lib/clinics/integration-actions"
-import { derivedMetrics } from "@/lib/portfolio/metrics"
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status"
 import { createClient } from "@/lib/supabase/server"
 import { monthKey, prevMonth, DATA_START_MONTH } from "@/lib/snapshots/month"
@@ -182,16 +181,16 @@ export default async function ClinicDetailPage({
   const rate = liveFunnel?.rate ?? currentSnap?.rate ?? 0
   const status = resolveStatus({ rate, rules })
 
-  // Derived funnel metrics (auto only). Comparecimento/Fechamento ainda são por
-  // título canônico; No-show e Não agendados vêm do funil, que respeita o
-  // mapeamento de colunas da clínica (com fallback canônico por título).
-  const stepCounts: Record<string, number> = {}
-  if (liveFunnel) {
-    for (const s of liveFunnel.steps) stepCounts[s.title] = s.count
-  }
-  const derived = liveFunnel ? derivedMetrics(stepCounts) : null
-  const noShowRate = liveFunnel && liveFunnel.scheduled > 0 ? liveFunnel.noShow / liveFunnel.scheduled : 0
-  const notScheduledRate = liveFunnel && liveFunnel.leads > 0 ? liveFunnel.notScheduled / liveFunnel.leads : 0
+  // Métricas derivadas (auto only) — todas vêm do funil ao vivo, que respeita o
+  // mapeamento de colunas da clínica (fallback canônico por título quando não há).
+  const derived = liveFunnel
+    ? {
+        attendance: liveFunnel.scheduled > 0 ? liveFunnel.attended / liveFunnel.scheduled : 0,
+        closing: liveFunnel.attended > 0 ? liveFunnel.closed / liveFunnel.attended : 0,
+        noShow: liveFunnel.scheduled > 0 ? liveFunnel.noShow / liveFunnel.scheduled : 0,
+        notScheduled: liveFunnel.leads > 0 ? liveFunnel.notScheduled / liveFunnel.leads : 0,
+      }
+    : null
 
   // Trend chart: começa em maio/2026 (primeiro mês com dados); patch do mês
   // corrente com a taxa ao vivo nas clínicas auto.
@@ -402,8 +401,8 @@ export default async function ClinicDetailPage({
           <>
             <KpiCard label="Comparecimento" value={fmtPct(derived.attendance)} hint="compareceram / agendados" />
             <KpiCard label="Fechamento" value={fmtPct(derived.closing)} hint="fecharam / compareceram" />
-            <KpiCard label="No-show" value={fmtPct(noShowRate)} hint="faltas / agendados" />
-            <KpiCard label="Não agendados" value={fmtPct(notScheduledRate)} hint="não agendaram / leads" />
+            <KpiCard label="No-show" value={fmtPct(derived.noShow)} hint="faltas / agendados" />
+            <KpiCard label="Não agendados" value={fmtPct(derived.notScheduled)} hint="não agendaram / leads" />
           </>
         )}
       </div>

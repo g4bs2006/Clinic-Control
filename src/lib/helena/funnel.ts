@@ -8,6 +8,7 @@ export const CANONICAL_STEPS = [
 const CLOSING = "Compareceram e Fecharam";
 const NOSHOW = "Faltosos";
 const NOT_SCHEDULED = "Não Agendados";
+const ATTENDED_TITLES = new Set(["Compareceram e Não Fecharam", "Compareceram e Fecharam"]);
 
 // Etapas que implicam "já agendou" em algum momento. O card ocupa uma única
 // etapa por vez (Kanban) — quem avança sai de "Agendados", então contar só
@@ -34,6 +35,10 @@ const SCHEDULED_TITLES = new Set([
  *   o No-show = faltas / agendados.
  * - notScheduledStepIds: colunas de "não agendou" (lead que não chegou a
  *   agendar). NÃO contam como agendado; alimentam Não agendados / leads.
+ * - attendedStepIds:  colunas de "compareceu". Subconjunto de "agendado"; as
+ *   colunas de fechamento contam automaticamente como compareceu (quem fechou
+ *   compareceu). Alimentam Comparecimento = compareceu/agendados e o
+ *   denominador de Fechamento = fechados/compareceu.
  * - leadStepIds:      colunas de "chegada de leads" (informativo; leads = todos
  *   os cards do painel, então não altera a contagem de leads).
  */
@@ -42,6 +47,7 @@ export type FunnelMapping = {
   closingStepIds?: string[];
   noshowStepIds?: string[];
   notScheduledStepIds?: string[];
+  attendedStepIds?: string[];
   leadStepIds?: string[];
 };
 
@@ -55,18 +61,22 @@ function resolveClassifier(
   isClosing: (stepId: string, title: string | undefined) => boolean;
   isNoShow: (stepId: string, title: string | undefined) => boolean;
   isNotScheduled: (stepId: string, title: string | undefined) => boolean;
+  isAttended: (stepId: string, title: string | undefined) => boolean;
 } {
   if (mapping && mapping.scheduledStepIds) {
     const scheduled = new Set(mapping.scheduledStepIds);
     const closing = new Set(mapping.closingStepIds ?? []);
     const noshow = new Set(mapping.noshowStepIds ?? []);
     const notScheduled = new Set(mapping.notScheduledStepIds ?? []);
+    const attended = new Set(mapping.attendedStepIds ?? []);
     return {
-      // Fechamento e no-show entram em "agendado" automaticamente (subconjuntos).
-      isScheduled: (stepId) => scheduled.has(stepId) || closing.has(stepId) || noshow.has(stepId),
+      // Hierarquia de subconjuntos: fechou ⊂ compareceu ⊂ agendado; faltou ⊂ agendado.
+      isScheduled: (stepId) =>
+        scheduled.has(stepId) || closing.has(stepId) || noshow.has(stepId) || attended.has(stepId),
       isClosing: (stepId) => closing.has(stepId),
       isNoShow: (stepId) => noshow.has(stepId),
       isNotScheduled: (stepId) => notScheduled.has(stepId),
+      isAttended: (stepId) => attended.has(stepId) || closing.has(stepId),
     };
   }
   // Fallback canônico: classifica pelo TÍTULO da etapa.
@@ -75,6 +85,7 @@ function resolveClassifier(
     isClosing: (_stepId, title) => title === CLOSING,
     isNoShow: (_stepId, title) => title === NOSHOW,
     isNotScheduled: (_stepId, title) => title === NOT_SCHEDULED,
+    isAttended: (_stepId, title) => title !== undefined && ATTENDED_TITLES.has(title),
   };
 }
 
@@ -84,22 +95,29 @@ export function buildLiveFunnel(
   mapping?: FunnelMapping | null,
 ) {
   const titleByStepId = new Map(steps.map((s) => [s.id, s.title]));
-  const { isScheduled, isClosing, isNoShow, isNotScheduled } = resolveClassifier(steps, mapping);
+  const { isScheduled, isClosing, isNoShow, isNotScheduled, isAttended } =
+    resolveClassifier(steps, mapping);
   const countByTitle = new Map<string, number>();
   let revenue = 0;
   let leads = 0;
   let scheduled = 0;
   let noShow = 0;
   let notScheduled = 0;
+  let attended = 0;
+  let closed = 0;
   for (const card of monthCards) {
     const title = titleByStepId.get(card.stepId);
     if (!title) continue;
     leads++;
     countByTitle.set(title, (countByTitle.get(title) ?? 0) + 1);
     if (isScheduled(card.stepId, title)) scheduled++;
-    if (isClosing(card.stepId, title)) revenue += card.monetaryAmount ?? 0;
+    if (isClosing(card.stepId, title)) {
+      closed++;
+      revenue += card.monetaryAmount ?? 0; // faturamento = valor do card
+    }
     if (isNoShow(card.stepId, title)) noShow++;
     if (isNotScheduled(card.stepId, title)) notScheduled++;
+    if (isAttended(card.stepId, title)) attended++;
   }
   // Com mapping, exibe as etapas reais do painel (na ordem do Kanban); sem
   // mapping, mantém as 9 etapas canônicas para compatibilidade de exibição.
@@ -109,7 +127,7 @@ export function buildLiveFunnel(
         .map((s) => ({ title: s.title, count: countByTitle.get(s.title) ?? 0 }))
     : CANONICAL_STEPS.map((title) => ({ title, count: countByTitle.get(title) ?? 0 }));
   const rate = leads === 0 ? 0 : scheduled / leads;
-  return { steps: outSteps, leads, scheduled, rate, revenue, noShow, notScheduled };
+  return { steps: outSteps, leads, scheduled, rate, revenue, noShow, notScheduled, attended, closed };
 }
 
 export type DailyFunnelPoint = { day: string; leads: number; scheduled: number; rate: number | null };

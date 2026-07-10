@@ -16,12 +16,13 @@ interface ClinicFunnelMappingProps {
   clinicId: string;
 }
 
-type Bucket = "lead" | "scheduled" | "closing" | "noshow" | "notscheduled";
+type Bucket = "lead" | "scheduled" | "closing" | "noshow" | "notscheduled" | "attended";
 
 const BUCKETS: { key: Bucket; label: string; hint: string }[] = [
   { key: "lead", label: "Chegada", hint: "colunas de entrada de leads" },
   { key: "scheduled", label: "Agendado", hint: "colunas que contam como agendamento" },
-  { key: "closing", label: "Fechamento", hint: "faturamento = valor dos cards nessas colunas" },
+  { key: "attended", label: "Compareceu", hint: "veio à consulta — conta também como agendado" },
+  { key: "closing", label: "Fechamento", hint: "fechou tratamento — faturamento = valor dos cards; conta como compareceu/agendado" },
   { key: "noshow", label: "No-show", hint: "agendou e não compareceu — conta também como agendado" },
   { key: "notscheduled", label: "Não agendou", hint: "lead que não chegou a agendar — não conta como agendado" },
 ];
@@ -36,6 +37,7 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
     closing: new Set(),
     noshow: new Set(),
     notscheduled: new Set(),
+    attended: new Set(),
   });
   const [isLoading, startLoad] = useTransition();
   const [isSaving, startSave] = useTransition();
@@ -58,6 +60,7 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
           closing: new Set(res.setup.closingStepIds),
           noshow: new Set(res.setup.noshowStepIds),
           notscheduled: new Set(res.setup.notScheduledStepIds),
+          attended: new Set(res.setup.attendedStepIds),
         });
         setLoaded(true);
       });
@@ -81,6 +84,7 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
         closingStepIds: [...sel.closing],
         noshowStepIds: [...sel.noshow],
         notScheduledStepIds: [...sel.notscheduled],
+        attendedStepIds: [...sel.attended],
       });
       if (!res.ok) {
         toast.error(res.error);
