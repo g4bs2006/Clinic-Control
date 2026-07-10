@@ -37,6 +37,18 @@ function dateLabel(d: string): string {
   })
 }
 
+/** Idade (dias) de uma data YYYY-MM-DD — meio-dia BRT evita off-by-one de fuso. */
+function daysSinceDay(d: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(`${d}T12:00:00-03:00`).getTime()) / 86_400_000))
+}
+
+/** Sugestão pendente envelhece rápido: ou confirma ou descarta. */
+function suggestionAgeCls(days: number): string {
+  if (days >= 7) return "font-semibold text-rose-400"
+  if (days >= 3) return "font-medium text-amber-400"
+  return "text-muted-foreground"
+}
+
 interface TaskSuggestionsProps {
   suggestions: TaskSuggestionRow[]
   clinics: (ClinicOption & { developerId: string | null })[]
@@ -190,7 +202,16 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, cu
             <Link href={`/clinicas/${s.clinic_id}`} className="hover:text-foreground transition-colors">
               {s.clinic_name}
             </Link>
-            {s.summary_date && <> · {dateLabel(s.summary_date)}</>}
+            {s.summary_date && (
+              <>
+                {" "}· {dateLabel(s.summary_date)}
+                {daysSinceDay(s.summary_date) >= 3 && (
+                  <span className={suggestionAgeCls(daysSinceDay(s.summary_date))}>
+                    {" "}· pendente há {daysSinceDay(s.summary_date)}d
+                  </span>
+                )}
+              </>
+            )}
           </p>
         </div>
         <div className="flex w-full gap-2 sm:w-auto">

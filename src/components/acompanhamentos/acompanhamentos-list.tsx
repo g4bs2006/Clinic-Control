@@ -37,6 +37,34 @@ function summaryDateLabel(d: string): string {
   return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" })
 }
 
+// ── Envelhecimento: acompanhamento é passivo, o risco é apodrecer esquecido ──
+
+function daysSince(iso: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000))
+}
+
+/** Idade de uma data YYYY-MM-DD (meio-dia BRT, evita off-by-one de fuso). */
+function daysSinceDay(d: string): number {
+  return daysSince(`${d}T12:00:00-03:00`)
+}
+
+function ageCls(days: number): string {
+  if (days >= 14) return "font-semibold text-rose-400"
+  if (days >= 7) return "font-medium text-amber-400"
+  return "text-muted-foreground"
+}
+
+function ageLabel(days: number): string {
+  return days === 0 ? "aberto hoje" : `aberto há ${days} ${days === 1 ? "dia" : "dias"}`
+}
+
+/** Sugestão pendente envelhece mais rápido: ou confirma ou descarta. */
+function suggestionAgeCls(days: number): string {
+  if (days >= 7) return "font-semibold text-rose-400"
+  if (days >= 3) return "font-medium text-amber-400"
+  return "text-muted-foreground"
+}
+
 export function AcompanhamentosList({
   initialItems,
   initialSuggestions,
@@ -51,7 +79,10 @@ export function AcompanhamentosList({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [openItem, setOpenItem] = useState<AcompanhamentoRow | null>(null)
 
-  const abertos = items.filter((a) => a.status === "aberto")
+  // Abertos: mais VELHOS primeiro — o que está apodrecendo sobe pro topo.
+  const abertos = items
+    .filter((a) => a.status === "aberto")
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
   const fechados = items.filter((a) => a.status !== "aberto")
 
   function setStatus(id: string, status: AcompanhamentoRow["status"]) {
@@ -215,7 +246,13 @@ export function AcompanhamentosList({
               </Link>
             )}
             {a.assigned_to_name && <>· {a.assigned_to_name}</>}
-            {closed && a.resolved_at ? <>· {a.status === "resolvido" ? "resolvido" : "dispensado"} {dateLabel(a.resolved_at)}</> : <>· aberto {dateLabel(a.created_at)}</>}
+            {closed && a.resolved_at ? (
+              <>· {a.status === "resolvido" ? "resolvido" : "dispensado"} {dateLabel(a.resolved_at)}</>
+            ) : (
+              <span className={ageCls(daysSince(a.created_at))} title={`desde ${dateLabel(a.created_at)}`}>
+                · {ageLabel(daysSince(a.created_at))}
+              </span>
+            )}
             {a.source === "ia" && (
               <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[0.6rem] font-semibold text-amber-400">IA</span>
             )}
@@ -262,6 +299,7 @@ export function AcompanhamentosList({
         <div className="mb-1 flex items-center gap-2">
           <h2 className="text-sm font-semibold text-foreground">Em aberto</h2>
           <span className="text-xs tabular-nums text-muted-foreground/70">{abertos.length}</span>
+          <span className="text-xs text-muted-foreground/60">· mais antigos primeiro</span>
         </div>
         {abertos.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
@@ -351,7 +389,16 @@ export function AcompanhamentosList({
                     <Link href={`/clinicas/${s.clinic_id}`} className="hover:text-foreground transition-colors">
                       {s.clinic_name}
                     </Link>
-                    {s.summary_date && <> · {summaryDateLabel(s.summary_date)}</>}
+                    {s.summary_date && (
+                      <>
+                        {" "}· {summaryDateLabel(s.summary_date)}
+                        {daysSinceDay(s.summary_date) >= 3 && (
+                          <span className={suggestionAgeCls(daysSinceDay(s.summary_date))}>
+                            {" "}· pendente há {daysSinceDay(s.summary_date)}d
+                          </span>
+                        )}
+                      </>
+                    )}
                   </p>
                 </div>
                 <div className="flex gap-1.5">

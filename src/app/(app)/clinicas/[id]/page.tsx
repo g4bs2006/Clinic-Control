@@ -22,7 +22,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
-import { FunnelView } from "@/components/dashboard/funnel-view"
+import { ClinicFunnelExplorer } from "@/components/clinics/clinic-funnel-explorer"
 import { TrendChart, type TrendSeries } from "@/components/dashboard/trend-chart"
 import { ClinicAgents } from "@/components/clinics/clinic-agents"
 import { ClinicFiles } from "@/components/clinics/clinic-files"
@@ -410,8 +410,13 @@ export default async function ClinicDetailPage({
       {/* ── Funnel + trend ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {liveFunnel ? (
-          <Panel title="Funil de leads" subtitle="mês corrente · ao vivo da Helena">
-            <FunnelView steps={liveFunnel.steps} totals={liveFunnel} />
+          <Panel title="Funil de leads" subtitle="ao vivo da Helena · selecione o mês">
+            <ClinicFunnelExplorer
+              clinicId={id}
+              monthOptions={dailyMonthOptions}
+              initialMonth={currentMonth}
+              initialFunnel={liveFunnel}
+            />
           </Panel>
         ) : (
           <Panel
