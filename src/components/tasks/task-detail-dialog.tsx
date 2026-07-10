@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Sparkles, Paperclip, Download, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw } from "lucide-react"
+import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -391,7 +391,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                           items={Object.fromEntries(TASK_STATUSES.map((st) => [st, TASK_STATUS_LABEL[st]]))}
                           onValueChange={(v) => v && changeSubtaskStatus(s.id, v as TaskStatus)}
                         >
-                          <SelectTrigger className="h-6 min-w-[8rem] text-[0.7rem]">
+                          <SelectTrigger className="h-8 min-w-[8rem] text-xs sm:h-6 sm:text-[0.7rem]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -425,20 +425,25 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 ) : (
                   <ul className="flex flex-col divide-y divide-border/40">
                     {attachments.map((a) => (
-                      <li key={a.id} className="flex items-center gap-2 py-1.5 text-sm">
+                      <li key={a.id} className="flex items-center gap-2 py-2 text-sm">
                         <button
                           type="button"
                           onClick={() => downloadAttachment(a.id)}
                           className="flex-1 truncate text-left text-brand-gradient hover:opacity-85"
+                          title="Baixar anexo"
                         >
                           {a.file_name}
                         </button>
                         <span className="shrink-0 text-[0.68rem] text-muted-foreground">{fmtBytes(a.size_bytes)}</span>
-                        <Button type="button" size="icon-xs" variant="ghost" onClick={() => downloadAttachment(a.id)}>
-                          <Download className="size-3" />
-                        </Button>
-                        <Button type="button" size="icon-xs" variant="ghost" onClick={() => removeAttachment(a.id)}>
-                          <Trash2 className="size-3" />
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          className="size-9 shrink-0 text-muted-foreground hover:text-red-400 sm:size-7"
+                          aria-label="Excluir anexo"
+                          onClick={() => removeAttachment(a.id)}
+                        >
+                          <Trash2 className="size-3.5" />
                         </Button>
                       </li>
                     ))}

@@ -221,20 +221,20 @@ export function AcompanhamentosList({
             )}
           </p>
         </div>
-        <div className="flex shrink-0 gap-1.5">
+        <div className="flex w-full gap-2 sm:w-auto sm:shrink-0">
           {a.status === "aberto" ? (
             <>
-              <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => setStatus(a.id, "resolvido")}>
+              <Button type="button" size="sm" variant="outline" disabled={pending} className="h-9 flex-1 sm:h-8 sm:flex-none" onClick={() => setStatus(a.id, "resolvido")}>
                 <CheckCircle2 className="size-3.5" />
                 Resolver
               </Button>
-              <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => setStatus(a.id, "dispensado")}>
+              <Button type="button" size="sm" variant="ghost" disabled={pending} className="h-9 flex-1 sm:h-8 sm:flex-none" onClick={() => setStatus(a.id, "dispensado")}>
                 <X className="size-3.5" />
                 Dispensar
               </Button>
             </>
           ) : (
-            <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => setStatus(a.id, "aberto")}>
+            <Button type="button" size="sm" variant="ghost" disabled={pending} className="h-9 flex-1 sm:h-8 sm:flex-none" onClick={() => setStatus(a.id, "aberto")}>
               <RotateCcw className="size-3.5" />
               Reabrir
             </Button>
@@ -246,7 +246,7 @@ export function AcompanhamentosList({
             disabled={pending}
             onClick={() => remove(a.id)}
             title="Excluir"
-            className="text-muted-foreground hover:text-red-400"
+            className="size-9 shrink-0 text-muted-foreground hover:text-red-400 sm:size-8"
           >
             <Trash2 className="size-3.5" />
           </Button>

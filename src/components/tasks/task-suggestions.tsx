@@ -193,18 +193,26 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, cu
             {s.summary_date && <> · {dateLabel(s.summary_date)}</>}
           </p>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex w-full gap-2 sm:w-auto">
           <Button
             type="button"
             size="sm"
             variant="outline"
             disabled={pending}
+            className="h-9 flex-1 sm:h-8 sm:flex-none"
             onClick={() => (isAcomp ? confirmAcompanhamento(s) : openReview(s))}
           >
             <Check className="size-3.5" />
             Confirmar
           </Button>
-          <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => dismiss(s.id)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            className="h-9 flex-1 sm:h-8 sm:flex-none"
+            onClick={() => dismiss(s.id)}
+          >
             <X className="size-3.5" />
             Descartar
           </Button>

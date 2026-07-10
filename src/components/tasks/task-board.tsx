@@ -103,7 +103,7 @@ function TaskListItem({
         onClick={() => onChangeStatus(t.id, isDone ? "pendente" : "concluida")}
         title={isDone ? "Reabrir tarefa" : "Concluir tarefa"}
         aria-label={isDone ? "Reabrir tarefa" : "Concluir tarefa"}
-        className={`shrink-0 transition-colors ${isDone ? "text-emerald-500 hover:text-muted-foreground" : "text-muted-foreground/50 hover:text-emerald-500"}`}
+        className={`flex size-9 shrink-0 items-center justify-center transition-colors sm:size-6 ${isDone ? "text-emerald-500 hover:text-muted-foreground" : "text-muted-foreground/50 hover:text-emerald-500"}`}
       >
         {isDone ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}
       </button>
@@ -148,7 +148,7 @@ function TaskListItem({
         items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
         onValueChange={(v) => v && onChangeStatus(t.id, v as TaskStatus)}
       >
-        <SelectTrigger className="h-7 min-w-[9rem] text-xs">
+        <SelectTrigger className="h-9 min-w-[9rem] text-xs sm:h-7">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -166,6 +166,7 @@ function TaskListItem({
         variant="ghost"
         disabled={pending}
         title="Excluir tarefa"
+        className="size-9 sm:size-8"
         onClick={() => onRemove(t.id)}
       >
         <Trash2 className="size-3.5" />
@@ -371,7 +372,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
               items={{ [ALL]: "Todos os status", ...Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]])) }}
               onValueChange={(v) => setStatusFilter(v ?? ALL)}
             >
-              <SelectTrigger className="h-8 text-sm min-w-[9rem]">
+              <SelectTrigger className="h-9 flex-1 text-sm min-w-[9rem] sm:h-8 sm:flex-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -389,7 +390,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
               items={{ [ALL]: "Todas as categorias", ...Object.fromEntries(filterCategories.map((c) => [c.slug, c.label])) }}
               onValueChange={(v) => setCategoryFilter(v ?? ALL)}
             >
-              <SelectTrigger className="h-8 text-sm min-w-[9rem]">
+              <SelectTrigger className="h-9 flex-1 text-sm min-w-[9rem] sm:h-8 sm:flex-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -407,7 +408,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
               items={{ [ALL]: "Todas as prioridades", ...Object.fromEntries(TASK_PRIORITIES.map((p) => [p, TASK_PRIORITY_LABEL[p]])) }}
               onValueChange={(v) => setPriorityFilter(v ?? ALL)}
             >
-              <SelectTrigger className="h-8 text-sm min-w-[9rem]">
+              <SelectTrigger className="h-9 flex-1 text-sm min-w-[9rem] sm:h-8 sm:flex-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -454,6 +455,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
             size="icon-sm"
             variant={view === "list" ? "secondary" : "ghost"}
             title="Ver como lista"
+            className="size-9 sm:size-7"
             onClick={() => setView("list")}
           >
             <List className="size-3.5" />
@@ -463,6 +465,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
             size="icon-sm"
             variant={view === "board" ? "secondary" : "ghost"}
             title="Ver como board"
+            className="size-9 sm:size-7"
             onClick={() => setView("board")}
           >
             <LayoutGrid className="size-3.5" />
@@ -472,6 +475,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
             size="icon-sm"
             variant={view === "week" ? "secondary" : "ghost"}
             title="Ver minha semana"
+            className="size-9 sm:size-7"
             onClick={() => setView("week")}
           >
             <CalendarDays className="size-3.5" />
