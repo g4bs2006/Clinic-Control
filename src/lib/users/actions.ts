@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSessionUser } from "@/lib/auth/session";
+import { requireGestor } from "@/lib/auth/require-gestor";
 import { hashPassword, verifyPassword, generateTempPassword } from "@/lib/auth/password";
 
 /** Cookie global com a carteira (developer_id) que o gestor escolheu filtrar. */
@@ -96,13 +97,6 @@ export async function setCarteira(devId: string | null) {
   }
   revalidatePath("/", "layout");
   return { ok: true as const };
-}
-
-async function requireGestor(): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
-  const profile = await getCurrentProfile();
-  if (!profile) return { ok: false, error: "Não autenticado" };
-  if (profile.role !== "gestor") return { ok: false, error: "Apenas gestores podem fazer isso" };
-  return { ok: true, userId: profile.id };
 }
 
 /** Troca o papel de um usuário — apenas gestor. */

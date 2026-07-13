@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Copy, Check, Eye, EyeOff, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, Plus, Pencil, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   createFormCredential,
   updateFormCredential,
@@ -13,36 +14,6 @@ import {
   type FormCredential,
   type FormCredentialInput,
 } from "@/lib/clinics/form-credentials-actions";
-
-// ---------------------------------------------------------------------------
-// Copy button (reusable)
-// ---------------------------------------------------------------------------
-
-function CopyButton({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      toast.success(`${label} copiado!`);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Falha ao copiar");
-    }
-  }, [value, label]);
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="inline-flex items-center justify-center size-7 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
-      title={`Copiar ${label.toLowerCase()}`}
-    >
-      {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
-    </button>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Token field with reveal toggle

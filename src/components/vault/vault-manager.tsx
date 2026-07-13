@@ -1,20 +1,24 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Eye, EyeOff, Copy, Pencil, Trash2, Plus, ExternalLink } from "lucide-react";
+import { Eye, EyeOff, Pencil, Trash2, Plus, ExternalLink, Search, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import {
-  listCredentials,
   revealSecret,
   createCredential,
   updateCredential,
@@ -27,203 +31,388 @@ interface VaultManagerProps {
   initialCredentials: CredentialSummary[];
 }
 
-const EMPTY_FORM: CredentialInput = { service: "", category: "", login: "", secret: "", url: "", notes: "" };
+type FormState = Omit<CredentialInput, "clearSecret">;
 
-async function copyText(text: string, label: string) {
-  await navigator.clipboard.writeText(text);
-  toast.success(`${label} copiado`);
+const EMPTY_FORM: FormState = { service: "", category: "", login: "", secret: "", url: "", notes: "" };
+
+/** Janela de exposição: segredo revelado se auto-oculta depois disso. */
+const EXPOSURE_MS = 30_000;
+
+function fmtRelative(iso: string): string {
+  const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (diffMin < 1) return "agora há pouco";
+  if (diffMin < 60) return `há ${diffMin} min`;
+  const h = Math.floor(diffMin / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `há ${d} d`;
+  return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+// ── Assinatura visual: o ciclo de revelação ─────────────────────────────────
+// O segredo "resolve" na tela (caracteres embaralhados → texto real) e fica
+// emoldurado em âmbar enquanto exposto; a linha fina drena por 30s até o
+// auto-ocultamento. Motion que codifica o estado real (exposto/oculto), não
+// decoração — e respeita prefers-reduced-motion.
+
+const SCRAMBLE_CHARS = "!<>-_\\/[]{}=+*^?#";
+
+function ScrambleText({ text }: { text: string }) {
+  const [display, setDisplay] = useState(text);
+
+  useEffect(() => {
+    // Textos longos (docs/JSON) e reduced-motion pulam direto pro texto real.
+    if (text.length > 160 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setDisplay(text);
+      return;
+    }
+    let frame = 0;
+    const totalFrames = 10;
+    const id = setInterval(() => {
+      frame++;
+      const resolved = Math.floor((frame / totalFrames) * text.length);
+      let out = text.slice(0, resolved);
+      for (let i = resolved; i < text.length; i++) {
+        out += text[i] === "\n" ? "\n" : SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
+      }
+      setDisplay(out);
+      if (frame >= totalFrames) clearInterval(id);
+    }, 35);
+    return () => clearInterval(id);
+  }, [text]);
+
+  return <>{display}</>;
+}
+
+function ExposureTimer({ onExpire }: { onExpire: () => void }) {
+  const expireRef = useRef(onExpire);
+  expireRef.current = onExpire;
+  const [draining, setDraining] = useState(false);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setDraining(true));
+    const t = setTimeout(() => expireRef.current(), EXPOSURE_MS);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, []);
+
+  return (
+    <div className="h-px w-full overflow-hidden bg-amber-500/15">
+      <div
+        className="h-px bg-amber-400/80 transition-[width] ease-linear motion-reduce:transition-none"
+        style={{ width: draining ? "0%" : "100%", transitionDuration: `${EXPOSURE_MS}ms` }}
+      />
+    </div>
+  );
 }
 
 export function VaultManager({ initialCredentials }: VaultManagerProps) {
-  const [credentials, setCredentials] = useState(initialCredentials);
-  const [revealed, setRevealed] = useState<Record<string, string>>({});
-  const [revealingId, setRevealingId] = useState<string | null>(null);
+  const [items, setItems] = useState(initialCredentials);
+  const [query, setQuery] = useState("");
+  // Cache do plaintext decriptado (por sessão de página) e conjunto do que
+  // está VISÍVEL — separados de propósito: "copiar sem revelar" preenche o
+  // cache sem expor nada na tela. A primeira busca de cada segredo é auditada
+  // no servidor; após editar o segredo o cache é invalidado.
+  const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const [shown, setShown] = useState<Record<string, boolean>>({});
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CredentialSummary | null>(null);
-  const [form, setForm] = useState<CredentialInput>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [clearSecret, setClearSecret] = useState(false);
+  const [secretVisible, setSecretVisible] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CredentialSummary | null>(null);
   const [isSaving, startSave] = useTransition();
-  const [isRefreshing, startRefresh] = useTransition();
+  const [isDeleting, startDelete] = useTransition();
 
-  const grouped = useMemo(() => {
-    const groups = new Map<string, CredentialSummary[]>();
-    for (const c of credentials) {
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? items.filter((c) =>
+          [c.service, c.login, c.category, c.notes, c.url]
+            .filter(Boolean)
+            .some((v) => v!.toLowerCase().includes(q)),
+        )
+      : items;
+    const map = new Map<string, CredentialSummary[]>();
+    for (const c of filtered) {
       const key = c.category?.trim() || "Outros";
-      groups.set(key, [...(groups.get(key) ?? []), c]);
+      map.set(key, [...(map.get(key) ?? []), c]);
     }
-    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, "pt-BR"));
-  }, [credentials]);
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, "pt-BR"))
+      .map(([category, list]) => ({
+        category,
+        list: [...list].sort((a, b) => a.service.localeCompare(b.service, "pt-BR")),
+      }));
+  }, [items, query]);
 
-  function refresh() {
-    startRefresh(async () => {
-      const res = await listCredentials();
-      if (res.ok) setCredentials(res.credentials);
+  async function fetchSecret(id: string): Promise<string | null> {
+    if (secrets[id]) return secrets[id];
+    setLoadingId(id);
+    try {
+      const res = await revealSecret(id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return null;
+      }
+      setSecrets((prev) => ({ ...prev, [id]: res.secret }));
+      return res.secret;
+    } catch {
+      toast.error("Falha ao buscar o conteúdo — tente novamente");
+      return null;
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  function conceal(id: string) {
+    setShown((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
     });
   }
 
-  async function ensureRevealed(id: string): Promise<string | null> {
-    if (revealed[id]) return revealed[id];
-    setRevealingId(id);
-    const res = await revealSecret(id);
-    setRevealingId(null);
-    if (!res.ok) {
-      toast.error(res.error);
-      return null;
-    }
-    setRevealed((prev) => ({ ...prev, [id]: res.secret }));
-    return res.secret;
-  }
-
-  async function toggleReveal(id: string) {
-    if (revealed[id]) {
-      setRevealed((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+  async function toggleShown(id: string) {
+    if (shown[id]) {
+      conceal(id);
       return;
     }
-    await ensureRevealed(id);
+    const secret = await fetchSecret(id);
+    if (secret != null) setShown((prev) => ({ ...prev, [id]: true }));
   }
 
-  async function handleCopySecret(id: string) {
-    const secret = await ensureRevealed(id);
-    if (secret) await copyText(secret, "Conteúdo");
+  function invalidateSecret(id: string) {
+    setSecrets((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    conceal(id);
   }
 
   function openCreate() {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setClearSecret(false);
+    setSecretVisible(false);
     setDialogOpen(true);
   }
 
   function openEdit(c: CredentialSummary) {
     setEditing(c);
-    setForm({ service: c.service, category: c.category ?? "", login: c.login ?? "", secret: "", url: c.url ?? "", notes: c.notes ?? "" });
+    setForm({
+      service: c.service,
+      category: c.category ?? "",
+      login: c.login ?? "",
+      secret: "",
+      url: c.url ?? "",
+      notes: c.notes ?? "",
+    });
+    setClearSecret(false);
+    setSecretVisible(false);
     setDialogOpen(true);
   }
 
   function handleSave() {
     startSave(async () => {
-      const res = editing ? await updateCredential(editing.id, form) : await createCredential(form);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
+      try {
+        if (editing) {
+          const res = await updateCredential(editing.id, { ...form, clearSecret });
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
+          setItems((prev) => prev.map((i) => (i.id === editing.id ? res.credential : i)));
+          // Segredo trocado/limpo: o plaintext em cache é de antes da edição —
+          // servir ele no copiar/revelar entregaria a credencial ROTACIONADA.
+          if (res.secretChanged) invalidateSecret(editing.id);
+          toast.success("Item atualizado");
+        } else {
+          const res = await createCredential(form);
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
+          setItems((prev) => [...prev, res.credential]);
+          toast.success("Item criado");
+        }
+        setDialogOpen(false);
+      } catch {
+        toast.error("Falha ao salvar — tente novamente");
       }
-      toast.success(editing ? "Item atualizado" : "Item criado");
-      setDialogOpen(false);
-      refresh();
     });
   }
 
-  async function handleDelete(c: CredentialSummary) {
-    if (!confirm(`Excluir o item "${c.service}"? Essa ação não pode ser desfeita.`)) return;
-    const res = await deleteCredential(c.id);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
-    }
-    toast.success("Item excluído");
-    refresh();
+  function handleDelete() {
+    const target = deleteTarget;
+    if (!target) return;
+    startDelete(async () => {
+      try {
+        const res = await deleteCredential(target.id);
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        setItems((prev) => prev.filter((i) => i.id !== target.id));
+        invalidateSecret(target.id);
+        setDeleteTarget(null);
+        toast.success("Item excluído");
+      } catch {
+        toast.error("Falha ao excluir — tente novamente");
+      }
+    });
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      {/* ── Busca + novo ── */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por serviço, login, categoria ou nota…"
+            className="pl-8"
+          />
+        </div>
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" />
           Novo item
         </Button>
       </div>
 
-      {isRefreshing && <p className="text-xs text-muted-foreground">Atualizando…</p>}
-
-      {grouped.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum item cadastrado ainda.</p>
+      {items.length === 0 && (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-6 py-12 text-center">
+          <KeyRound className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            O cofre está vazio. Guarde aqui logins, tokens, chaves e outros acessos da operação.
+          </p>
+          <Button size="sm" variant="outline" onClick={openCreate}>
+            <Plus className="size-4" />
+            Guardar o primeiro item
+          </Button>
+        </div>
       )}
 
-      {grouped.map(([category, items]) => (
-        <div key={category} className="rounded-lg border border-border">
-          <div className="border-b border-border bg-muted/30 px-4 py-2">
-            <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+      {items.length > 0 && groups.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          Nada encontrado para &quot;{query.trim()}&quot;.
+        </p>
+      )}
+
+      {groups.map(({ category, list }) => (
+        <section key={category}>
+          <div className="mb-2 flex items-baseline justify-between px-1">
+            <h3 className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {category}
             </h3>
+            <span className="text-[0.65rem] tabular-nums text-muted-foreground/70">
+              {list.length} {list.length === 1 ? "item" : "itens"}
+            </span>
           </div>
-          <div className="divide-y divide-border/60">
-            {items.map((c) => (
-              <div key={c.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">{c.service}</span>
-                    {c.url && (
-                      <a
-                        href={c.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-muted-foreground hover:text-foreground"
-                        title={c.url}
-                      >
-                        <ExternalLink className="size-3.5" />
-                      </a>
-                    )}
+          <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <div className="divide-y divide-border/60">
+              {list.map((c) => {
+                const isShown = !!shown[c.id] && !!secrets[c.id];
+                return (
+                  <div key={c.id} className="group px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium text-foreground">{c.service}</span>
+                          {c.url && (
+                            <a
+                              href={c.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="shrink-0 text-muted-foreground/70 transition-colors hover:text-foreground"
+                              title={c.url}
+                            >
+                              <ExternalLink className="size-3.5" />
+                            </a>
+                          )}
+                          <span
+                            className="ml-auto shrink-0 text-[0.65rem] text-muted-foreground/60"
+                            title={new Date(c.updatedAt).toLocaleString("pt-BR")}
+                          >
+                            atualizado {fmtRelative(c.updatedAt)}
+                          </span>
+                        </div>
+
+                        {c.login && (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <span className="truncate">{c.login}</span>
+                            <CopyButton value={c.login} label="Login" className="size-6" />
+                          </div>
+                        )}
+
+                        {c.hasSecret && (
+                          <div
+                            className={cn(
+                              "rounded-md border transition-colors",
+                              isShown ? "border-amber-500/40 bg-amber-500/[0.04]" : "border-border/60 bg-muted/30",
+                            )}
+                          >
+                            <div className="flex items-start gap-1 px-2.5 py-1.5">
+                              <pre className="max-h-40 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap break-all font-mono text-xs leading-relaxed">
+                                {isShown ? (
+                                  <ScrambleText text={secrets[c.id]} />
+                                ) : loadingId === c.id ? (
+                                  "decriptando…"
+                                ) : (
+                                  "••••••••••••••••"
+                                )}
+                              </pre>
+                              <button
+                                type="button"
+                                onClick={() => toggleShown(c.id)}
+                                className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                title={isShown ? "Ocultar agora" : "Revelar por 30 segundos"}
+                              >
+                                {isShown ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                              </button>
+                              <CopyButton
+                                getValue={() => fetchSecret(c.id)}
+                                label="Conteúdo"
+                                className="size-6"
+                              />
+                            </div>
+                            {isShown && <ExposureTimer onExpire={() => conceal(c.id)} />}
+                          </div>
+                        )}
+
+                        {c.notes && <p className="text-xs text-muted-foreground">{c.notes}</p>}
+                      </div>
+
+                      <div className="flex shrink-0 gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
+                        <Button size="icon-sm" variant="ghost" onClick={() => openEdit(c)} title="Editar item">
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => setDeleteTarget(c)}
+                          title="Excluir item"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  {c.login && (
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <span className="truncate">{c.login}</span>
-                      <button
-                        type="button"
-                        onClick={() => copyText(c.login!, "Login")}
-                        className="text-muted-foreground/70 hover:text-foreground"
-                        title="Copiar login"
-                      >
-                        <Copy className="size-3" />
-                      </button>
-                    </div>
-                  )}
-                  {c.hasSecret && (
-                    <div className="flex items-start gap-1.5 text-sm">
-                      {revealed[c.id] ? (
-                        <pre className="max-h-40 max-w-full overflow-y-auto whitespace-pre-wrap break-all rounded bg-muted px-2 py-1 font-mono text-xs">
-                          {revealed[c.id]}
-                        </pre>
-                      ) : (
-                        <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs">
-                          {revealingId === c.id ? "carregando…" : "••••••••••••"}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => toggleReveal(c.id)}
-                        className="mt-0.5 shrink-0 text-muted-foreground/70 hover:text-foreground"
-                        title={revealed[c.id] ? "Ocultar" : "Revelar"}
-                      >
-                        {revealed[c.id] ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCopySecret(c.id)}
-                        className="mt-0.5 shrink-0 text-muted-foreground/70 hover:text-foreground"
-                        title="Copiar conteúdo"
-                      >
-                        <Copy className="size-3" />
-                      </button>
-                    </div>
-                  )}
-                  {c.notes && <p className="text-xs text-muted-foreground">{c.notes}</p>}
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => openEdit(c)} title="Editar">
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => handleDelete(c)} title="Excluir">
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </section>
       ))}
 
+      {/* ── Criar / editar ── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -236,38 +425,72 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
                 id="service"
                 value={form.service}
                 onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))}
-                placeholder="Ex: Supabase, JWT do n8n, Grupo WhatsApp Contact IA…"
+                placeholder="Ex: Supabase, JWT do n8n, Grupo WhatsApp…"
                 required
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="category">Categoria</Label>
-              <Input
-                id="category"
-                value={form.category ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                placeholder="Ex: Dashboards, Contact.IA, Sala Black"
-              />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="category">Categoria</Label>
+                <Input
+                  id="category"
+                  value={form.category ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  placeholder="Ex: Dashboards, Sala Black"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="login">Login / e-mail (opcional)</Label>
+                <Input
+                  id="login"
+                  value={form.login ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, login: e.target.value }))}
+                  placeholder="Vazio se não se aplica"
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="login">Login / e-mail (opcional)</Label>
-              <Input
-                id="login"
-                value={form.login ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, login: e.target.value }))}
-                placeholder="Deixe vazio se não se aplica"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="secret">Conteúdo sensível (senha, token, texto, JSON…)</Label>
-              <textarea
+              <div className="flex items-center justify-between">
+                <Label htmlFor="secret">Conteúdo sensível (senha, token, texto, JSON…)</Label>
+                <button
+                  type="button"
+                  onClick={() => setSecretVisible((v) => !v)}
+                  className="inline-flex items-center gap-1 text-[0.7rem] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {secretVisible ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                  {secretVisible ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
+              <Textarea
                 id="secret"
                 value={form.secret ?? ""}
                 onChange={(e) => setForm((f) => ({ ...f, secret: e.target.value }))}
-                placeholder={editing ? "deixe vazio para manter o conteúdo atual" : "Cole aqui senha, token, JSON, texto de doc — qualquer coisa sensível"}
+                placeholder={
+                  editing?.hasSecret
+                    ? "Vazio mantém o conteúdo atual"
+                    : "Cole aqui o que precisa ficar cifrado"
+                }
                 rows={4}
-                className="w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                disabled={clearSecret}
+                spellCheck={false}
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                className={cn("font-mono", !secretVisible && "[-webkit-text-security:disc]")}
               />
+              {editing?.hasSecret && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClearSecret((v) => !v);
+                    setForm((f) => ({ ...f, secret: "" }));
+                  }}
+                  className="flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Checkbox checked={clearSecret} tabIndex={-1} className="pointer-events-none size-4" />
+                  Remover o conteúdo sensível deste item ao salvar
+                </button>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="url">URL</Label>
@@ -293,6 +516,27 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
             </Button>
             <Button onClick={handleSave} disabled={isSaving || !form.service.trim()}>
               {isSaving ? "Salvando…" : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Confirmação de exclusão ── */}
+      <Dialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir &quot;{deleteTarget?.service}&quot;?</DialogTitle>
+            <DialogDescription>
+              O item sai do cofre e o conteúdo cifrado é apagado. O histórico de revelações fica
+              preservado no log de auditoria.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? "Excluindo…" : "Excluir item"}
             </Button>
           </DialogFooter>
         </DialogContent>
