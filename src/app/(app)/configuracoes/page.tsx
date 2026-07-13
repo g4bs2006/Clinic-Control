@@ -63,16 +63,17 @@ export default async function ConfiguracoesPage() {
       {/* ── Usuários e papéis ──────────────────────────────────── */}
       <Panel
         title="Usuários"
-        subtitle="gestor vê toda a carteira · desenvolvedor vê só as clínicas dele"
+        subtitle="criar, editar e redefinir a senha de outras pessoas da equipe"
       >
         <UsersEditor
           initialProfiles={profiles}
           clinicCountByDeveloper={clinicCountByDeveloper}
+          currentUserId={currentProfile?.id}
         />
       </Panel>
 
       {/* ── Minha conta ────────────────────────────────────────── */}
-      <Panel title="Minha conta" subtitle="trocar a própria senha de acesso">
+      <Panel title="Minha conta" subtitle="trocar a sua própria senha de acesso">
         <ChangePasswordForm />
       </Panel>
 

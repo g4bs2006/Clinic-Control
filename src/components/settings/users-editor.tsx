@@ -39,9 +39,12 @@ const ROLE_LABEL: Record<UserProfile["role"], string> = {
 export function UsersEditor({
   initialProfiles,
   clinicCountByDeveloper,
+  currentUserId,
 }: {
   initialProfiles: UserProfile[]
   clinicCountByDeveloper: Record<string, number>
+  /** Id do usuário logado — a própria linha não mostra "Redefinir senha" (use Minha conta). */
+  currentUserId?: string
 }) {
   const [profiles, setProfiles] = useState(initialProfiles)
   const [pending, startTransition] = useTransition()
@@ -267,17 +270,19 @@ export function UsersEditor({
                 <Pencil className="size-3.5" />
                 Editar
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={pending}
-                onClick={() => onResetPassword(p)}
-                title="Gera uma senha temporária para repassar ao usuário"
-              >
-                <KeyRound className="size-3.5" />
-                Redefinir senha
-              </Button>
+              {p.id !== currentUserId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => onResetPassword(p)}
+                  title="Gera uma senha temporária para repassar a este usuário"
+                >
+                  <KeyRound className="size-3.5" />
+                  Redefinir senha
+                </Button>
+              )}
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                 <Switch
                   checked={p.active !== false}
