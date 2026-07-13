@@ -40,7 +40,7 @@ const navItems: { href: string; label: string; icon: LucideIcon; gestorOnly?: bo
   { href: "/churns", label: "Churns", icon: UserMinus },
   { href: "/helena", label: "Contas Helena", icon: Plug },
   // Segredos de produção — mais sensível que o resto do app, só gestor vê o item.
-  { href: "/cofre", label: "Cofre de credenciais", icon: KeyRound, gestorOnly: true },
+  { href: "/cofre", label: "Cofre", icon: KeyRound, gestorOnly: true },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 

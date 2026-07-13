@@ -87,7 +87,7 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
 
   async function handleCopySecret(id: string) {
     const secret = await ensureRevealed(id);
-    if (secret) await copyText(secret, "Segredo");
+    if (secret) await copyText(secret, "Conteúdo");
   }
 
   function openCreate() {
@@ -109,20 +109,20 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
         toast.error(res.error);
         return;
       }
-      toast.success(editing ? "Credencial atualizada" : "Credencial criada");
+      toast.success(editing ? "Item atualizado" : "Item criado");
       setDialogOpen(false);
       refresh();
     });
   }
 
   async function handleDelete(c: CredentialSummary) {
-    if (!confirm(`Excluir a credencial "${c.service}"? Essa ação não pode ser desfeita.`)) return;
+    if (!confirm(`Excluir o item "${c.service}"? Essa ação não pode ser desfeita.`)) return;
     const res = await deleteCredential(c.id);
     if (!res.ok) {
       toast.error(res.error);
       return;
     }
-    toast.success("Credencial excluída");
+    toast.success("Item excluído");
     refresh();
   }
 
@@ -131,14 +131,14 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
       <div className="flex justify-end">
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" />
-          Nova credencial
+          Novo item
         </Button>
       </div>
 
       {isRefreshing && <p className="text-xs text-muted-foreground">Atualizando…</p>}
 
       {grouped.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhuma credencial cadastrada ainda.</p>
+        <p className="text-sm text-muted-foreground">Nenhum item cadastrado ainda.</p>
       )}
 
       {grouped.map(([category, items]) => (
@@ -180,14 +180,20 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
                     </div>
                   )}
                   {c.hasSecret && (
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs">
-                        {revealingId === c.id ? "carregando…" : revealed[c.id] ?? "••••••••••••"}
-                      </span>
+                    <div className="flex items-start gap-1.5 text-sm">
+                      {revealed[c.id] ? (
+                        <pre className="max-h-40 max-w-full overflow-y-auto whitespace-pre-wrap break-all rounded bg-muted px-2 py-1 font-mono text-xs">
+                          {revealed[c.id]}
+                        </pre>
+                      ) : (
+                        <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs">
+                          {revealingId === c.id ? "carregando…" : "••••••••••••"}
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={() => toggleReveal(c.id)}
-                        className="text-muted-foreground/70 hover:text-foreground"
+                        className="mt-0.5 shrink-0 text-muted-foreground/70 hover:text-foreground"
                         title={revealed[c.id] ? "Ocultar" : "Revelar"}
                       >
                         {revealed[c.id] ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
@@ -195,8 +201,8 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
                       <button
                         type="button"
                         onClick={() => handleCopySecret(c.id)}
-                        className="text-muted-foreground/70 hover:text-foreground"
-                        title="Copiar segredo"
+                        className="mt-0.5 shrink-0 text-muted-foreground/70 hover:text-foreground"
+                        title="Copiar conteúdo"
                       >
                         <Copy className="size-3" />
                       </button>
@@ -221,16 +227,16 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? "Editar credencial" : "Nova credencial"}</DialogTitle>
+            <DialogTitle>{editing ? "Editar item" : "Novo item"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="service">Serviço</Label>
+              <Label htmlFor="service">Título</Label>
               <Input
                 id="service"
                 value={form.service}
                 onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))}
-                placeholder="Ex: Supabase, n8n, Cal.com"
+                placeholder="Ex: Supabase, JWT do n8n, Grupo WhatsApp Contact IA…"
                 required
               />
             </div>
@@ -244,21 +250,23 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="login">Login / e-mail</Label>
+              <Label htmlFor="login">Login / e-mail (opcional)</Label>
               <Input
                 id="login"
                 value={form.login ?? ""}
                 onChange={(e) => setForm((f) => ({ ...f, login: e.target.value }))}
+                placeholder="Deixe vazio se não se aplica"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="secret">Senha / token</Label>
-              <Input
+              <Label htmlFor="secret">Conteúdo sensível (senha, token, texto, JSON…)</Label>
+              <textarea
                 id="secret"
-                type="password"
                 value={form.secret ?? ""}
                 onChange={(e) => setForm((f) => ({ ...f, secret: e.target.value }))}
-                placeholder={editing ? "deixe vazio para manter o segredo atual" : ""}
+                placeholder={editing ? "deixe vazio para manter o conteúdo atual" : "Cole aqui senha, token, JSON, texto de doc — qualquer coisa sensível"}
+                rows={4}
+                className="w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
               />
             </div>
             <div className="space-y-1.5">

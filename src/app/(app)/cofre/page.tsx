@@ -7,10 +7,11 @@ export default async function CofrePage() {
   return (
     <main className="p-4 max-w-4xl mx-auto space-y-6 sm:p-8">
       <div>
-        <h1 className="text-2xl font-bold brand-header">Cofre de credenciais</h1>
+        <h1 className="text-2xl font-bold brand-header">Cofre</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Logins e segredos dos serviços externos usados pela operação. Segredos ficam cifrados
-          no banco e só são revelados por gestores — cada revelação é registrada.
+          Credenciais, tokens, documentos e qualquer outro acesso sensível da operação — não
+          precisa ser login/senha. O conteúdo fica cifrado no banco e só é revelado por gestores;
+          cada revelação é registrada.
         </p>
       </div>
 
