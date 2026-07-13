@@ -21,13 +21,14 @@ import {
   LogOut,
   Eye,
   X,
+  KeyRound,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/actions";
 import { CarteiraSwitcher } from "@/components/carteira-switcher";
 
-const navItems: { href: string; label: string; icon: LucideIcon }[] = [
+const navItems: { href: string; label: string; icon: LucideIcon; gestorOnly?: boolean }[] = [
   { href: "/", label: "Início", icon: LayoutDashboard },
   { href: "/clinicas", label: "Clínicas", icon: Building2 },
   { href: "/mensal", label: "Mensal", icon: CalendarDays },
@@ -38,6 +39,8 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/whatsapp", label: "Gerenciador de grupos", icon: MessageCircle },
   { href: "/churns", label: "Churns", icon: UserMinus },
   { href: "/helena", label: "Contas Helena", icon: Plug },
+  // Segredos de produção — mais sensível que o resto do app, só gestor vê o item.
+  { href: "/cofre", label: "Cofre de credenciais", icon: KeyRound, gestorOnly: true },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
@@ -203,7 +206,9 @@ export function AppNav({
 
           {/* Items */}
           <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
-            {navItems.map((item) => {
+            {navItems
+              .filter((item) => !item.gestorOnly || user?.role === "gestor")
+              .map((item) => {
               const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
               const Icon = item.icon;
               return (
