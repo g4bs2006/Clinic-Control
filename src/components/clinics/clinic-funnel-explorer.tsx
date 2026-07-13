@@ -22,6 +22,9 @@ type FunnelData = {
   notScheduled: number
   rate: number
   revenue: number
+  scheduledByCrc: number
+  scheduledByIa: number
+  scheduledUnclassified: number
 }
 
 interface ClinicFunnelExplorerProps {

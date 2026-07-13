@@ -14,6 +14,9 @@ interface FunnelTotals {
   closed: number
   noShow: number
   notScheduled: number
+  scheduledByCrc?: number
+  scheduledByIa?: number
+  scheduledUnclassified?: number
 }
 
 interface FunnelViewProps {
@@ -77,6 +80,19 @@ export function FunnelView({ steps, totals }: FunnelViewProps) {
 
   // Detalhamento: todas as colunas reais do painel com card no mês.
   const outcomes = steps.filter((s) => s.count > 0)
+
+  // Só mostra o breakdown por responsável se a clínica já tem etiqueta
+  // configurada (CRC ou IA) — evita ruído para quem não configurou ainda.
+  const crc = totals.scheduledByCrc ?? 0
+  const ia = totals.scheduledByIa ?? 0
+  const unclassified = totals.scheduledUnclassified ?? 0
+  const showScheduler = crc > 0 || ia > 0
+  const schedulerTotal = crc + ia + unclassified
+  const schedulerChips = [
+    { label: "CRC", count: crc, cls: "bg-sky-500/15 text-sky-400" },
+    { label: "IA", count: ia, cls: "bg-violet-500/15 text-violet-400" },
+    { label: "Não classificado", count: unclassified, cls: "bg-muted text-muted-foreground" },
+  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -143,6 +159,24 @@ export function FunnelView({ steps, totals }: FunnelViewProps) {
                 <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground">
                   {fmt(o.count)}
                 </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Agendado por quem: CRC vs IA (via etiqueta do card) ── */}
+      {showScheduler && (
+        <div className="border-t border-border/40 pt-4">
+          <h4 className="mb-3 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Agendado por quem
+          </h4>
+          <div className="grid grid-cols-3 gap-2">
+            {schedulerChips.map((c) => (
+              <div key={c.label} className={cn("flex flex-col items-center gap-1 rounded-lg px-3 py-2", c.cls)}>
+                <span className="text-lg font-bold tabular-nums">{fmt(c.count)}</span>
+                <span className="text-[0.7rem] text-center">{c.label}</span>
+                <span className="text-[0.65rem] opacity-70">{pct(c.count, schedulerTotal)}</span>
               </div>
             ))}
           </div>

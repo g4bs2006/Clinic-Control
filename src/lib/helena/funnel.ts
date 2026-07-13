@@ -51,6 +51,19 @@ export type FunnelMapping = {
   leadStepIds?: string[];
 };
 
+/**
+ * Segunda dimensão do funil, ortogonal ao FunnelMapping por coluna: quem
+ * realizou o agendamento, via ETIQUETA do card (não a coluna). Só se aplica a
+ * cards já classificados como "agendado" pelo FunnelMapping/fallback canônico.
+ * Sem convenção de nome entre clínicas — não há fallback, só o que o gestor
+ * configurar. Um card agendado com etiqueta desconhecida (removida da conta)
+ * ou sem nenhuma das duas cai em "não classificado".
+ */
+export type SchedulerTagMapping = {
+  crcTagIds: string[];
+  iaTagIds: string[];
+};
+
 // Resolve as funções de classificação a partir do mapping (por stepId) ou, na
 // ausência dele, do comportamento canônico por título de etapa.
 function resolveClassifier(
@@ -93,10 +106,13 @@ export function buildLiveFunnel(
   steps: HelenaStep[],
   monthCards: HelenaCard[],
   mapping?: FunnelMapping | null,
+  tagMapping?: SchedulerTagMapping | null,
 ) {
   const titleByStepId = new Map(steps.map((s) => [s.id, s.title]));
   const { isScheduled, isClosing, isNoShow, isNotScheduled, isAttended } =
     resolveClassifier(steps, mapping);
+  const crcTags = new Set(tagMapping?.crcTagIds ?? []);
+  const iaTags = new Set(tagMapping?.iaTagIds ?? []);
   const countByTitle = new Map<string, number>();
   let revenue = 0;
   let leads = 0;
@@ -105,12 +121,22 @@ export function buildLiveFunnel(
   let notScheduled = 0;
   let attended = 0;
   let closed = 0;
+  let scheduledByCrc = 0;
+  let scheduledByIa = 0;
+  let scheduledUnclassified = 0;
   for (const card of monthCards) {
     const title = titleByStepId.get(card.stepId);
     if (!title) continue;
     leads++;
     countByTitle.set(title, (countByTitle.get(title) ?? 0) + 1);
-    if (isScheduled(card.stepId, title)) scheduled++;
+    if (isScheduled(card.stepId, title)) {
+      scheduled++;
+      const isCrc = card.tagIds.some((t) => crcTags.has(t));
+      const isIa = card.tagIds.some((t) => iaTags.has(t));
+      if (isCrc) scheduledByCrc++;
+      else if (isIa) scheduledByIa++;
+      else scheduledUnclassified++;
+    }
     if (isClosing(card.stepId, title)) {
       closed++;
       revenue += card.monetaryAmount ?? 0; // faturamento = valor do card
@@ -127,7 +153,20 @@ export function buildLiveFunnel(
         .map((s) => ({ title: s.title, count: countByTitle.get(s.title) ?? 0 }))
     : CANONICAL_STEPS.map((title) => ({ title, count: countByTitle.get(title) ?? 0 }));
   const rate = leads === 0 ? 0 : scheduled / leads;
-  return { steps: outSteps, leads, scheduled, rate, revenue, noShow, notScheduled, attended, closed };
+  return {
+    steps: outSteps,
+    leads,
+    scheduled,
+    rate,
+    revenue,
+    noShow,
+    notScheduled,
+    attended,
+    closed,
+    scheduledByCrc,
+    scheduledByIa,
+    scheduledUnclassified,
+  };
 }
 
 export type DailyFunnelPoint = { day: string; leads: number; scheduled: number; rate: number | null };

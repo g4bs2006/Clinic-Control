@@ -19,7 +19,14 @@ export interface HelenaCard {
   title: string;
   monetaryAmount: number | null;
   createdAt: string;
+  tagIds: string[];
   customFields?: Record<string, unknown>;
+}
+
+/** Etiqueta (tag) cadastrada na conta — GET /core/v1/tag. */
+export interface HelenaTag {
+  id: string;
+  name: string;
 }
 
 export interface HelenaCompany {

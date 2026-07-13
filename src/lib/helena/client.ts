@@ -7,6 +7,7 @@ import type {
   HelenaAgent,
   HelenaChannel,
   HelenaWebhookSubscription,
+  HelenaTag,
 } from "./types";
 
 const DEFAULT_BASE = "https://api.wts.chat";
@@ -73,6 +74,7 @@ export async function listCards(
         title: c.title,
         monetaryAmount: c.monetaryAmount ?? null,
         createdAt: c.createdAt,
+        tagIds: c.tagIds ?? [],
         customFields: c.customFields ?? undefined,
       });
     }
@@ -81,6 +83,13 @@ export async function listCards(
     if (page > MAX_PAGES) throw new Error("Helena API: paginação excedeu o limite de páginas");
   }
   return out;
+}
+
+/** Etiquetas cadastradas na conta (GET /core/v1/tag — sem paginação nem filtros). */
+export async function listTags(token: string, opts?: Opts): Promise<HelenaTag[]> {
+  const data = await get(token, "/core/v1/tag", {}, opts);
+  const items = Array.isArray(data) ? data : data.items ?? [];
+  return items.map((t: HelenaTag) => ({ id: t.id, name: t.name }));
 }
 
 /** Sessões cruas do período (payload completo — usado no relatório de conversas). */

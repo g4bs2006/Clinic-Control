@@ -7,6 +7,7 @@ import {
   listPanels,
   getPanelWithSteps,
   listCards,
+  listTags,
   getContactCount,
   getChatCounts,
   getSessionTakeoverStats,
@@ -15,7 +16,13 @@ import {
   listUsers,
   listChannels,
 } from "@/lib/helena/client";
-import { buildLiveFunnel, buildDailyFunnel, type DailyFunnelPoint, type FunnelMapping } from "@/lib/helena/funnel";
+import {
+  buildLiveFunnel,
+  buildDailyFunnel,
+  type DailyFunnelPoint,
+  type FunnelMapping,
+  type SchedulerTagMapping,
+} from "@/lib/helena/funnel";
 import { monthKey, monthRangeUtc } from "@/lib/snapshots/month";
 
 // Converte as colunas de mapeamento da linha de clinic_integrations no
@@ -41,6 +48,20 @@ function rowToMapping(row: {
     attendedStepIds: row.attended_step_ids ?? [],
     leadStepIds: row.lead_step_ids ?? [],
   };
+}
+
+// Segunda dimensão, ortogonal à de colunas: quem agendou, via etiqueta do
+// card. NULL nas duas colunas = clínica nunca configurada → null (todo
+// agendado cai em "não classificado", sem fallback — não há convenção de nome
+// de etiqueta entre clínicas).
+function rowToTagMapping(row: {
+  crc_tag_ids?: string[] | null;
+  ia_tag_ids?: string[] | null;
+}): SchedulerTagMapping | null {
+  const crc = row.crc_tag_ids ?? null;
+  const ia = row.ia_tag_ids ?? null;
+  if (crc === null && ia === null) return null;
+  return { crcTagIds: crc ?? [], iaTagIds: ia ?? [] };
 }
 
 // Auth design note: these actions gate on "is there an authenticated user?" only.
@@ -116,7 +137,9 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
-      .select("helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids, noshow_step_ids, notscheduled_step_ids, attended_step_ids")
+      .select(
+        "helena_token_encrypted, panel_id, lead_step_ids, scheduled_step_ids, closing_step_ids, noshow_step_ids, notscheduled_step_ids, attended_step_ids, crc_tag_ids, ia_tag_ids",
+      )
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
@@ -127,7 +150,10 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
     const panelId = data.panel_id as string;
     const { steps } = await getPanelWithSteps(token, panelId);
     const cards = await listCards(token, panelId, monthRangeUtc(yearMonth));
-    return { ok: true as const, funnel: buildLiveFunnel(steps, cards, rowToMapping(data)) };
+    return {
+      ok: true as const,
+      funnel: buildLiveFunnel(steps, cards, rowToMapping(data), rowToTagMapping(data)),
+    };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao ler o funil" };
   }
@@ -296,6 +322,94 @@ export async function saveFunnelMapping(
     return { ok: true as const };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao salvar mapeamento de colunas" };
+  }
+}
+
+// ── Configuração do mapeamento de etiquetas (quem agendou: CRC/IA) ─────────
+
+export type SchedulerTagOption = { id: string; name: string };
+export type SchedulerTagMappingSetup = {
+  tags: SchedulerTagOption[];
+  crcTagIds: string[];
+  iaTagIds: string[];
+};
+
+// Pré-seleção sensata quando a clínica ainda não configurou: etiqueta com
+// nome exatamente "CRC"/"IA" (case-insensitive) já vem marcada. Diferente do
+// mapeamento de colunas, não há um conjunto maior de sinônimos conhecidos.
+function normalizeTagName(name: string) {
+  return name.trim().toLowerCase();
+}
+
+/**
+ * Carrega as etiquetas cadastradas na conta Helena + o mapeamento salvo, para
+ * a tela de configuração "quem agendou". Etiquetas são da CONTA, não do
+ * painel — GET /core/v1/tag não aceita filtro por painel.
+ */
+export async function getSchedulerTagSetup(
+  clinicId: string,
+): Promise<{ ok: true; setup: SchedulerTagMappingSetup } | { ok: false; error: string }> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("clinic_integrations")
+      .select("helena_token_encrypted, crc_tag_ids, ia_tag_ids")
+      .eq("clinic_id", clinicId)
+      .single();
+    if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+
+    const token = decryptToken(data.helena_token_encrypted as string);
+    const tags = await listTags(token);
+    const options: SchedulerTagOption[] = tags.map((t) => ({ id: t.id, name: t.name }));
+
+    const hasSaved = data.crc_tag_ids !== null || data.ia_tag_ids !== null;
+    const setup: SchedulerTagMappingSetup = hasSaved
+      ? {
+          tags: options,
+          crcTagIds: data.crc_tag_ids ?? [],
+          iaTagIds: data.ia_tag_ids ?? [],
+        }
+      : {
+          tags: options,
+          crcTagIds: options.filter((t) => normalizeTagName(t.name) === "crc").map((t) => t.id),
+          iaTagIds: options.filter((t) => normalizeTagName(t.name) === "ia").map((t) => t.id),
+        };
+
+    return { ok: true as const, setup };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao carregar etiquetas da conta" };
+  }
+}
+
+/** Persiste o mapeamento de etiquetas (quem agendou) escolhido pelo gestor. */
+export async function saveSchedulerTagMapping(
+  clinicId: string,
+  mapping: { crcTagIds: string[]; iaTagIds: string[] },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data: existing } = await supabase
+      .from("clinic_integrations")
+      .select("clinic_id")
+      .eq("clinic_id", clinicId)
+      .maybeSingle();
+    if (!existing)
+      return { ok: false as const, error: "Integração não encontrada — salve a integração Helena primeiro" };
+
+    const { error } = await supabase
+      .from("clinic_integrations")
+      .update({ crc_tag_ids: mapping.crcTagIds, ia_tag_ids: mapping.iaTagIds })
+      .eq("clinic_id", clinicId);
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao salvar mapeamento de etiquetas" };
   }
 }
 

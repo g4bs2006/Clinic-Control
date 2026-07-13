@@ -24,7 +24,7 @@ export default async function NovaClinicaPage() {
   }
 
   return (
-    <main className="p-4 max-w-xl space-y-6 sm:p-8">
+    <main className="p-4 max-w-4xl mx-auto space-y-6 sm:p-8">
       <h1 className="text-2xl font-bold brand-header">Nova clínica</h1>
       <ClinicForm onSubmit={handleCreate} />
     </main>

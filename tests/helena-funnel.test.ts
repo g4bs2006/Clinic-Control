@@ -12,8 +12,13 @@ const steps = [
   { id: "s8", title: "Compareceram e Não Fecharam", position: 8, cardCount: 0, monetaryAmount: 0 },
   { id: "s9", title: "Compareceram e Fecharam", position: 9, cardCount: 0, monetaryAmount: 0 },
 ];
-const card = (id: string, stepId: string, amount: number | null = null, createdAt = "2026-06-10T00:00:00Z") =>
-  ({ id, stepId, title: id, monetaryAmount: amount, createdAt });
+const card = (
+  id: string,
+  stepId: string,
+  amount: number | null = null,
+  createdAt = "2026-06-10T00:00:00Z",
+  tagIds: string[] = [],
+) => ({ id, stepId, title: id, monetaryAmount: amount, createdAt, tagIds });
 
 describe("buildLiveFunnel", () => {
   it("conta por etapa e calcula taxa", () => {
@@ -50,6 +55,48 @@ describe("buildLiveFunnel", () => {
     ]);
     expect(r.leads).toBe(10);
     expect(r.scheduled).toBe(6);
+  });
+
+  it("sem tagMapping, todo agendado cai em não classificado", () => {
+    const r = buildLiveFunnel(steps, [card("a", "s2", null, undefined, ["tag-crc"])]);
+    expect(r.scheduled).toBe(1);
+    expect(r.scheduledByCrc).toBe(0);
+    expect(r.scheduledByIa).toBe(0);
+    expect(r.scheduledUnclassified).toBe(1);
+  });
+});
+
+describe("buildLiveFunnel com mapeamento de etiqueta (CRC/IA)", () => {
+  it("classifica agendado por etiqueta do card, ignorando leads não-agendados", () => {
+    const tagMapping = { crcTagIds: ["tag-crc"], iaTagIds: ["tag-ia"] };
+    const r = buildLiveFunnel(
+      steps,
+      [
+        card("a", "s2", null, undefined, ["tag-crc"]), // agendado por CRC
+        card("b", "s2", null, undefined, ["tag-ia"]), // agendado por IA
+        card("c", "s2", null, undefined, []), // agendado sem etiqueta → não classificado
+        card("d", "s2", null, undefined, ["tag-removida"]), // etiqueta desconhecida → não classificado
+        card("e", "s1", null, undefined, ["tag-crc"]), // lead puro (não agendado) — etiqueta irrelevante aqui
+      ],
+      null,
+      tagMapping,
+    );
+    expect(r.scheduled).toBe(4);
+    expect(r.scheduledByCrc).toBe(1);
+    expect(r.scheduledByIa).toBe(1);
+    expect(r.scheduledUnclassified).toBe(2);
+  });
+
+  it("card com as duas etiquetas conta como CRC (prioridade sobre IA)", () => {
+    const tagMapping = { crcTagIds: ["tag-crc"], iaTagIds: ["tag-ia"] };
+    const r = buildLiveFunnel(
+      steps,
+      [card("a", "s2", null, undefined, ["tag-crc", "tag-ia"])],
+      null,
+      tagMapping,
+    );
+    expect(r.scheduledByCrc).toBe(1);
+    expect(r.scheduledByIa).toBe(0);
   });
 });
 

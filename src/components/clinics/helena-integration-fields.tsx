@@ -15,6 +15,7 @@ import {
 import { getHelenaSetupOverview, getLiveFunnel, saveIntegration } from "@/lib/clinics/integration-actions";
 import type { HelenaChannel, HelenaCompany } from "@/lib/helena/types";
 import { ClinicFunnelMapping } from "@/components/clinics/clinic-funnel-mapping";
+import { ClinicSchedulerTagMapping } from "@/components/clinics/clinic-scheduler-tag-mapping";
 
 interface Panel {
   id: string;
@@ -281,6 +282,10 @@ export function HelenaIntegrationFields({
       {/* Configuração das colunas do funil — só faz sentido para clínica já
           existente com integração salva (lê o painel vinculado). */}
       {clinicId && <ClinicFunnelMapping clinicId={clinicId} />}
+
+      {/* Configuração de quem agendou (CRC/IA) — dimensão por etiqueta,
+          independente do mapeamento de colunas acima. */}
+      {clinicId && <ClinicSchedulerTagMapping clinicId={clinicId} />}
 
       {/* Create-mode note */}
       {!clinicId && selectedPanelId && (

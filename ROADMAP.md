@@ -39,7 +39,7 @@ Infra: permanece no **Vercel** (auto-deploy do `main`) + **Supabase**. Avaliamos
 
 - [x] Agenda "Minha semana" (visão pessoal por prazo)
 - [x] Seleção múltipla e ação em lote (lista + sugestões)
-- [ ] **Tarefas recorrentes** — recorrência diária/semanal/mensal; decisão de desenho: materializar a próxima ocorrência ao concluir a atual, ou via `pg_cron`. Envolve migration (regra de recorrência).
+- [x] **Tarefas recorrentes** — regras declarativas com materialização lazy, anti-empilhamento e fan-out por carteira; detector de rotinas e diagnóstico pós-onboarding.
 - [ ] **Dependências entre tarefas** — "bloqueada por"; envolve migration (`task_dependencies`) + UI + lógica de bloqueio.
 - [ ] **Lembretes externos de prazo** — depende da frente de Notificações (a "Minha semana" já cobre o aviso in-app).
 
@@ -49,7 +49,6 @@ Infra: permanece no **Vercel** (auto-deploy do `main`) + **Supabase**. Avaliamos
 
 | Prioridade | Item | Observação |
 |---|---|---|
-| Alta | Tarefas recorrentes | Frente "matar o ClickUp". |
 | Alta | Dependências entre tarefas | Frente "matar o ClickUp". |
 | Alta | Notificações + lembretes de prazo | Fundação de entrega; habilita lembretes externos. Decisão pendente: canal (e-mail é a espinha dorsal mais confiável para alertas críticos, já que a Evolution/WhatsApp pode cair). |
 | Média | Detecção de padrões entre clínicas | Agrupar reclamações/temas recorrentes via *embeddings* (`pgvector`); desenhado, aguarda chave de embeddings (DeepSeek não oferece endpoint). |
