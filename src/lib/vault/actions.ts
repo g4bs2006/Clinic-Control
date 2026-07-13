@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireGestor } from "@/lib/auth/require-gestor";
+import { getSessionUser } from "@/lib/auth/session";
 import { encryptToken, decryptToken } from "@/lib/crypto/token";
 
 // Chave própria do cofre com fallback na chave da Helena: quando VAULT_ENC_KEY
@@ -34,7 +35,8 @@ function errMessage(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;
 }
 
-const SUMMARY_COLUMNS = "id, service, category, login, url, notes, has_secret, updated_at";
+const SUMMARY_COLUMNS =
+  "id, service, category, login, url, notes, has_secret, visible_to_devs, updated_at";
 
 export type CredentialSummary = {
   id: string;
@@ -44,6 +46,7 @@ export type CredentialSummary = {
   url: string | null;
   notes: string | null;
   hasSecret: boolean;
+  visibleToDevs: boolean;
   updatedAt: string;
 };
 
@@ -55,6 +58,8 @@ export type CredentialInput = {
   secret: string | null;
   /** Update apenas: true remove o conteúdo sensível do item (secret_encrypted = null). */
   clearSecret?: boolean;
+  /** Desenvolvedores podem listar e revelar este item (default: só gestores). */
+  visibleToDevs: boolean;
   url: string | null;
   notes: string | null;
 };
@@ -67,6 +72,7 @@ type SummaryRow = {
   url: string | null;
   notes: string | null;
   has_secret: boolean;
+  visible_to_devs: boolean;
   updated_at: string;
 };
 
@@ -79,6 +85,7 @@ function rowToSummary(row: SummaryRow): CredentialSummary {
     url: row.url,
     notes: row.notes,
     hasSecret: row.has_secret,
+    visibleToDevs: row.visible_to_devs,
     updatedAt: row.updated_at,
   };
 }
@@ -109,20 +116,26 @@ async function logMutation(
   if (error) console.warn(`vault: falha ao registrar ${entry.action} no log de auditoria: ${error.message}`);
 }
 
-/** Lista todos os itens SEM tocar em ciphertext (has_secret é coluna gerada no banco). */
+/**
+ * Lista itens SEM tocar em ciphertext (has_secret é coluna gerada no banco).
+ * Gestor vê tudo; desenvolvedor vê só o que foi marcado visible_to_devs —
+ * o filtro é aplicado AQUI (servidor), a UI só reflete.
+ */
 export async function listCredentials(): Promise<
   { ok: true; credentials: CredentialSummary[] } | { ok: false; error: string }
 > {
   try {
-    const gate = await requireGestor();
-    if (!gate.ok) return gate;
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const supabase = createServiceClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("credential_vault")
       .select(SUMMARY_COLUMNS)
       .order("category", { ascending: true, nullsFirst: false })
       .order("service", { ascending: true });
+    if (user.role !== "gestor") query = query.eq("visible_to_devs", true);
+    const { data, error } = await query;
     if (error) return { ok: false as const, error: error.message };
 
     return { ok: true as const, credentials: (data as SummaryRow[]).map(rowToSummary) };
@@ -142,16 +155,20 @@ export async function revealSecret(
   credentialId: string,
 ): Promise<{ ok: true; secret: string } | { ok: false; error: string }> {
   try {
-    const gate = await requireGestor();
-    if (!gate.ok) return gate;
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
 
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("credential_vault")
-      .select("secret_encrypted, service")
+      .select("secret_encrypted, service, visible_to_devs")
       .eq("id", credentialId)
       .single();
     if (error || !data) return { ok: false as const, error: "Item não encontrado" };
+    // Mesma mensagem do não-encontrado de propósito: um dev não deve conseguir
+    // sondar quais ids existem no cofre restrito.
+    if (user.role !== "gestor" && !data.visible_to_devs)
+      return { ok: false as const, error: "Item não encontrado" };
     if (!data.secret_encrypted)
       return { ok: false as const, error: "Esse item não tem conteúdo sensível cadastrado" };
 
@@ -167,7 +184,7 @@ export async function revealSecret(
 
     const { error: auditError } = await supabase.from("credential_vault_access_log").insert({
       credential_id: credentialId,
-      user_id: gate.userId,
+      user_id: user.id,
       service: data.service as string,
       action: "reveal",
     });
@@ -201,6 +218,7 @@ export async function createCredential(
         category: input.category?.trim() || null,
         login: input.login?.trim() || null,
         secret_encrypted: secret ? encryptSecret(secret) : null,
+        visible_to_devs: input.visibleToDevs,
         url: input.url?.trim() || null,
         notes: input.notes?.trim() || null,
         created_by: gate.userId,
@@ -246,6 +264,7 @@ export async function updateCredential(
       service: input.service.trim(),
       category: input.category?.trim() || null,
       login: input.login?.trim() || null,
+      visible_to_devs: input.visibleToDevs,
       url: input.url?.trim() || null,
       notes: input.notes?.trim() || null,
     };

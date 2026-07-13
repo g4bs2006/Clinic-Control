@@ -39,8 +39,9 @@ const navItems: { href: string; label: string; icon: LucideIcon; gestorOnly?: bo
   { href: "/whatsapp", label: "Gerenciador de grupos", icon: MessageCircle },
   { href: "/churns", label: "Churns", icon: UserMinus },
   { href: "/helena", label: "Contas Helena", icon: Plug },
-  // Segredos de produção — mais sensível que o resto do app, só gestor vê o item.
-  { href: "/cofre", label: "Cofre", icon: KeyRound, gestorOnly: true },
+  // Cofre: devs também acessam — veem só os itens que o gestor compartilhou
+  // (filtro por visible_to_devs no servidor).
+  { href: "/cofre", label: "Cofre", icon: KeyRound },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 

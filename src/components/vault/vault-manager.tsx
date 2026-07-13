@@ -2,12 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Eye, EyeOff, Pencil, Trash2, Plus, ExternalLink, Search, KeyRound } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Pencil,
+  Trash2,
+  Plus,
+  ExternalLink,
+  Search,
+  KeyRound,
+  Lock,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { CopyButton } from "@/components/ui/copy-button";
 import {
   Dialog,
@@ -29,11 +41,21 @@ import {
 
 interface VaultManagerProps {
   initialCredentials: CredentialSummary[];
+  /** Só afeta a UI (ações de gestão, badge de visibilidade) — a autorização real vive nas actions. */
+  isGestor: boolean;
 }
 
 type FormState = Omit<CredentialInput, "clearSecret">;
 
-const EMPTY_FORM: FormState = { service: "", category: "", login: "", secret: "", url: "", notes: "" };
+const EMPTY_FORM: FormState = {
+  service: "",
+  category: "",
+  login: "",
+  secret: "",
+  visibleToDevs: false,
+  url: "",
+  notes: "",
+};
 
 /** Janela de exposição: segredo revelado se auto-oculta depois disso. */
 const EXPOSURE_MS = 30_000;
@@ -108,7 +130,7 @@ function ExposureTimer({ onExpire }: { onExpire: () => void }) {
   );
 }
 
-export function VaultManager({ initialCredentials }: VaultManagerProps) {
+export function VaultManager({ initialCredentials, isGestor }: VaultManagerProps) {
   const [items, setItems] = useState(initialCredentials);
   const [query, setQuery] = useState("");
   // Cache do plaintext decriptado (por sessão de página) e conjunto do que
@@ -127,6 +149,13 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
   const [deleteTarget, setDeleteTarget] = useState<CredentialSummary | null>(null);
   const [isSaving, startSave] = useTransition();
   const [isDeleting, startDelete] = useTransition();
+
+  // Sugestões de categoria no formulário — evita "Dashboards" e "dashboards"
+  // virarem dois grupos por digitação livre.
+  const knownCategories = useMemo(
+    () => [...new Set(items.map((c) => c.category?.trim()).filter(Boolean))] as string[],
+    [items],
+  );
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -210,6 +239,7 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
       category: c.category ?? "",
       login: c.login ?? "",
       secret: "",
+      visibleToDevs: c.visibleToDevs,
       url: c.url ?? "",
       notes: c.notes ?? "",
     });
@@ -281,22 +311,28 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
             className="pl-8"
           />
         </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="size-4" />
-          Novo item
-        </Button>
+        {isGestor && (
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="size-4" />
+            Novo item
+          </Button>
+        )}
       </div>
 
       {items.length === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-6 py-12 text-center">
           <KeyRound className="size-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            O cofre está vazio. Guarde aqui logins, tokens, chaves e outros acessos da operação.
+            {isGestor
+              ? "O cofre está vazio. Guarde aqui logins, tokens, chaves e outros acessos da operação."
+              : "Nenhum acesso foi compartilhado com a equipe ainda."}
           </p>
-          <Button size="sm" variant="outline" onClick={openCreate}>
-            <Plus className="size-4" />
-            Guardar o primeiro item
-          </Button>
+          {isGestor && (
+            <Button size="sm" variant="outline" onClick={openCreate}>
+              <Plus className="size-4" />
+              Guardar o primeiro item
+            </Button>
+          )}
         </div>
       )}
 
@@ -336,6 +372,26 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
                             >
                               <ExternalLink className="size-3.5" />
                             </a>
+                          )}
+                          {/* Badge de visibilidade — só o gestor precisa saber o recorte;
+                              para o dev, tudo que aparece já é compartilhado. */}
+                          {isGestor && (
+                            <span
+                              className={cn(
+                                "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px text-[0.6rem]",
+                                c.visibleToDevs
+                                  ? "border-sky-500/30 bg-sky-500/10 text-sky-400"
+                                  : "border-border/60 text-muted-foreground/70",
+                              )}
+                              title={
+                                c.visibleToDevs
+                                  ? "Desenvolvedores veem e revelam este item"
+                                  : "Visível apenas para gestores"
+                              }
+                            >
+                              {c.visibleToDevs ? <Users className="size-2.5" /> : <Lock className="size-2.5" />}
+                              {c.visibleToDevs ? "equipe" : "gestores"}
+                            </span>
                           )}
                           <span
                             className="ml-auto shrink-0 text-[0.65rem] text-muted-foreground/60"
@@ -390,19 +446,21 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
                         {c.notes && <p className="text-xs text-muted-foreground">{c.notes}</p>}
                       </div>
 
-                      <div className="flex shrink-0 gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
-                        <Button size="icon-sm" variant="ghost" onClick={() => openEdit(c)} title="Editar item">
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          onClick={() => setDeleteTarget(c)}
-                          title="Excluir item"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
+                      {isGestor && (
+                        <div className="flex shrink-0 gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
+                          <Button size="icon-sm" variant="ghost" onClick={() => openEdit(c)} title="Editar item">
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            onClick={() => setDeleteTarget(c)}
+                            title="Excluir item"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -414,48 +472,70 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
 
       {/* ── Criar / editar ── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? "Editar item" : "Novo item"}</DialogTitle>
+            <DialogDescription>
+              {editing
+                ? "Ajuste os dados do item guardado no cofre."
+                : "Guarde um acesso da operação — o conteúdo sensível é cifrado antes de sair do navegador do servidor."}
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="service">Título</Label>
-              <Input
-                id="service"
-                value={form.service}
-                onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))}
-                placeholder="Ex: Supabase, JWT do n8n, Grupo WhatsApp…"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+          <datalist id="vault-categories">
+            {knownCategories.map((cat) => (
+              <option key={cat} value={cat} />
+            ))}
+          </datalist>
+
+          <div className="space-y-5">
+            {/* Identificação */}
+            <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="category">Categoria</Label>
+                <Label htmlFor="service">Título</Label>
                 <Input
-                  id="category"
-                  value={form.category ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                  placeholder="Ex: Dashboards, Sala Black"
+                  id="service"
+                  value={form.service}
+                  onChange={(e) => setForm((f) => ({ ...f, service: e.target.value }))}
+                  placeholder="Ex: Supabase, JWT do n8n, Grupo WhatsApp…"
+                  required
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="login">Login / e-mail (opcional)</Label>
-                <Input
-                  id="login"
-                  value={form.login ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, login: e.target.value }))}
-                  placeholder="Vazio se não se aplica"
-                />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="category">Categoria</Label>
+                  <Input
+                    id="category"
+                    list="vault-categories"
+                    value={form.category ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                    placeholder="Ex: Dashboards, Sala Black"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="login">Login / e-mail</Label>
+                  <Input
+                    id="login"
+                    value={form.login ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, login: e.target.value }))}
+                    placeholder="Opcional"
+                  />
+                </div>
               </div>
             </div>
-            <div className="space-y-1.5">
+
+            {/* Conteúdo sensível */}
+            <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
               <div className="flex items-center justify-between">
-                <Label htmlFor="secret">Conteúdo sensível (senha, token, texto, JSON…)</Label>
+                <Label htmlFor="secret" className="flex items-center gap-1.5">
+                  <Lock className="size-3 text-muted-foreground" />
+                  Conteúdo sensível
+                </Label>
                 <button
                   type="button"
                   onClick={() => setSecretVisible((v) => !v)}
-                  className="inline-flex items-center gap-1 text-[0.7rem] text-muted-foreground transition-colors hover:text-foreground"
+                  disabled={clearSecret}
+                  className="inline-flex items-center gap-1 text-[0.7rem] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
                 >
                   {secretVisible ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
                   {secretVisible ? "Ocultar" : "Mostrar"}
@@ -468,7 +548,7 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
                 placeholder={
                   editing?.hasSecret
                     ? "Vazio mantém o conteúdo atual"
-                    : "Cole aqui o que precisa ficar cifrado"
+                    : "Senha, token, JSON, texto — o que precisa ficar cifrado"
                 }
                 rows={4}
                 disabled={clearSecret}
@@ -476,7 +556,7 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
                 autoComplete="off"
                 autoCapitalize="off"
                 autoCorrect="off"
-                className={cn("font-mono", !secretVisible && "[-webkit-text-security:disc]")}
+                className={cn("bg-background font-mono", !secretVisible && "[-webkit-text-security:disc]")}
               />
               {editing?.hasSecret && (
                 <button
@@ -492,30 +572,57 @@ export function VaultManager({ initialCredentials }: VaultManagerProps) {
                 </button>
               )}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="url">URL</Label>
-              <Input
-                id="url"
-                value={form.url ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-                placeholder="https://…"
+
+            {/* Compartilhamento com a equipe */}
+            <label
+              htmlFor="visible-to-devs"
+              className="flex items-start justify-between gap-3 rounded-lg border border-border/70 p-3"
+            >
+              <span className="space-y-0.5">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <Users className="size-3.5 text-muted-foreground" />
+                  Compartilhar com a equipe
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Desenvolvedores poderão ver e revelar este item. Desligado, fica só para gestores.
+                </span>
+              </span>
+              <Switch
+                id="visible-to-devs"
+                checked={form.visibleToDevs}
+                onCheckedChange={(checked) => setForm((f) => ({ ...f, visibleToDevs: checked }))}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="notes">Notas</Label>
-              <Input
-                id="notes"
-                value={form.notes ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              />
+            </label>
+
+            {/* Referências */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="url">URL</Label>
+                <Input
+                  id="url"
+                  value={form.url ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
+                  placeholder="https://…"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="notes">Notas</Label>
+                <Input
+                  id="notes"
+                  value={form.notes ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Opcional"
+                />
+              </div>
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
             <Button onClick={handleSave} disabled={isSaving || !form.service.trim()}>
-              {isSaving ? "Salvando…" : "Salvar"}
+              {isSaving ? "Salvando…" : editing ? "Salvar alterações" : "Guardar no cofre"}
             </Button>
           </DialogFooter>
         </DialogContent>
