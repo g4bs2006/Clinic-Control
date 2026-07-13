@@ -406,8 +406,28 @@ O norte é transformar o Clinic Control de "painel que a equipe consulta" em **c
 | Média | Timeline de sentimento (30 dias) | Faixa de sentimento no perfil da clínica. |
 | Média | Rollup semanal por IA | Consolidado semanal; aguarda mais dados acumulados. |
 | Média | Relatório de conversas — Fase 2/3 | Abas IA×Humano/Habilidades/Mensagens, keywords por clínica e funil na tela. |
+| Média | Integração Google Workspace (reuniões) | Trazer gravação/transcrição/resumo do Meet para a clínica. Em planejamento — ver seção abaixo. |
 | Baixa | Categorização automática de pendência | Sugerir categoria da tarefa por palavra-chave da pendência. |
 | Baixa | Segurança — itens adiados | Base URL fixa no re-disparo do relatório; mensagem de erro genérica da Helena ao cliente. |
+
+### Em estudo — Integração Google Workspace (reuniões)
+
+> **Status: planejamento, ainda não iniciado.** Registrado aqui para não se perder; o esforço estimado é de ~1 a 2 semanas para um primeiro fluxo fim-a-fim, incremental a partir daí.
+
+**Objetivo.** Quando alguém realiza uma reunião (Google Meet), trazer automaticamente a gravação, a transcrição e o resumo para o Clinic Control, vinculados à clínica correspondente — alimentando, opcionalmente, os acompanhamentos/tarefas. Pré-requisitos já confirmados: a organização está em Google Workspace no tier pago, com gravação e resumo automático (Gemini) habilitados.
+
+**Fundação de acesso.** *Service account* com delegação de domínio (uma credencial que impersona os organizadores) — dispensa consentimento por usuário e a verificação pública do Google, por ser uso interno. Scopes read-only de Calendar, Drive e Meet. O JSON da service account fica no Cofre.
+
+**Modelo de dados (schema `clinic_control`).**
+- `google_meetings` — `google_event_id` (único), título, início/fim, organizador, link do Meet, `clinic_id` (FK nullable — o vínculo com a clínica), status do sync.
+- `meeting_recordings` — FK da reunião, `drive_file_id` + link. A gravação em vídeo permanece como **link do Drive**, não é copiada para o banco.
+- `meeting_summaries` — FK da reunião, transcrição e resumo em texto, `source` (`google` = resumo do Gemini / `ai` = motor próprio).
+
+**Fluxo de sincronização.** Cron (Edge Function/Vercel cron, mesmo padrão dos jobs atuais) a cada ~15 min: puxa eventos do Calendar com link do Meet; para reuniões encerradas, consulta a Meet API (`conferenceRecords → recordings/transcripts`, que ficam prontos alguns minutos após o fim) e grava transcrição + resumo.
+
+**Decisão pendente — vínculo reunião → clínica.** Abordagem recomendada: **manual com sugestão** — as reuniões caem numa fila de "não atribuídas" e o dev vincula à clínica em um clique, com um palpite pré-marcado por heurística (e-mail do participante / convenção no título). É o mesmo padrão "sistema sugere, humano confirma" já usado nas tarefas e nas sugestões de IA.
+
+**Onde aparece.** Seção "Reuniões" no perfil da clínica (resumo, transcrição, link da gravação); opcionalmente, o resumo alimenta o motor que já gera acompanhamentos/tarefas.
 
 ### Pendências de configuração (operacionais)
 
