@@ -23,7 +23,11 @@ export interface HelenaCard {
   customFields?: Record<string, unknown>;
 }
 
-/** Etiqueta (tag) cadastrada na conta — GET /core/v1/tag. */
+/**
+ * Etiqueta de card do CRM — vem embutida no painel via
+ * GET /crm/v1/panel/{id}?IncludeDetails=Tags. Catálogo por PAINEL, distinto
+ * do catálogo de etiquetas de contato (GET /core/v1/tag).
+ */
 export interface HelenaTag {
   id: string;
   name: string;

@@ -104,7 +104,7 @@ export function ClinicSchedulerTagMapping({ clinicId }: ClinicSchedulerTagMappin
             <p className="text-sm text-muted-foreground">Carregando etiquetas…</p>
           ) : tags.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nenhuma etiqueta cadastrada nessa conta Helena.
+              Nenhuma etiqueta cadastrada nesse painel da Helena.
             </p>
           ) : (
             <>

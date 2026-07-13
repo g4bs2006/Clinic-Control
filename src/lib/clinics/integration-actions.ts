@@ -7,7 +7,6 @@ import {
   listPanels,
   getPanelWithSteps,
   listCards,
-  listTags,
   getContactCount,
   getChatCounts,
   getSessionTakeoverStats,
@@ -342,9 +341,10 @@ function normalizeTagName(name: string) {
 }
 
 /**
- * Carrega as etiquetas cadastradas na conta Helena + o mapeamento salvo, para
- * a tela de configuração "quem agendou". Etiquetas são da CONTA, não do
- * painel — GET /core/v1/tag não aceita filtro por painel.
+ * Carrega as etiquetas DO PAINEL vinculado (CRM/card) + o mapeamento salvo,
+ * para a tela de configuração "quem agendou". As etiquetas de card vêm
+ * embutidas no próprio painel (GET /crm/v1/panel/{id}?IncludeDetails=Tags) —
+ * catálogo distinto do de etiquetas de contato (GET /core/v1/tag).
  */
 export async function getSchedulerTagSetup(
   clinicId: string,
@@ -356,13 +356,15 @@ export async function getSchedulerTagSetup(
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
-      .select("helena_token_encrypted, crc_tag_ids, ia_tag_ids")
+      .select("helena_token_encrypted, panel_id, crc_tag_ids, ia_tag_ids")
       .eq("clinic_id", clinicId)
       .single();
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+    if (!data.panel_id)
+      return { ok: false as const, error: "Painel ainda não vinculado — crie na Helena e reprocesse" };
 
     const token = decryptToken(data.helena_token_encrypted as string);
-    const tags = await listTags(token);
+    const { tags } = await getPanelWithSteps(token, data.panel_id as string);
     const options: SchedulerTagOption[] = tags.map((t) => ({ id: t.id, name: t.name }));
 
     const hasSaved = data.crc_tag_ids !== null || data.ia_tag_ids !== null;

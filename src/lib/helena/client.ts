@@ -15,10 +15,21 @@ const MAX_PAGES = 500;
 
 type Opts = { fetchImpl?: typeof fetch; baseUrl?: string };
 
-async function get(token: string, path: string, query: Record<string, string>, opts?: Opts) {
+async function get(
+  token: string,
+  path: string,
+  query: Record<string, string | string[]>,
+  opts?: Opts,
+) {
   const fetchImpl = opts?.fetchImpl ?? fetch;
   const base = opts?.baseUrl ?? DEFAULT_BASE;
-  const qs = new URLSearchParams(query).toString();
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    // IncludeDetails aceita múltiplos valores como o MESMO parâmetro repetido
+    // (?IncludeDetails=Steps&IncludeDetails=Tags), não uma lista separada por vírgula.
+    for (const v of Array.isArray(value) ? value : [value]) params.append(key, v);
+  }
+  const qs = params.toString();
   const res = await fetchImpl(`${base}${path}${qs ? `?${qs}` : ""}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -47,11 +58,14 @@ export async function listPanels(token: string, opts?: Opts): Promise<HelenaPane
 }
 
 export async function getPanelWithSteps(token: string, panelId: string, opts?: Opts) {
-  const data = await get(token, `/crm/v1/panel/${panelId}`, { IncludeDetails: "Steps" }, opts);
+  const data = await get(token, `/crm/v1/panel/${panelId}`, { IncludeDetails: ["Steps", "Tags"] }, opts);
   const steps: HelenaStep[] = (data.steps ?? [])
     .map((s: HelenaStep) => ({ id: s.id, title: s.title, position: s.position, cardCount: s.cardCount, monetaryAmount: s.monetaryAmount ?? 0 }))
     .sort((a: HelenaStep, b: HelenaStep) => a.position - b.position);
-  return { panel: { id: data.id, title: data.title, key: data.key, companyId: data.companyId } as HelenaPanel, steps };
+  // Etiquetas DO PAINEL (CRM/cards) — catálogo distinto do de contato
+  // (GET /core/v1/tag). Só existe via IncludeDetails=Tags neste endpoint.
+  const tags: HelenaTag[] = (data.tags ?? []).map((t: HelenaTag) => ({ id: t.id, name: t.name }));
+  return { panel: { id: data.id, title: data.title, key: data.key, companyId: data.companyId } as HelenaPanel, steps, tags };
 }
 
 export async function listCards(
@@ -83,13 +97,6 @@ export async function listCards(
     if (page > MAX_PAGES) throw new Error("Helena API: paginação excedeu o limite de páginas");
   }
   return out;
-}
-
-/** Etiquetas cadastradas na conta (GET /core/v1/tag — sem paginação nem filtros). */
-export async function listTags(token: string, opts?: Opts): Promise<HelenaTag[]> {
-  const data = await get(token, "/core/v1/tag", {}, opts);
-  const items = Array.isArray(data) ? data : data.items ?? [];
-  return items.map((t: HelenaTag) => ({ id: t.id, name: t.name }));
 }
 
 /** Sessões cruas do período (payload completo — usado no relatório de conversas). */
