@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { CheckCircle2, X, RotateCcw, Trash2, Eye, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   updateAcompanhamentoStatus,
   deleteAcompanhamento,
@@ -72,6 +73,7 @@ export function AcompanhamentosList({
   initialItems: AcompanhamentoRow[]
   initialSuggestions: TaskSuggestionRow[]
 }) {
+  const confirm = useConfirm()
   const [items, setItems] = useState(initialItems)
   const [suggestions, setSuggestions] = useState(initialSuggestions)
   const [pending, startTransition] = useTransition()
@@ -97,8 +99,14 @@ export function AcompanhamentosList({
     })
   }
 
-  function remove(id: string) {
-    if (!confirm("Excluir este acompanhamento definitivamente?")) return
+  async function remove(id: string) {
+    const ok = await confirm({
+      title: "Excluir acompanhamento?",
+      description: "Remove este acompanhamento em definitivo. Essa ação não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      destructive: true,
+    })
+    if (!ok) return
     const snapshot = items
     setItems((prev) => prev.filter((a) => a.id !== id))
     startTransition(async () => {

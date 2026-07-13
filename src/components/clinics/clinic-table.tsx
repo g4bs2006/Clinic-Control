@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -53,6 +54,7 @@ interface ClinicTableProps {
 
 export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }: ClinicTableProps) {
   const router = useRouter()
+  const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [filter, setFilter] = useState<"all" | "completed" | "pending">("all")
   const [query, setQuery] = useState("")
@@ -115,18 +117,22 @@ export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }:
     return true
   })
 
-  function handleArchive(id: string, name: string) {
-    if (confirm(`Deseja realmente arquivar a clínica "${name}"?`)) {
-      startTransition(async () => {
-        const res = await archiveClinic(id)
-        if (res.ok) {
-          toast.success(`Clínica "${name}" arquivada com sucesso.`)
-          router.refresh()
-        } else {
-          toast.error(res.error)
-        }
-      })
-    }
+  async function handleArchive(id: string, name: string) {
+    const ok = await confirm({
+      title: "Arquivar clínica?",
+      description: `"${name}" sai da lista ativa. Você pode restaurá-la depois.`,
+      confirmLabel: "Arquivar",
+    })
+    if (!ok) return
+    startTransition(async () => {
+      const res = await archiveClinic(id)
+      if (res.ok) {
+        toast.success(`Clínica "${name}" arquivada com sucesso.`)
+        router.refresh()
+      } else {
+        toast.error(res.error)
+      }
+    })
   }
 
   return (
@@ -193,8 +199,25 @@ export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }:
 
       {/* ── Table ──────────────────────────────────────────────── */}
       {filteredClinics.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
-          <p className="text-sm font-medium text-foreground">Nenhuma clínica encontrada para este filtro</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border py-12 text-center">
+          <p className="text-sm font-medium text-foreground">Nenhuma clínica encontrada</p>
+          <p className="text-xs text-muted-foreground">
+            {query.trim() ? `Nada corresponde a "${query.trim()}"` : "Nenhuma clínica neste filtro"}
+            {filter !== "all" && " com o filtro atual"}.
+          </p>
+          {(query.trim() || filter !== "all") && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setQuery("")
+                setFilter("all")
+              }}
+            >
+              Limpar filtros
+            </Button>
+          )}
         </div>
       ) : (
         <>

@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   Select,
   SelectContent,
@@ -49,6 +50,7 @@ interface CheckItemsEditorProps {
 
 export function CheckItemsEditor({ initialItems, categories, canMakeGlobal = false }: CheckItemsEditorProps) {
   const router = useRouter()
+  const confirm = useConfirm()
   const [drafts, setDrafts] = useState<DraftItem[]>(initialItems.map(toDraft))
   const [pending, startTransition] = useTransition()
 
@@ -134,13 +136,20 @@ export function CheckItemsEditor({ initialItems, categories, canMakeGlobal = fal
     })
   }
 
-  function remove(index: number) {
+  async function remove(index: number) {
     const d = drafts[index]
     if (!d.id) {
       // unsaved row — drop locally
       setDrafts((prev) => prev.filter((_, i) => i !== index))
       return
     }
+    const ok = await confirm({
+      title: "Remover item do checklist?",
+      description: `"${d.label}" sai do checklist das clínicas.`,
+      confirmLabel: "Remover",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteCheckItem(d.id!)
       if (res.ok) {

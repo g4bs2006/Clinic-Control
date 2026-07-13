@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   Select,
   SelectContent,
@@ -24,6 +25,7 @@ interface WhatsappTeamEditorProps {
 
 export function WhatsappTeamEditor({ initialMembers }: WhatsappTeamEditorProps) {
   const router = useRouter()
+  const confirm = useConfirm()
   const [members, setMembers] = useState(initialMembers)
   const [name, setName] = useState("")
   const [lid, setLid] = useState("")
@@ -45,7 +47,15 @@ export function WhatsappTeamEditor({ initialMembers }: WhatsappTeamEditorProps) 
     })
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
+    const m = members.find((x) => x.id === id)
+    const ok = await confirm({
+      title: "Remover membro?",
+      description: `${m?.name ?? "Este contato"} deixa de contar como resposta humana nos grupos.`,
+      confirmLabel: "Remover",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteTeamMember(id)
       if (res.ok) {

@@ -123,6 +123,12 @@ function EditableRow({
 
   async function handleSave() {
     if (leads === null || scheduled === null) return;
+    // Mesma trava do formulário de métricas manuais: agendados não pode passar
+    // de leads (geraria taxa de conversão acima de 100%).
+    if (scheduled > leads) {
+      toast.error(`${row.name}: agendados não pode ser maior que leads`);
+      return;
+    }
     setSaving(true);
     try {
       const result = await upsertManualSnapshot(row.clinicId, month, leads, scheduled);
@@ -191,6 +197,12 @@ function EditableCard({ row, month, rules }: { row: GridRow; month: string; rule
 
   async function handleSave() {
     if (leads === null || scheduled === null) return;
+    // Mesma trava do formulário de métricas manuais: agendados não pode passar
+    // de leads (geraria taxa de conversão acima de 100%).
+    if (scheduled > leads) {
+      toast.error(`${row.name}: agendados não pode ser maior que leads`);
+      return;
+    }
     setSaving(true);
     try {
       const result = await upsertManualSnapshot(row.clinicId, month, leads, scheduled);

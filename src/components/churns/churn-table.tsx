@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { removeChurn, type ChurnRow } from "@/lib/churns/actions"
 
 function monthLabel(key: string): string {
@@ -27,9 +28,27 @@ interface ChurnTableProps {
 
 export function ChurnTable({ churns }: ChurnTableProps) {
   const router = useRouter()
+  const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
 
-  function remove(id: string, reactivate: boolean) {
+  async function remove(id: string, reactivate: boolean) {
+    const c = churns.find((x) => x.id === id)
+    const clinic = c?.clinic_name ?? "esta clínica"
+    const ok = await confirm(
+      reactivate
+        ? {
+            title: "Reativar clínica?",
+            description: `${clinic} volta para a carteira ativa e o registro de churn é removido.`,
+            confirmLabel: "Reativar",
+          }
+        : {
+            title: "Excluir registro de churn?",
+            description: `Remove só o registro de ${clinic}; a clínica continua arquivada.`,
+            confirmLabel: "Excluir",
+            destructive: true,
+          },
+    )
+    if (!ok) return
     startTransition(async () => {
       const res = await removeChurn(id, reactivate)
       if (res.ok) {

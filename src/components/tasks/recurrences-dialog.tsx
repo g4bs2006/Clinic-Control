@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Repeat, Pause, Play, Trash2, Sparkles, Check, X } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,7 @@ export function RecurrencesDialog({
   const defaultCategory = (categories[0]?.slug ?? "outro") as TaskCategory
   const [open, setOpen] = useState(false)
   const [rules, setRules] = useState<TaskRecurrenceRow[] | null>(null)
+  const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
 
   // form
@@ -131,13 +133,21 @@ export function RecurrencesDialog({
   function toggleActive(r: TaskRecurrenceRow) {
     startTransition(async () => {
       const res = await setRecurrenceActive(r.id, !r.active)
-      if (res.ok) load()
-      else toast.error(res.error)
+      if (res.ok) {
+        toast.success(r.active ? "Regra pausada" : "Regra ativada")
+        load()
+      } else toast.error(res.error)
     })
   }
 
-  function remove(r: TaskRecurrenceRow) {
-    if (!confirm(`Excluir a regra "${r.title}"? As tarefas já criadas ficam.`)) return
+  async function remove(r: TaskRecurrenceRow) {
+    const ok = await confirm({
+      title: "Excluir regra recorrente?",
+      description: `"${r.title}" deixa de gerar novas ocorrências. As tarefas já criadas ficam.`,
+      confirmLabel: "Excluir",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteRecurrence(r.id)
       if (res.ok) {

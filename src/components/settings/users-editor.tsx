@@ -21,6 +21,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   createUser,
   updateUser,
@@ -46,6 +47,7 @@ export function UsersEditor({
   /** Id do usuário logado — a própria linha não mostra "Redefinir senha" (use Minha conta). */
   currentUserId?: string
 }) {
+  const confirm = useConfirm()
   const [profiles, setProfiles] = useState(initialProfiles)
   const [pending, startTransition] = useTransition()
   const [tempPassword, setTempPassword] = useState<{ userId: string; value: string } | null>(null)
@@ -92,7 +94,18 @@ export function UsersEditor({
     })
   }
 
-  function onActiveChange(userId: string, active: boolean) {
+  async function onActiveChange(userId: string, active: boolean) {
+    // Desativar bloqueia o login da pessoa — confirma (reativar é inócuo, vai direto).
+    if (!active) {
+      const p = profiles.find((x) => x.id === userId)
+      const ok = await confirm({
+        title: "Desativar usuário?",
+        description: `${p?.name || p?.email || "A pessoa"} deixa de conseguir entrar no sistema até ser reativada.`,
+        confirmLabel: "Desativar",
+        destructive: true,
+      })
+      if (!ok) return
+    }
     const prev = profiles
     setProfiles((ps) => ps.map((p) => (p.id === userId ? { ...p, active } : p))) // optimistic
     startTransition(async () => {
@@ -106,9 +119,14 @@ export function UsersEditor({
     })
   }
 
-  function onResetPassword(p: UserProfile) {
-    if (!confirm(`Redefinir a senha de ${p.name || p.email}? A senha atual deixa de funcionar.`))
-      return
+  async function onResetPassword(p: UserProfile) {
+    const ok = await confirm({
+      title: "Redefinir senha?",
+      description: `${p.name || p.email} receberá uma senha temporária e a senha atual deixa de funcionar.`,
+      confirmLabel: "Redefinir",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await resetUserPassword(p.id)
       if (!res.ok) {
@@ -142,10 +160,16 @@ export function UsersEditor({
     })
   }
 
-  function onDelete(p: UserProfile) {
+  async function onDelete(p: UserProfile) {
     const owned = clinicCountByDeveloper[p.id] ?? 0
     const extra = owned > 0 ? ` As ${owned} clínica(s) da carteira dele ficarão sem responsável.` : ""
-    if (!confirm(`Excluir ${p.name || p.email} definitivamente?${extra} Esta ação não pode ser desfeita.`)) return
+    const ok = await confirm({
+      title: `Excluir ${p.name || p.email}?`,
+      description: `Remove o usuário em definitivo.${extra} Esta ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteUser(p.id)
       if (!res.ok) {

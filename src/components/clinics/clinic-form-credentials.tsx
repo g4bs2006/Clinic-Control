@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CopyButton } from "@/components/ui/copy-button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   createFormCredential,
   updateFormCredential,
@@ -338,12 +339,19 @@ export function ClinicFormCredentials({
   credentials: FormCredential[];
   system: string | null;
 }) {
+  const confirm = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDeleting, startDelete] = useTransition();
 
-  function handleDelete(id: string, name: string) {
-    if (!confirm(`Excluir credencial "${name}"?`)) return;
+  async function handleDelete(id: string, name: string) {
+    const ok = await confirm({
+      title: "Excluir credencial?",
+      description: `"${name}" será removida em definitivo.`,
+      confirmLabel: "Excluir",
+      destructive: true,
+    });
+    if (!ok) return;
     startDelete(async () => {
       const result = await deleteFormCredential(id);
       if (!result.ok) {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   upsertCheckCategory,
   deleteCheckCategory,
@@ -19,6 +20,7 @@ interface Draft {
 
 export function CheckCategoriesEditor({ initialCategories }: { initialCategories: CheckCategoryRow[] }) {
   const router = useRouter()
+  const confirm = useConfirm()
   const [drafts, setDrafts] = useState<Draft[]>(
     initialCategories.map((c) => ({ id: c.id, label: c.label, position: c.position })),
   )
@@ -51,12 +53,19 @@ export function CheckCategoriesEditor({ initialCategories }: { initialCategories
     })
   }
 
-  function remove(index: number) {
+  async function remove(index: number) {
     const d = drafts[index]
     if (!d.id) {
       setDrafts((prev) => prev.filter((_, i) => i !== index))
       return
     }
+    const ok = await confirm({
+      title: "Remover categoria?",
+      description: `"${d.label}" será removida do checklist.`,
+      confirmLabel: "Remover",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteCheckCategory(d.id!)
       if (res.ok) {

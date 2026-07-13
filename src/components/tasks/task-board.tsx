@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CreateTaskDialog } from "./create-task-dialog"
 import { RecurrencesDialog } from "./recurrences-dialog"
@@ -201,6 +202,7 @@ interface TaskBoardProps {
 
 export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles, categories, currentUserId = null, isGestor = false, defaultClinicId = null }: TaskBoardProps) {
   const router = useRouter()
+  const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   // Cópia local para atualização otimista (arrastar no board / trocar status na
   // lista reflete na hora). Re-sincroniza quando o servidor envia nova lista
@@ -288,7 +290,14 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
     })
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
+    const ok = await confirm({
+      title: "Excluir tarefa?",
+      description: "A tarefa é removida em definitivo — não vai para as arquivadas e não dá para recuperar.",
+      confirmLabel: "Excluir",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteTask(id)
       if (res.ok) {

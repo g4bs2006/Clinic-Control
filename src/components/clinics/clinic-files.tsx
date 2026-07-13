@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Upload, Download, FileText, FolderUp, Trash2, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { importParsedAgents } from "@/lib/agents/actions"
 import {
   deleteClinicFile,
@@ -67,6 +68,7 @@ export function ClinicFiles({
   files: StoredFile[]
 }) {
   const router = useRouter()
+  const confirm = useConfirm()
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
@@ -102,7 +104,13 @@ export function ClinicFiles({
   }
 
   async function handleDelete(path: string) {
-    if (!confirm(`Excluir "${path}"? Essa ação não pode ser desfeita.`)) return
+    const ok = await confirm({
+      title: "Excluir arquivo?",
+      description: `"${path}" será removido em definitivo. Essa ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      destructive: true,
+    })
+    if (!ok) return
     setDeleting(path)
     const res = await deleteClinicFile(clinicId, path)
     setDeleting(null)
@@ -113,8 +121,13 @@ export function ClinicFiles({
   }
 
   async function handleDeleteAll() {
-    if (!confirm(`Excluir TODOS os ${files.length} arquivo(s) desta clínica? Essa ação não pode ser desfeita.`))
-      return
+    const ok = await confirm({
+      title: "Excluir todos os arquivos?",
+      description: `Os ${files.length} arquivo(s) desta clínica serão removidos em definitivo. Essa ação não pode ser desfeita.`,
+      confirmLabel: "Excluir tudo",
+      destructive: true,
+    })
+    if (!ok) return
     setBusy(true)
     const res = await deleteAllClinicFiles(clinicId)
     setBusy(false)

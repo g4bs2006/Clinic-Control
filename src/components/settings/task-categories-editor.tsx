@@ -7,6 +7,7 @@ import { GripVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   upsertTaskCategory,
   deleteTaskCategory,
@@ -32,6 +33,7 @@ interface TaskCategoriesEditorProps {
 
 export function TaskCategoriesEditor({ initialCategories }: TaskCategoriesEditorProps) {
   const router = useRouter()
+  const confirm = useConfirm()
   const [drafts, setDrafts] = useState<DraftCategory[]>(initialCategories.map(toDraft))
   const [pending, startTransition] = useTransition()
   const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -100,12 +102,19 @@ export function TaskCategoriesEditor({ initialCategories }: TaskCategoriesEditor
     })
   }
 
-  function remove(index: number) {
+  async function remove(index: number) {
     const d = drafts[index]
     if (!d.id) {
       setDrafts((prev) => prev.filter((_, i) => i !== index))
       return
     }
+    const ok = await confirm({
+      title: "Remover categoria de tarefa?",
+      description: `"${d.label}" deixa de aparecer ao criar ou filtrar tarefas.`,
+      confirmLabel: "Remover",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteTaskCategory(d.id!)
       if (res.ok) {

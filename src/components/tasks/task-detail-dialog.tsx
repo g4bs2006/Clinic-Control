@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   Dialog,
   DialogContent,
@@ -80,6 +81,7 @@ interface TaskDetailDialogProps {
 }
 
 export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onChanged }: TaskDetailDialogProps) {
+  const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
   const [task, setTask] = useState<TaskRow | null>(null)
@@ -161,8 +163,15 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     })
   }
 
-  function remove() {
+  async function remove() {
     if (!taskId) return
+    const ok = await confirm({
+      title: "Excluir tarefa?",
+      description: "A tarefa é removida em definitivo — não vai para as arquivadas e não dá para recuperar.",
+      confirmLabel: "Excluir",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteTask(taskId)
       if (res.ok) {
@@ -241,7 +250,14 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     else toast.error(res.error)
   }
 
-  function removeAttachment(id: string) {
+  async function removeAttachment(id: string) {
+    const ok = await confirm({
+      title: "Remover anexo?",
+      description: "O arquivo é apagado do armazenamento e não pode ser recuperado.",
+      confirmLabel: "Remover",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteTaskAttachment(id)
       if (res.ok) refreshAll()
