@@ -1,4 +1,5 @@
 import Link from "next/link"
+import type { ReactNode } from "react"
 import { notFound } from "next/navigation"
 import { getClinic, listClinics } from "@/lib/clinics/actions"
 import { getClinicHistory } from "@/lib/portfolio/data"
@@ -30,7 +31,7 @@ import { ClinicFiles } from "@/components/clinics/clinic-files"
 import { ClinicChecks } from "@/components/clinics/clinic-checks"
 import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
 import { ClinicStrategistSelect } from "@/components/clinics/clinic-strategist-select"
-import { ClinicPlanSelect } from "@/components/clinics/clinic-plan-select"
+import { ClinicPlanBadge } from "@/components/clinics/clinic-plan-badge"
 import { ClinicOdontoImpact } from "@/components/clinics/clinic-odontoimpact"
 import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
 import { ClinicFunnelSetup } from "@/components/clinics/clinic-funnel-setup"
@@ -107,6 +108,17 @@ const CONTRACT_LABEL: Record<string, string> = {
   active: "Ativo",
   suspended: "Suspenso",
   archived: "Arquivado",
+}
+
+// Linha da "Ficha da clínica": rótulo à esquerda, controle de edição à direita
+// (empilha no mobile). Reúne os metadados de referência num só lugar.
+function FichaRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="sm:shrink-0">{children}</div>
+    </div>
+  )
 }
 
 export default async function ClinicDetailPage({
@@ -282,6 +294,7 @@ export default async function ClinicDetailPage({
             <span className="rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
               {CONTRACT_LABEL[clinic.contract_status] ?? clinic.contract_status}
             </span>
+            <ClinicPlanBadge clinicId={id} current={clinic.plan ?? null} />
             {status && (
               <span
                 className="rounded-full px-2.5 py-1 text-xs font-semibold"
@@ -304,36 +317,31 @@ export default async function ClinicDetailPage({
         </Panel>
       )}
 
-      {/* ── Sistema utilizado + carteira ───────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Panel title="Sistema" subtitle="prontuário / agenda utilizado pela clínica">
-          <ClinicSystemSelect clinicId={id} current={clinic.system ?? null} />
-        </Panel>
-        <Panel title="Desenvolvedor responsável" subtitle="carteira: quem cuida desta clínica">
-          <ClinicDeveloperSelect
-            clinicId={id}
-            current={clinic.developer_id ?? null}
-            profiles={profiles}
-          />
-        </Panel>
-      </div>
-
-      {/* ── Estrategista + plano + OdontoImpact ─────────────────── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Panel title="Estrategista" subtitle="responsável pela clínica no ecossistema">
-          <ClinicStrategistSelect clinicId={id} current={clinic.strategist ?? null} />
-        </Panel>
-        <Panel title="Plano" subtitle="classificação comercial no ecossistema">
-          <ClinicPlanSelect clinicId={id} current={clinic.plan ?? null} />
-        </Panel>
-        <Panel title="OdontoImpact" subtitle="tráfego pago · gestor responsável">
-          <ClinicOdontoImpact
-            clinicId={id}
-            currentOdontoImpact={clinic.odontoimpact ?? false}
-            currentTrafficManager={clinic.traffic_manager ?? null}
-          />
-        </Panel>
-      </div>
+      {/* ── Ficha da clínica ───────────────────────────────────── */}
+      <Panel title="Ficha da clínica" subtitle="dados de referência do ecossistema · clique num campo para editar">
+        <div className="flex flex-col divide-y divide-border/50">
+          <FichaRow label="Sistema">
+            <ClinicSystemSelect clinicId={id} current={clinic.system ?? null} />
+          </FichaRow>
+          <FichaRow label="Desenvolvedor responsável">
+            <ClinicDeveloperSelect
+              clinicId={id}
+              current={clinic.developer_id ?? null}
+              profiles={profiles}
+            />
+          </FichaRow>
+          <FichaRow label="Estrategista">
+            <ClinicStrategistSelect clinicId={id} current={clinic.strategist ?? null} />
+          </FichaRow>
+          <FichaRow label="OdontoImpact (tráfego pago)">
+            <ClinicOdontoImpact
+              clinicId={id}
+              currentOdontoImpact={clinic.odontoimpact ?? false}
+              currentTrafficManager={clinic.traffic_manager ?? null}
+            />
+          </FichaRow>
+        </div>
+      </Panel>
 
       {/* ── Tarefas ─────────────────────────────────────────────── */}
       <Panel title="Tarefas" subtitle="pendências manuais e sugeridas pela IA para esta clínica">

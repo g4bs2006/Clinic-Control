@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -22,6 +21,9 @@ interface ClinicOdontoImpactProps {
   currentTrafficManager: string | null
 }
 
+// Controle compacto para a linha "OdontoImpact" da ficha: switch da assinatura
+// + (quando ativa) select do gestor de tráfego. Sem label próprio — a linha da
+// ficha já rotula o campo. Desligar a assinatura limpa o gestor no servidor.
 export function ClinicOdontoImpact({
   clinicId,
   currentOdontoImpact,
@@ -52,43 +54,37 @@ export function ClinicOdontoImpact({
     })
   }
 
-  function onToggle(checked: boolean) {
-    save(checked, trafficManager)
-  }
-
-  function onManagerChange(val: string | null) {
-    if (!val) return
-    save(true, val === NONE ? "" : val)
-  }
-
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-end">
+      <div className="flex items-center gap-2">
         <Switch
           id="clinic-odontoimpact"
           checked={odontoimpact}
-          onCheckedChange={onToggle}
+          onCheckedChange={(checked) => save(checked, trafficManager)}
           disabled={pending}
+          aria-label="Assinatura OdontoImpact"
         />
-        <Label htmlFor="clinic-odontoimpact" className="text-sm font-medium cursor-pointer">
-          Assinatura OdontoImpact (tráfego pago)
-        </Label>
+        {!odontoimpact && (
+          <span className="text-xs text-muted-foreground">Sem assinatura</span>
+        )}
       </div>
       {odontoimpact && (
         <Select
           value={trafficManager || NONE}
           items={{
-            [NONE]: "— Não definido —",
+            [NONE]: "— Gestor —",
             ...Object.fromEntries(TRAFFIC_MANAGERS.map((m) => [m, m])),
           }}
-          onValueChange={onManagerChange}
+          onValueChange={(val) => {
+            if (val) save(true, val === NONE ? "" : val)
+          }}
           disabled={pending}
         >
-          <SelectTrigger id="clinic-traffic-manager" className="w-full sm:w-64">
-            <SelectValue placeholder="Selecione o gestor de tráfego" />
+          <SelectTrigger id="clinic-traffic-manager" className="w-full sm:w-52">
+            <SelectValue placeholder="Gestor de tráfego" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NONE}>— Não definido —</SelectItem>
+            <SelectItem value={NONE}>— Gestor —</SelectItem>
             {TRAFFIC_MANAGERS.map((m) => (
               <SelectItem key={m} value={m}>
                 {m}
