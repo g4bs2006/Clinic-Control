@@ -8,6 +8,8 @@ import { clinicInputSchema, type ClinicInput, type Clinic } from "./schema";
 import { regionFromState } from "./region";
 import { geocodeAddress } from "@/lib/geocoding/nominatim";
 import { CLINIC_SYSTEMS } from "./systems";
+import { STRATEGISTS } from "./strategists";
+import { TRAFFIC_MANAGERS } from "./traffic-managers";
 
 export async function geoFields(input: ClinicInput) {
   const region = input.state ? regionFromState(input.state) : null;
@@ -130,6 +132,73 @@ export async function updateClinicSystem(id: string, system: string) {
   const { error } = await supabase
     .from("clinics")
     .update({ system: value || null })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath(`/clinicas/${id}`);
+  revalidatePath("/clinicas");
+  return { ok: true as const };
+}
+
+// Atualiza apenas o estrategista responsável (externo ao sistema, sem login).
+// Valor vazio limpa o campo. Valida contra a lista conhecida.
+export async function updateClinicStrategist(id: string, strategist: string) {
+  const user = await getSessionUser();
+  if (!user) return { ok: false as const, error: "Não autenticado" };
+  const supabase = await createClient();
+
+  const value = strategist.trim();
+  if (value && !(STRATEGISTS as readonly string[]).includes(value)) {
+    return { ok: false as const, error: "Estrategista inválido" };
+  }
+
+  const { error } = await supabase
+    .from("clinics")
+    .update({ strategist: value || null })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath(`/clinicas/${id}`);
+  revalidatePath("/clinicas");
+  return { ok: true as const };
+}
+
+// Atualiza apenas o plano comercial da clínica no ecossistema.
+export async function updateClinicPlan(id: string, plan: "black" | "elite" | null) {
+  const user = await getSessionUser();
+  if (!user) return { ok: false as const, error: "Não autenticado" };
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("clinics")
+    .update({ plan })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath(`/clinicas/${id}`);
+  revalidatePath("/clinicas");
+  return { ok: true as const };
+}
+
+// Atualiza a assinatura OdontoImpact (tráfego pago) e o gestor de tráfego
+// responsável. Desligar a assinatura limpa o gestor. Valida contra a lista
+// conhecida.
+export async function updateClinicOdontoImpact(
+  id: string,
+  input: { odontoimpact: boolean; traffic_manager: string },
+) {
+  const user = await getSessionUser();
+  if (!user) return { ok: false as const, error: "Não autenticado" };
+  const supabase = await createClient();
+
+  const value = input.traffic_manager.trim();
+  if (value && !(TRAFFIC_MANAGERS as readonly string[]).includes(value)) {
+    return { ok: false as const, error: "Gestor de tráfego inválido" };
+  }
+
+  const { error } = await supabase
+    .from("clinics")
+    .update({
+      odontoimpact: input.odontoimpact,
+      traffic_manager: input.odontoimpact ? value || null : null,
+    })
     .eq("id", id);
   if (error) return { ok: false as const, error: error.message };
   revalidatePath(`/clinicas/${id}`);

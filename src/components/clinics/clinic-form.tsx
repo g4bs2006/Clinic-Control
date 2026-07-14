@@ -16,6 +16,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Clinic, ClinicInput } from "@/lib/clinics/schema";
 import { CLINIC_SYSTEMS } from "@/lib/clinics/systems";
+import { STRATEGISTS } from "@/lib/clinics/strategists";
+import { TRAFFIC_MANAGERS } from "@/lib/clinics/traffic-managers";
 import { HelenaIntegrationFields } from "@/components/clinics/helena-integration-fields";
 import {
   HELENA_APPS,
@@ -27,6 +29,9 @@ import {
 } from "@/lib/helena/provision-options";
 
 const SYSTEM_NONE = "__none__";
+const STRATEGIST_NONE = "__none__";
+const PLAN_NONE = "__none__";
+const TRAFFIC_MANAGER_NONE = "__none__";
 
 type ContractStatus = "active" | "suspended" | "archived";
 type Mode = "manual" | "auto";
@@ -50,6 +55,10 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
     defaultValues?.contract_status ?? "active"
   );
   const [system, setSystem] = useState<string>(defaultValues?.system ?? "");
+  const [strategist, setStrategist] = useState<string>(defaultValues?.strategist ?? "");
+  const [plan, setPlan] = useState<string>(defaultValues?.plan ?? "");
+  const [odontoimpact, setOdontoimpact] = useState(defaultValues?.odontoimpact ?? false);
+  const [trafficManager, setTrafficManager] = useState<string>(defaultValues?.traffic_manager ?? "");
   const [ownerName, setOwnerName] = useState(defaultValues?.owner_name ?? "");
   const [ownerEmail, setOwnerEmail] = useState(defaultValues?.owner_email ?? "");
   const [ownerPhone, setOwnerPhone] = useState(defaultValues?.owner_phone ?? "");
@@ -96,6 +105,10 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
       owner_phone: ownerPhone || undefined,
       legal_name: legalName || undefined,
       document_id: documentId ? documentId.replace(/\D/g, "") : undefined,
+      strategist: strategist || undefined,
+      plan: plan ? (plan as "black" | "elite") : undefined,
+      odontoimpact,
+      traffic_manager: odontoimpact ? trafficManager || undefined : undefined,
     };
 
     startTransition(async () => {
@@ -222,6 +235,94 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="strategist">Estrategista</Label>
+            <Select
+              value={strategist || STRATEGIST_NONE}
+              items={{
+                [STRATEGIST_NONE]: "— Não definido —",
+                ...Object.fromEntries(STRATEGISTS.map((s) => [s, s])),
+              }}
+              onValueChange={(val) => {
+                if (val) setStrategist(val === STRATEGIST_NONE ? "" : val);
+              }}
+            >
+              <SelectTrigger id="strategist" className="w-full">
+                <SelectValue placeholder="Selecione o estrategista" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={STRATEGIST_NONE}>— Não definido —</SelectItem>
+                {STRATEGISTS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="plan">Plano</Label>
+            <Select
+              value={plan || PLAN_NONE}
+              items={{ [PLAN_NONE]: "— Não definido —", black: "Black", elite: "Elite" }}
+              onValueChange={(val) => {
+                if (val) setPlan(val === PLAN_NONE ? "" : val);
+              }}
+            >
+              <SelectTrigger id="plan" className="w-full">
+                <SelectValue placeholder="Selecione o plano" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PLAN_NONE}>— Não definido —</SelectItem>
+                <SelectItem value="black">Black</SelectItem>
+                <SelectItem value="elite">Elite</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border/60 p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <Switch
+              id="odontoimpact"
+              checked={odontoimpact}
+              onCheckedChange={(checked) => setOdontoimpact(checked)}
+            />
+            <Label htmlFor="odontoimpact" className="cursor-pointer">
+              Assinatura OdontoImpact (tráfego pago)
+            </Label>
+          </div>
+          {odontoimpact && (
+            <div className="space-y-1.5">
+              <Label htmlFor="traffic_manager">Gestor de tráfego</Label>
+              <Select
+                value={trafficManager || TRAFFIC_MANAGER_NONE}
+                items={{
+                  [TRAFFIC_MANAGER_NONE]: "— Não definido —",
+                  ...Object.fromEntries(TRAFFIC_MANAGERS.map((m) => [m, m])),
+                }}
+                onValueChange={(val) => {
+                  if (val) setTrafficManager(val === TRAFFIC_MANAGER_NONE ? "" : val);
+                }}
+              >
+                <SelectTrigger id="traffic_manager" className="w-full">
+                  <SelectValue placeholder="Selecione o gestor de tráfego" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TRAFFIC_MANAGER_NONE}>— Não definido —</SelectItem>
+                  {TRAFFIC_MANAGERS.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {/* ── Dados do dono / documento (usados no provisionamento Helena) ── */}

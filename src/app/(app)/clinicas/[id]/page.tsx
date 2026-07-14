@@ -29,6 +29,9 @@ import { ClinicAgents } from "@/components/clinics/clinic-agents"
 import { ClinicFiles } from "@/components/clinics/clinic-files"
 import { ClinicChecks } from "@/components/clinics/clinic-checks"
 import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
+import { ClinicStrategistSelect } from "@/components/clinics/clinic-strategist-select"
+import { ClinicPlanSelect } from "@/components/clinics/clinic-plan-select"
+import { ClinicOdontoImpact } from "@/components/clinics/clinic-odontoimpact"
 import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
 import { ClinicFunnelSetup } from "@/components/clinics/clinic-funnel-setup"
 import { listReportJobs } from "@/lib/reports/actions"
@@ -311,6 +314,23 @@ export default async function ClinicDetailPage({
             clinicId={id}
             current={clinic.developer_id ?? null}
             profiles={profiles}
+          />
+        </Panel>
+      </div>
+
+      {/* ── Estrategista + plano + OdontoImpact ─────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Panel title="Estrategista" subtitle="responsável pela clínica no ecossistema">
+          <ClinicStrategistSelect clinicId={id} current={clinic.strategist ?? null} />
+        </Panel>
+        <Panel title="Plano" subtitle="classificação comercial no ecossistema">
+          <ClinicPlanSelect clinicId={id} current={clinic.plan ?? null} />
+        </Panel>
+        <Panel title="OdontoImpact" subtitle="tráfego pago · gestor responsável">
+          <ClinicOdontoImpact
+            clinicId={id}
+            currentOdontoImpact={clinic.odontoimpact ?? false}
+            currentTrafficManager={clinic.traffic_manager ?? null}
           />
         </Panel>
       </div>
