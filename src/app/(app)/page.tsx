@@ -11,6 +11,8 @@ import { PortfolioFilters } from "@/components/dashboard/portfolio-filters"
 import { listCheckItems, listAllClinicChecks } from "@/lib/clinics/check-items-actions"
 import { listClinics } from "@/lib/clinics/actions"
 import { listAttentionSummaries } from "@/lib/whatsapp/actions"
+import { listTopAiSpenders } from "@/lib/openai-usage/actions"
+import { USD_TO_BRL, formatBrl } from "@/lib/ai-usage/pricing"
 import { countMyPendingTasks } from "@/lib/tasks/actions"
 import { materializeRecurrences } from "@/lib/tasks/recurrence-actions"
 import { CheckCircle2, ListTodo } from "lucide-react"
@@ -58,7 +60,7 @@ export default async function HomePage({
   await materializeRecurrences()
 
   // Fetch portfolio data, check items, all checks, raw clinics and WhatsApp stats
-  const [portfolioData, checkItems, allChecksMap, rawClinics, rawAttentionSummaries, scope, myPendingTasks] = await Promise.all([
+  const [portfolioData, checkItems, allChecksMap, rawClinics, rawAttentionSummaries, scope, myPendingTasks, aiSpenders] = await Promise.all([
     getPortfolioForMonth(month),
     listCheckItems(),
     listAllClinicChecks(),
@@ -66,6 +68,7 @@ export default async function HomePage({
     listAttentionSummaries(),
     getCarteiraScope(params.dev),
     countMyPendingTasks(),
+    listTopAiSpenders(month, params.dev),
   ])
 
   // Escopo por carteira: desenvolvedor vê só a sua; gestor pode filtrar (?dev=).
@@ -410,6 +413,62 @@ export default async function HomePage({
                     </div>
                   </li>
                 ))}
+              </ul>
+            )}
+          </Panel>
+
+          {/* ── Maiores gastos de IA (OpenAI) ────────────────────── */}
+          <Panel title="Gastos de IA · OpenAI" subtitle="as 5 clínicas que mais consumiram no mês">
+            {aiSpenders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <CheckCircle2 className="size-8 text-emerald-500/80 mb-2" />
+                <p className="text-xs text-muted-foreground">
+                  Nenhuma clínica com projeto OpenAI vinculado ainda.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                {aiSpenders.slice(0, 5).map((s) => {
+                  const delta =
+                    s.prevMonthCostUsd > 0 ? s.costUsd / s.prevMonthCostUsd - 1 : null
+                  return (
+                    <li
+                      key={s.clinicId}
+                      className="flex flex-col gap-1.5 rounded-md border border-border/50 bg-accent/30 p-2.5 hover:bg-accent/60 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <Link
+                          href={`/clinicas/${s.clinicId}`}
+                          className="text-xs font-semibold text-foreground hover:underline truncate"
+                        >
+                          {s.name}
+                        </Link>
+                        {s.alerted && (
+                          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-red-400 shrink-0">
+                            Alerta
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-[0.7rem] text-muted-foreground">
+                        <span>
+                          <strong className="text-foreground tabular-nums">
+                            US$ {s.costUsd.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </strong>{" "}
+                          · ≈ {formatBrl(s.costUsd * USD_TO_BRL)}
+                        </span>
+                        {delta !== null && (
+                          <span
+                            className={`tabular-nums ${delta > 0.5 ? "text-red-400" : ""}`}
+                            title="variação vs mês anterior"
+                          >
+                            {delta >= 0 ? "▲" : "▼"}{" "}
+                            {Math.abs(delta * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}%
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </Panel>

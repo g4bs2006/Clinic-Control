@@ -30,5 +30,7 @@ export type Clinic = ClinicInput & {
   lng: number | null;
   developer_id: string | null; // carteira: usuário responsável pela clínica
   onboarded_at: string | null; // âncora do onboarding (null = em andamento)
+  openai_project_id: string | null; // projeto na organização OpenAI (monitor de consumo)
+  openai_daily_limit_usd: number | null; // teto de alerta próprio; null = limite global
   created_at: string;
 };

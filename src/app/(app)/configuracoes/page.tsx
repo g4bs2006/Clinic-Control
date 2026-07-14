@@ -9,6 +9,8 @@ import { listTaskCategories } from "@/lib/tasks/category-actions"
 import { getAiUsageStats } from "@/lib/ai-usage/actions"
 import { getAiSettings, getSuggestionStats } from "@/lib/ai-settings/actions"
 import { AiSettingsPanel } from "@/components/settings/ai-settings-panel"
+import { getOpenAiAlertSettings } from "@/lib/openai-usage/actions"
+import { OpenAiAlertSettingsPanel } from "@/components/settings/openai-alert-settings-panel"
 import { purposeLabel, formatBrl } from "@/lib/ai-usage/pricing"
 import { KpiCard } from "@/components/dashboard/kpi-card"
 import { ReportKeywordsEditor } from "@/components/settings/report-keywords-editor"
@@ -27,7 +29,7 @@ import { ChangePasswordForm } from "@/components/settings/change-password-form"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesPage() {
-  const [rules, steps, checkItems, checkCategories, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats] = await Promise.all([
+  const [rules, steps, checkItems, checkCategories, clinics, groups, teamMembers, profiles, reportKeywords, currentProfile, taskCategories, aiUsage, aiSettings, suggestionStats, openAiAlertSettings] = await Promise.all([
     listStatusRules(),
     listFunnelSteps(),
     listManagedCheckItems(),
@@ -42,6 +44,7 @@ export default async function ConfiguracoesPage() {
     getAiUsageStats(),
     getAiSettings(),
     getSuggestionStats(),
+    getOpenAiAlertSettings(),
   ])
 
   const clinicCountByDeveloper: Record<string, number> = {}
@@ -117,6 +120,16 @@ export default async function ConfiguracoesPage() {
             stats={suggestionStats}
             clinics={clinics.map((c) => ({ id: c.id, name: c.name }))}
           />
+        </Panel>
+      )}
+
+      {/* ── Alertas de gasto OpenAI (clínicas) ─────────────────── */}
+      {currentProfile?.role === "gestor" && (
+        <Panel
+          title="Alertas de gasto — OpenAI"
+          subtitle="limites do monitor de consumo por clínica (coleta diária via Admin API)"
+        >
+          <OpenAiAlertSettingsPanel settings={openAiAlertSettings} />
         </Panel>
       )}
 
