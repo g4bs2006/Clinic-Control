@@ -158,7 +158,9 @@ export function TrendChart({ data, series, formatValue = fmtPct, xKey }: TrendCh
 
   return (
     <div style={{ width: "100%" }}>
-      <ResponsiveContainer width="100%" height={300}>
+      {/* debounce: em redimensionamentos animados (fixar sidebar, janela), o
+          gráfico redesenha 1x ao final em vez de a cada frame. */}
+      <ResponsiveContainer width="100%" height={300} debounce={150}>
         <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -8 }}>
           <CartesianGrid
             strokeDasharray="3 3"

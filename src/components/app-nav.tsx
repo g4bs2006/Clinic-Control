@@ -131,7 +131,11 @@ export function AppNav({
         ref={navRef}
         aria-label="Navegação principal"
         // Footprint no flex: 0 no mobile (drawer sobrepõe), rail/cheio no desktop.
-        className={cn("relative w-0 shrink-0 md:transition-[width] md:duration-200 md:ease-out", desktopExpanded ? FULL : RAIL)}
+        // Só o PIN muda o footprint — o peek (hover) expande apenas o painel
+        // fixo, por cima do conteúdo. Animar o footprint no hover refluía a
+        // página a cada frame e forçava todos os gráficos Recharts visíveis a
+        // redesenhar ~12x por abertura (o "travamento" com gráficos na tela).
+        className={cn("relative w-0 shrink-0 md:transition-[width] md:duration-200 md:ease-out", pinned ? FULL : RAIL)}
         onMouseEnter={() => !pinned && setPeek(true)}
         onMouseLeave={() => !pinned && !carteiraOpen && setPeek(false)}
         onFocusCapture={() => !pinned && setPeek(true)}

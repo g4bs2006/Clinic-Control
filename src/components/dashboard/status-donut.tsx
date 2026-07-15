@@ -202,7 +202,7 @@ export function StatusDonut({ data, totalClinics }: StatusDonutProps) {
 
   return (
     <div style={{ width: "100%" }}>
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={200} debounce={150}>
         <PieChart>
           <Pie
             data={data}
