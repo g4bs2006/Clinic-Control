@@ -45,8 +45,12 @@ import { DailyRateChart } from "@/components/clinics/daily-rate-chart"
 import { getClinicOpenAiUsage, listOpenAiKeys } from "@/lib/openai-usage/actions"
 import { ClinicOpenAiUsagePanel } from "@/components/clinics/clinic-openai-usage"
 import { ClinicOpenAiKeySelect } from "@/components/clinics/clinic-openai-key-select"
+import { InvestigateContacts } from "@/components/clinics/investigate-contacts"
 
 export const dynamic = "force-dynamic"
+// "Investigar contatos" varre conversas da Helena sob demanda — precisa de
+// mais que os ~15s padrão de server action no Vercel.
+export const maxDuration = 60
 
 const CLINIC_COLOR = "#7C3AED" // brand purple accent
 
@@ -417,6 +421,7 @@ export default async function ClinicDetailPage({
             keys={openAiKeys}
           />
         </div>
+        <InvestigateContacts clinicId={id} />
       </Panel>
 
       {/* ── Credenciais do Formulário ──────────────────────────── */}

@@ -433,8 +433,8 @@ async function run(req: Request): Promise<Response> {
               title: `Gasto OpenAI alto — ${fmt(cost)} em ${yesterday}`,
               description:
                 `Consumo estimado de ${fmt(cost)} no dia ${yesterday} (UTC), ${motivo}. ` +
-                `Verificar no painel da clínica se há contato repetindo em loop ` +
-                `(outra IA/operadora) consumindo tokens.`,
+                `Use o botão "Investigar contatos" no painel Consumo de IA da clínica ` +
+                `para ranquear quem está consumindo tokens (outra IA/operadora/loop).`,
               severity: "alta",
               assigned_to: clinic.developer_id,
               source: "ia",
