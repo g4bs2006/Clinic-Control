@@ -879,3 +879,47 @@ export async function deleteTaskComment(
   revalidatePath("/tarefas");
   return { ok: true };
 }
+
+export async function renameTaskAttachment(
+  attachmentId: string,
+  newName: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const name = newName.trim();
+  if (!name) return { ok: false, error: "Nome do arquivo não pode ser vazio" };
+
+  // Buscar o anexo original
+  const { data: attachment, error: fetchError } = await supabase
+    .from("task_attachments")
+    .select("file_name, task_id")
+    .eq("id", attachmentId)
+    .maybeSingle();
+
+  if (fetchError || !attachment) {
+    return { ok: false, error: fetchError?.message ?? "Anexo não encontrado" };
+  }
+
+  if (attachment.file_name === name) {
+    return { ok: true }; // Nada mudou
+  }
+
+  const { error } = await supabase
+    .from("task_attachments")
+    .update({ file_name: name })
+    .eq("id", attachmentId);
+
+  if (error) return { ok: false, error: error.message };
+
+  const user = await getSessionUser();
+  await supabase.from("task_comments").insert({
+    task_id: attachment.task_id as string,
+    author_id: user!.id,
+    kind: "system",
+    body: `Renomeou o anexo "${attachment.file_name}" para "${name}"`,
+  });
+
+  revalidatePath("/tarefas");
+  return { ok: true };
+}

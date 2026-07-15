@@ -40,6 +40,7 @@ import {
   addTaskComment,
   updateTaskComment,
   deleteTaskComment,
+  renameTaskAttachment,
   type TaskRow,
   type TaskAttachmentRow,
   type TaskActivityRow,
@@ -99,6 +100,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [uploading, setUploading] = useState(false)
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editingCommentText, setEditingCommentText] = useState("")
+  const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
+  const [editingAttachmentName, setEditingAttachmentName] = useState("")
   // Marca que houve alteração; o board só é re-sincronizado ao fechar (uma vez),
   // em vez de um refetch de página inteira a cada micro-edição.
   const changedRef = useRef(false)
@@ -267,6 +270,26 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       const res = await deleteTaskAttachment(id)
       if (res.ok) refreshAll()
       else toast.error(res.error)
+    })
+  }
+
+  function handleStartRenameAttachment(id: string, name: string) {
+    setEditingAttachmentId(id)
+    setEditingAttachmentName(name)
+  }
+
+  function submitAttachmentRename(id: string) {
+    const name = editingAttachmentName.trim()
+    if (!name) return
+    startTransition(async () => {
+      const res = await renameTaskAttachment(id, name)
+      if (res.ok) {
+        setEditingAttachmentId(null)
+        setEditingAttachmentName("")
+        refreshAll()
+      } else {
+        toast.error(res.error)
+      }
     })
   }
 
@@ -485,26 +508,74 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 ) : (
                   <ul className="flex flex-col divide-y divide-border/40">
                     {attachments.map((a) => (
-                      <li key={a.id} className="flex items-center gap-2 py-2 text-sm">
-                        <button
-                          type="button"
-                          onClick={() => downloadAttachment(a.id)}
-                          className="flex-1 truncate text-left text-brand-gradient hover:opacity-85"
-                          title="Baixar anexo"
-                        >
-                          {a.file_name}
-                        </button>
-                        <span className="shrink-0 text-[0.68rem] text-muted-foreground">{fmtBytes(a.size_bytes)}</span>
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          variant="ghost"
-                          className="size-9 shrink-0 text-muted-foreground hover:text-red-400 sm:size-7"
-                          aria-label="Excluir anexo"
-                          onClick={() => removeAttachment(a.id)}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
+                      <li key={a.id} className="group flex items-center gap-2 py-2 text-sm transition-colors hover:bg-accent/10 rounded px-1.5">
+                        {editingAttachmentId === a.id ? (
+                          <div className="flex flex-1 items-center gap-1.5">
+                            <Input
+                              value={editingAttachmentName}
+                              onChange={(e) => setEditingAttachmentName(e.target.value)}
+                              className="h-7 text-xs flex-1"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") submitAttachmentRename(a.id)
+                                if (e.key === "Escape") setEditingAttachmentId(null)
+                              }}
+                              autoFocus
+                            />
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              className="size-7"
+                              disabled={pending || !editingAttachmentName.trim()}
+                              onClick={() => submitAttachmentRename(a.id)}
+                            >
+                              <Check className="size-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="ghost"
+                              className="size-7"
+                              onClick={() => setEditingAttachmentId(null)}
+                            >
+                              <X className="size-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => downloadAttachment(a.id)}
+                              className="flex-1 truncate text-left text-brand-gradient hover:opacity-85"
+                              title="Baixar anexo"
+                            >
+                              {a.file_name}
+                            </button>
+                            <span className="shrink-0 text-[0.68rem] text-muted-foreground">{fmtBytes(a.size_bytes)}</span>
+                            
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                              <Button
+                                type="button"
+                                size="icon-sm"
+                                variant="ghost"
+                                className="size-8 text-muted-foreground hover:text-foreground"
+                                title="Renomear anexo"
+                                onClick={() => handleStartRenameAttachment(a.id, a.file_name)}
+                              >
+                                <Pencil className="size-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon-sm"
+                                variant="ghost"
+                                className="size-8 text-muted-foreground hover:text-red-400"
+                                aria-label="Excluir anexo"
+                                onClick={() => removeAttachment(a.id)}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          </>
+                        )}
                       </li>
                     ))}
                   </ul>
