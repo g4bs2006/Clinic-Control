@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw } from "lucide-react"
+import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw, Pencil, Check } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useConfirm } from "@/components/ui/confirm-dialog"
@@ -38,6 +38,8 @@ import {
   deleteTaskAttachment,
   listTaskActivity,
   addTaskComment,
+  updateTaskComment,
+  deleteTaskComment,
   type TaskRow,
   type TaskAttachmentRow,
   type TaskActivityRow,
@@ -78,9 +80,10 @@ interface TaskDetailDialogProps {
   /** Reflete a troca de status no board na hora (otimista, sem refetch). */
   onStatusChange?: (id: string, status: TaskStatus) => void
   onChanged: () => void
+  currentUserId?: string | null
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onChanged }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onChanged, currentUserId = null }: TaskDetailDialogProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
@@ -94,6 +97,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [comment, setComment] = useState("")
   const [suggested, setSuggested] = useState<string[] | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editingCommentText, setEditingCommentText] = useState("")
   // Marca que houve alteração; o board só é re-sincronizado ao fechar (uma vez),
   // em vez de um refetch de página inteira a cada micro-edição.
   const changedRef = useRef(false)
@@ -273,6 +278,45 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
         setComment("")
         refreshAll()
       } else toast.error(res.error)
+    })
+  }
+
+  function handleEditComment(id: string, body: string) {
+    setEditingCommentId(id)
+    setEditingCommentText(body)
+  }
+
+  function submitCommentEdit(id: string) {
+    const text = editingCommentText.trim()
+    if (!text) return
+    startTransition(async () => {
+      const res = await updateTaskComment(id, text)
+      if (res.ok) {
+        setEditingCommentId(null)
+        setEditingCommentText("")
+        refreshAll()
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
+
+  async function handleDeleteComment(id: string) {
+    const ok = await confirm({
+      title: "Excluir comentário?",
+      description: "Esta ação removerá o comentário permanentemente.",
+      confirmLabel: "Excluir",
+      destructive: true,
+    })
+    if (!ok) return
+    startTransition(async () => {
+      const res = await deleteTaskComment(id)
+      if (res.ok) {
+        toast.success("Comentário excluído.")
+        refreshAll()
+      } else {
+        toast.error(res.error)
+      }
     })
   }
 
@@ -471,13 +515,84 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
               <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Atividade</p>
                 <ul className="flex max-h-52 flex-col gap-2 overflow-y-auto pr-1">
-                  {activity.map((a) => (
-                    <li key={a.id} className={a.kind === "system" ? "text-xs text-muted-foreground italic" : "text-sm"}>
-                      {a.kind === "comment" && <span className="font-semibold">{a.author_name ?? "Alguém"}: </span>}
-                      {a.body}
-                      <span className="ml-1.5 text-[0.62rem] text-muted-foreground/70">{fmtDateTime(a.created_at)}</span>
-                    </li>
-                  ))}
+                  {activity.map((a) => {
+                    const canEditOrDelete = a.kind === "comment" &&
+                      a.author_id === currentUserId &&
+                      (Date.now() - new Date(a.created_at).getTime()) < 30 * 60 * 1000
+
+                    return (
+                      <li key={a.id} className={`group flex flex-col gap-0.5 rounded-md p-1.5 transition-colors hover:bg-accent/20 ${a.kind === "system" ? "text-xs text-muted-foreground italic" : "text-sm"}`}>
+                        {editingCommentId === a.id ? (
+                          <div className="flex flex-col gap-1.5 w-full mt-1">
+                            <textarea
+                              value={editingCommentText}
+                              onChange={(e) => setEditingCommentText(e.target.value)}
+                              className="w-full min-h-[3rem] resize-y rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
+                            />
+                            <div className="flex gap-1.5 justify-end">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs"
+                                onClick={() => setEditingCommentId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-7 text-xs"
+                                disabled={pending || !editingCommentText.trim()}
+                                onClick={() => submitCommentEdit(a.id)}
+                              >
+                                Salvar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                {a.kind === "comment" && <span className="font-semibold text-xs text-muted-foreground mr-1">{a.author_name ?? "Alguém"}: </span>}
+                                <span className="break-words">{a.body}</span>
+                              </div>
+                              
+                              {canEditOrDelete && (
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditComment(a.id, a.body)}
+                                    title="Editar comentário"
+                                    className="p-1 hover:text-foreground text-muted-foreground transition-colors"
+                                  >
+                                    <Pencil className="size-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteComment(a.id)}
+                                    title="Excluir comentário"
+                                    className="p-1 hover:text-red-400 text-muted-foreground transition-colors"
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex items-center gap-1.5 text-[0.62rem] text-muted-foreground/70 pl-0.5">
+                              <span>{fmtDateTime(a.created_at)}</span>
+                              {a.updated_at && (
+                                <span title={`Editado em: ${fmtDateTime(a.updated_at)}`}>
+                                  · (editado)
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
                 <div className="flex items-center gap-2 border-t border-border/40 pt-2">
                   <Input

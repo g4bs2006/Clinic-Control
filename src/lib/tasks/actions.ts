@@ -742,15 +742,17 @@ export type TaskActivityRow = {
   id: string;
   body: string;
   kind: "comment" | "system";
+  author_id: string | null;
   author_name: string | null;
   created_at: string;
+  updated_at: string | null;
 };
 
 export async function listTaskActivity(taskId: string): Promise<TaskActivityRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("task_comments")
-    .select("id, body, kind, created_at, author:app_users!author_id(name)")
+    .select("id, body, kind, author_id, created_at, updated_at, author:app_users!author_id(name)")
     .eq("task_id", taskId)
     .order("created_at");
   if (error) throw new Error(error.message);
@@ -758,8 +760,10 @@ export async function listTaskActivity(taskId: string): Promise<TaskActivityRow[
     id: row.id as string,
     body: row.body as string,
     kind: row.kind as "comment" | "system",
+    author_id: row.author_id as string | null,
     author_name: unwrapName(row.author as SingleOrArray<{ name: string | null }>),
     created_at: row.created_at as string,
+    updated_at: row.updated_at as string | null,
   }));
 }
 
@@ -780,6 +784,96 @@ export async function addTaskComment(
     body: text,
     kind: "comment",
   });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/tarefas");
+  return { ok: true };
+}
+
+export async function updateTaskComment(
+  commentId: string,
+  body: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const text = body.trim();
+  if (!text) return { ok: false, error: "Comentário vazio" };
+
+  const user = await getSessionUser();
+  
+  // Buscar o comentário original para checar autoria e tempo
+  const { data: comment, error: fetchError } = await supabase
+    .from("task_comments")
+    .select("author_id, created_at, kind")
+    .eq("id", commentId)
+    .maybeSingle();
+
+  if (fetchError || !comment) {
+    return { ok: false, error: fetchError?.message ?? "Comentário não encontrado" };
+  }
+
+  if (comment.kind !== "comment") {
+    return { ok: false, error: "Apenas comentários de usuários podem ser editados" };
+  }
+
+  if (comment.author_id !== user!.id) {
+    return { ok: false, error: "Apenas o autor do comentário pode editá-lo" };
+  }
+
+  const elapsedMs = Date.now() - new Date(comment.created_at as string).getTime();
+  if (elapsedMs > 30 * 60 * 1000) {
+    return { ok: false, error: "O tempo limite de 30 minutos para edição expirou" };
+  }
+
+  const { error } = await supabase
+    .from("task_comments")
+    .update({ body: text, updated_at: new Date().toISOString() })
+    .eq("id", commentId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/tarefas");
+  return { ok: true };
+}
+
+export async function deleteTaskComment(
+  commentId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const user = await getSessionUser();
+
+  // Buscar o comentário original para checar autoria e tempo
+  const { data: comment, error: fetchError } = await supabase
+    .from("task_comments")
+    .select("author_id, created_at, kind")
+    .eq("id", commentId)
+    .maybeSingle();
+
+  if (fetchError || !comment) {
+    return { ok: false, error: fetchError?.message ?? "Comentário não encontrado" };
+  }
+
+  if (comment.kind !== "comment") {
+    return { ok: false, error: "Apenas comentários de usuários podem ser excluídos" };
+  }
+
+  if (comment.author_id !== user!.id) {
+    return { ok: false, error: "Apenas o autor do comentário pode excluí-lo" };
+  }
+
+  const elapsedMs = Date.now() - new Date(comment.created_at as string).getTime();
+  if (elapsedMs > 30 * 60 * 1000) {
+    return { ok: false, error: "O tempo limite de 30 minutos para exclusão expirou" };
+  }
+
+  const { error } = await supabase
+    .from("task_comments")
+    .delete()
+    .eq("id", commentId);
+
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/tarefas");

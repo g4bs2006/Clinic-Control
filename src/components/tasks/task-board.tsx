@@ -696,6 +696,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
         onClose={() => setOpenTaskId(null)}
         onStatusChange={changeStatus}
         onChanged={refresh}
+        currentUserId={currentUserId}
       />
     </div>
   )
