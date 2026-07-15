@@ -73,7 +73,7 @@ export function TaskFields({
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {!hideClinic && (
-        <label className="col-span-2 flex flex-col gap-1 text-xs text-muted-foreground">
+        <label className={`${status !== undefined && onStatusChange ? "col-span-1" : "col-span-2"} flex flex-col gap-1 text-xs text-muted-foreground`}>
           Clínica
           <Select
             value={clinicId ?? NO_CLINIC}
@@ -92,6 +92,28 @@ export function TaskFields({
               {clinics.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      )}
+
+      {status !== undefined && onStatusChange && (
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Status
+          <Select
+            value={status}
+            items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
+            onValueChange={(v) => v && onStatusChange(v as TaskStatus)}
+          >
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {TASK_STATUS_LABEL[s]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -178,28 +200,6 @@ export function TaskFields({
           className="h-8"
         />
       </label>
-
-      {status !== undefined && onStatusChange && (
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Status
-          <Select
-            value={status}
-            items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
-            onValueChange={(v) => v && onStatusChange(v as TaskStatus)}
-          >
-            <SelectTrigger className="h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TASK_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {TASK_STATUS_LABEL[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
-      )}
     </div>
   )
 }
