@@ -364,17 +364,13 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
 
             <div className="flex flex-col gap-5">
               {/* ── Metadados ─────────────────────────────────────── */}
-              <div className="flex flex-wrap items-center gap-2">
-                {task.source === "ia" && (
+              {task.source === "ia" && (
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.62rem] font-semibold text-amber-400">
                     Origem: IA
                   </span>
-                )}
-                <div className="flex-1" />
-                <Button type="button" size="icon-sm" variant="ghost" disabled={pending} onClick={remove} title="Excluir tarefa">
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
+                </div>
+              )}
 
               <TaskFields
                 clinics={clinics}
@@ -716,7 +712,20 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   Concluir tarefa
                 </Button>
               )}
-              <DialogClose className={buttonVariants({ variant: "outline" })}>Fechar</DialogClose>
+              <div className="flex gap-2 mt-2 sm:mt-0">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-red-400 hover:text-red-500 hover:bg-red-500/10 h-9 px-3"
+                  disabled={pending}
+                  onClick={remove}
+                  title="Excluir tarefa"
+                >
+                  <Trash2 className="size-4 mr-1" />
+                  Excluir
+                </Button>
+                <DialogClose className={buttonVariants({ variant: "outline" })}>Fechar</DialogClose>
+              </div>
             </DialogFooter>
           </>
         )}
