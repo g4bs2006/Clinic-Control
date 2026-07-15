@@ -42,9 +42,9 @@ import { listClinicTasks, listTaskSuggestions } from "@/lib/tasks/actions"
 import { listActiveTaskCategories } from "@/lib/tasks/category-actions"
 import { TaskBoard } from "@/components/tasks/task-board"
 import { DailyRateChart } from "@/components/clinics/daily-rate-chart"
-import { getClinicOpenAiUsage, listOpenAiProjects } from "@/lib/openai-usage/actions"
+import { getClinicOpenAiUsage, listOpenAiKeys } from "@/lib/openai-usage/actions"
 import { ClinicOpenAiUsagePanel } from "@/components/clinics/clinic-openai-usage"
-import { ClinicOpenAiProjectSelect } from "@/components/clinics/clinic-openai-project-select"
+import { ClinicOpenAiKeySelect } from "@/components/clinics/clinic-openai-key-select"
 
 export const dynamic = "force-dynamic"
 
@@ -156,7 +156,7 @@ export default async function ClinicDetailPage({
   const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
   const nextClinic = currentIndex < allClinics.length - 1 ? allClinics[currentIndex + 1] : null
 
-  const [agents, files, clinicChecks, formCredentials, responseStats, summaries, provisioning, helenaIntegration, profiles, currentProfile, openAiUsage, openAiProjects] =
+  const [agents, files, clinicChecks, formCredentials, responseStats, summaries, provisioning, helenaIntegration, profiles, currentProfile, openAiUsage, openAiKeys] =
     await Promise.all([
       listClinicAgents(id),
       listClinicFiles(id),
@@ -169,7 +169,7 @@ export default async function ClinicDetailPage({
       listUserProfiles(),
       getCurrentProfile(),
       getClinicOpenAiUsage(id),
-      listOpenAiProjects(),
+      listOpenAiKeys(),
     ])
 
   const reportJobs = isAuto ? await listReportJobs(id) : []
@@ -390,7 +390,7 @@ export default async function ClinicDetailPage({
       {/* ── Consumo de IA (OpenAI) ─────────────────────────────── */}
       <Panel
         title="Consumo de IA (OpenAI)"
-        subtitle="tokens e custo do projeto da clínica na organização OpenAI · coletado diariamente"
+        subtitle="tokens da API key da clínica · custo estimado rateado da fatura real da organização · coletado diariamente"
       >
         {openAiUsage.ok && openAiUsage.linked ? (
           <ClinicOpenAiUsagePanel
@@ -402,19 +402,19 @@ export default async function ClinicDetailPage({
         ) : (
           <p className="text-sm text-muted-foreground">
             {openAiUsage.ok
-              ? "Vincule abaixo o projeto OpenAI desta clínica para acompanhar tokens, custo diário e receber alertas de gasto anormal."
+              ? "Vincule abaixo a API key OpenAI desta clínica para acompanhar tokens, custo diário e receber alertas de gasto anormal."
               : `Não foi possível ler o consumo agora (${openAiUsage.error}).`}
           </p>
         )}
         <div className="flex flex-col gap-1.5 border-t border-border/50 pt-3">
           <span className="text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">
-            Projeto OpenAI vinculado
+            API key OpenAI vinculada
           </span>
-          <ClinicOpenAiProjectSelect
+          <ClinicOpenAiKeySelect
             clinicId={id}
             clinicName={clinic.name}
-            current={clinic.openai_project_id ?? null}
-            projects={openAiProjects}
+            current={clinic.openai_api_key_id ?? null}
+            keys={openAiKeys}
           />
         </div>
       </Panel>

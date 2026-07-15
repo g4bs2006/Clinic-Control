@@ -5,8 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getCarteiraScope } from "@/lib/users/actions";
 import { requireGestor } from "@/lib/auth/require-gestor";
 
-// Dias em UTC (bucket da OpenAI — ver 0053_openai_usage.sql). O "mês" aqui é o
-// mês UTC, que bate com o dashboard da OpenAI, não com o fuso de SP.
+// Dias em UTC (bucket da OpenAI — ver 0053/0055). O "mês" aqui é o mês UTC,
+// que bate com o dashboard da OpenAI, não com o fuso de SP.
+//
+// Granularidade: API KEY, não projeto (0055) — cada clínica tem a própria key
+// dentro da organização. O custo por key é ESTIMADO (tokens × preço por
+// modelo) e calibrado pela Edge Function para a soma diária bater com a
+// fatura real da organização.
 
 function monthBounds(yearMonth: string): { start: string; end: string } {
   const [y, m] = yearMonth.split("-").map(Number);
@@ -33,7 +38,7 @@ export type ClinicOpenAiUsage =
   | {
       ok: true;
       linked: true;
-      projectId: string;
+      apiKeyId: string;
       yearMonth: string;
       days: OpenAiUsageDay[];
       monthCostUsd: number;
@@ -46,14 +51,31 @@ export type ClinicOpenAiUsage =
     }
   | { ok: false; error: string };
 
-type UsageRow = {
-  project_id: string;
+type KeyUsageRow = {
+  api_key_id: string;
   day: string;
-  cost_usd: number;
+  est_cost_usd: number;
   input_tokens: number;
   output_tokens: number;
   requests: number;
 };
+
+/** Soma as linhas key×dia×modelo em um mapa por dia. */
+function sumByDay(rows: KeyUsageRow[]): Map<string, OpenAiUsageDay> {
+  const byDay = new Map<string, OpenAiUsageDay>();
+  for (const r of rows) {
+    let d = byDay.get(r.day);
+    if (!d) {
+      d = { day: r.day, costUsd: 0, inputTokens: 0, outputTokens: 0, requests: 0 };
+      byDay.set(r.day, d);
+    }
+    d.costUsd += Number(r.est_cost_usd);
+    d.inputTokens += Number(r.input_tokens);
+    d.outputTokens += Number(r.output_tokens);
+    d.requests += Number(r.requests);
+  }
+  return byDay;
+}
 
 /** Consumo OpenAI da clínica num mês + KPIs de anomalia (ontem vs média 7d). */
 export async function getClinicOpenAiUsage(
@@ -64,11 +86,11 @@ export async function getClinicOpenAiUsage(
     const supabase = await createClient();
     const { data: clinic } = await supabase
       .from("clinics")
-      .select("openai_project_id")
+      .select("openai_api_key_id")
       .eq("id", clinicId)
       .maybeSingle();
-    const projectId = (clinic?.openai_project_id as string | null) ?? null;
-    if (!projectId) return { ok: true, linked: false };
+    const apiKeyId = (clinic?.openai_api_key_id as string | null) ?? null;
+    if (!apiKeyId) return { ok: true, linked: false };
 
     const ym = yearMonth ?? currentYearMonthUtc();
     const { start, end } = monthBounds(ym);
@@ -79,35 +101,30 @@ export async function getClinicOpenAiUsage(
     const rangeEnd = end > kpiStart ? end : new Date().toISOString().slice(0, 10);
 
     const { data, error } = await supabase
-      .from("clinic_openai_usage")
-      .select("project_id, day, cost_usd, input_tokens, output_tokens, requests")
-      .eq("project_id", projectId)
+      .from("openai_key_usage")
+      .select("api_key_id, day, est_cost_usd, input_tokens, output_tokens, requests")
+      .eq("api_key_id", apiKeyId)
       .gte("day", rangeStart)
       .lt("day", rangeEnd)
       .order("day");
     if (error) return { ok: false, error: error.message };
-    const rows = (data ?? []) as UsageRow[];
+    const byDay = sumByDay((data ?? []) as KeyUsageRow[]);
 
-    const monthRows = rows.filter((r) => r.day >= start && r.day < end);
-    const days: OpenAiUsageDay[] = monthRows.map((r) => ({
-      day: r.day,
-      costUsd: Number(r.cost_usd),
-      inputTokens: Number(r.input_tokens),
-      outputTokens: Number(r.output_tokens),
-      requests: Number(r.requests),
-    }));
+    const days = [...byDay.values()]
+      .filter((d) => d.day >= start && d.day < end)
+      .sort((a, b) => a.day.localeCompare(b.day));
 
     const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
-    const yesterdayCostUsd = Number(rows.find((r) => r.day === yesterday)?.cost_usd ?? 0);
-    const prev7 = rows.filter((r) => r.day < yesterday && r.day >= kpiStart);
+    const yesterdayCostUsd = byDay.get(yesterday)?.costUsd ?? 0;
+    const prev7 = [...byDay.values()].filter((d) => d.day < yesterday && d.day >= kpiStart);
     const avg7CostUsd = prev7.length
-      ? prev7.reduce((s, r) => s + Number(r.cost_usd), 0) / prev7.length
+      ? prev7.reduce((s, d) => s + d.costUsd, 0) / prev7.length
       : null;
 
     return {
       ok: true,
       linked: true,
-      projectId,
+      apiKeyId,
       yearMonth: ym,
       days,
       monthCostUsd: days.reduce((s, d) => s + d.costUsd, 0),
@@ -142,8 +159,8 @@ export async function listTopAiSpenders(
 
   let clinicsQuery = supabase
     .from("clinics")
-    .select("id, name, developer_id, openai_project_id")
-    .not("openai_project_id", "is", null);
+    .select("id, name, developer_id, openai_api_key_id")
+    .not("openai_api_key_id", "is", null);
   if (scope.developerFilter) clinicsQuery = clinicsQuery.eq("developer_id", scope.developerFilter);
   const { data: clinics } = await clinicsQuery;
   if (!clinics?.length) return [];
@@ -153,82 +170,85 @@ export async function listTopAiSpenders(
   const [py, pm] = start.split("-").map(Number);
   const prevStart = new Date(Date.UTC(py, pm - 2, 1)).toISOString().slice(0, 10);
 
-  const projectIds = clinics.map((c) => c.openai_project_id as string);
+  const keyIds = clinics.map((c) => c.openai_api_key_id as string);
   const [{ data: usage }, { data: alerts }] = await Promise.all([
     supabase
-      .from("clinic_openai_usage")
-      .select("project_id, day, cost_usd, input_tokens, output_tokens")
-      .in("project_id", projectIds)
+      .from("openai_key_usage")
+      .select("api_key_id, day, est_cost_usd, input_tokens, output_tokens, requests")
+      .in("api_key_id", keyIds)
       .gte("day", prevStart)
       .lt("day", end),
     supabase
       .from("openai_usage_alerts")
-      .select("project_id")
-      .in("project_id", projectIds)
+      .select("api_key_id")
+      .in("api_key_id", keyIds)
       .gte("day", start)
       .lt("day", end),
   ]);
 
-  const alertedProjects = new Set((alerts ?? []).map((a) => a.project_id as string));
+  const alertedKeys = new Set((alerts ?? []).map((a) => a.api_key_id as string));
   const rows = clinics.map((c) => {
-    const mine = ((usage ?? []) as UsageRow[]).filter((u) => u.project_id === c.openai_project_id);
+    const mine = ((usage ?? []) as KeyUsageRow[]).filter((u) => u.api_key_id === c.openai_api_key_id);
     const inMonth = mine.filter((u) => u.day >= start && u.day < end);
     const inPrev = mine.filter((u) => u.day < start);
     return {
       clinicId: c.id as string,
       name: c.name as string,
-      costUsd: inMonth.reduce((s, u) => s + Number(u.cost_usd), 0),
-      prevMonthCostUsd: inPrev.reduce((s, u) => s + Number(u.cost_usd), 0),
+      costUsd: inMonth.reduce((s, u) => s + Number(u.est_cost_usd), 0),
+      prevMonthCostUsd: inPrev.reduce((s, u) => s + Number(u.est_cost_usd), 0),
       inputTokens: inMonth.reduce((s, u) => s + Number(u.input_tokens), 0),
       outputTokens: inMonth.reduce((s, u) => s + Number(u.output_tokens), 0),
-      alerted: alertedProjects.has(c.openai_project_id as string),
+      alerted: alertedKeys.has(c.openai_api_key_id as string),
     };
   });
   return rows.sort((a, b) => b.costUsd - a.costUsd);
 }
 
-export type OpenAiProjectOption = {
-  projectId: string;
+export type OpenAiKeyOption = {
+  apiKeyId: string;
   name: string;
-  status: string | null;
-  /** Nome da clínica que já usa este projeto (para o select sinalizar). */
+  /** "sk-proj-****...abcd" — ajuda a conferir visualmente qual key é. */
+  redacted: string | null;
+  /** Nome da clínica que já usa esta key (para o select sinalizar). */
   linkedToClinic: string | null;
 };
 
-/** Projetos da organização (cache alimentado pelo cron collect-openai-usage). */
-export async function listOpenAiProjects(): Promise<OpenAiProjectOption[]> {
+/** API keys da organização (cache alimentado pelo cron collect-openai-usage). */
+export async function listOpenAiKeys(): Promise<OpenAiKeyOption[]> {
   const supabase = await createClient();
-  const [{ data: projects }, { data: linked }] = await Promise.all([
-    supabase.from("openai_projects").select("project_id, name, status").order("name"),
-    supabase.from("clinics").select("name, openai_project_id").not("openai_project_id", "is", null),
+  const [{ data: keys }, { data: linked }] = await Promise.all([
+    supabase.from("openai_api_keys").select("api_key_id, name, redacted_value").order("name"),
+    supabase.from("clinics").select("name, openai_api_key_id").not("openai_api_key_id", "is", null),
   ]);
-  const linkedBy = new Map((linked ?? []).map((c) => [c.openai_project_id as string, c.name as string]));
-  return (projects ?? []).map((p) => ({
-    projectId: p.project_id as string,
-    name: p.name as string,
-    status: (p.status as string | null) ?? null,
-    linkedToClinic: linkedBy.get(p.project_id as string) ?? null,
+  const linkedBy = new Map(
+    (linked ?? []).map((c) => [c.openai_api_key_id as string, c.name as string]),
+  );
+  return (keys ?? []).map((k) => ({
+    apiKeyId: k.api_key_id as string,
+    name: k.name as string,
+    redacted: (k.redacted_value as string | null) ?? null,
+    linkedToClinic: linkedBy.get(k.api_key_id as string) ?? null,
   }));
 }
 
-/** Vincula/desvincula o projeto OpenAI da clínica ("" limpa o vínculo). */
-export async function updateClinicOpenAiProject(
+/** Vincula/desvincula a API key OpenAI da clínica ("" limpa o vínculo). */
+export async function updateClinicOpenAiKey(
   clinicId: string,
-  projectId: string,
+  apiKeyId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await createClient();
-  const value = projectId.trim();
+  const value = apiKeyId.trim();
   if (value) {
     const { data } = await supabase
-      .from("openai_projects")
-      .select("project_id")
-      .eq("project_id", value)
+      .from("openai_api_keys")
+      .select("api_key_id")
+      .eq("api_key_id", value)
       .maybeSingle();
-    if (!data) return { ok: false, error: "Projeto desconhecido — rode a coleta para sincronizar" };
+    if (!data) return { ok: false, error: "Key desconhecida — rode a coleta para sincronizar" };
   }
   const { error } = await supabase
     .from("clinics")
-    .update({ openai_project_id: value || null })
+    .update({ openai_api_key_id: value || null })
     .eq("id", clinicId);
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/clinicas/${clinicId}`);

@@ -418,12 +418,12 @@ export default async function HomePage({
           </Panel>
 
           {/* ── Maiores gastos de IA (OpenAI) ────────────────────── */}
-          <Panel title="Gastos de IA · OpenAI" subtitle="as 5 clínicas que mais consumiram no mês">
+          <Panel title="Gastos de IA · OpenAI" subtitle="as 5 clínicas que mais consumiram no mês · custo estimado por API key">
             {aiSpenders.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-6 text-center">
                 <CheckCircle2 className="size-8 text-emerald-500/80 mb-2" />
                 <p className="text-xs text-muted-foreground">
-                  Nenhuma clínica com projeto OpenAI vinculado ainda.
+                  Nenhuma clínica com API key OpenAI vinculada ainda.
                 </p>
               </div>
             ) : (

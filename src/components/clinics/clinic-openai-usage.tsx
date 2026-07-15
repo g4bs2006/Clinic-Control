@@ -53,7 +53,7 @@ export function ClinicOpenAiUsagePanel({
         setUsage(res)
         setError(null)
       } else {
-        setError(res.ok ? "Clínica sem projeto vinculado" : res.error)
+        setError(res.ok ? "Clínica sem API key vinculada" : res.error)
       }
     })
   }
