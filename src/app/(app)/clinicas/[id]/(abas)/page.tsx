@@ -20,6 +20,7 @@ import { listClinicTasks, listTaskSuggestions } from "@/lib/tasks/actions"
 import { listActiveTaskCategories } from "@/lib/tasks/category-actions"
 import { TaskBoard } from "@/components/tasks/task-board"
 import { DailyRateChart } from "@/components/clinics/daily-rate-chart"
+import { LazyMount } from "@/components/ui/lazy-mount"
 import { fmtPct, fmtBRL, shortMonthLabel, monthLabel, lastNMonths } from "./shared"
 
 export const dynamic = "force-dynamic"
@@ -193,12 +194,14 @@ export default async function ClinicOverviewPage({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {liveFunnel ? (
           <Panel title="Funil de leads" subtitle="ao vivo da Helena · selecione o mês">
-            <ClinicFunnelExplorer
-              clinicId={id}
-              monthOptions={dailyMonthOptions}
-              initialMonth={currentMonth}
-              initialFunnel={liveFunnel}
-            />
+            <LazyMount minHeight={320} rootMargin="400px">
+              <ClinicFunnelExplorer
+                clinicId={id}
+                monthOptions={dailyMonthOptions}
+                initialMonth={currentMonth}
+                initialFunnel={liveFunnel}
+              />
+            </LazyMount>
           </Panel>
         ) : (
           <Panel
@@ -217,7 +220,9 @@ export default async function ClinicOverviewPage({
         )}
 
         <Panel title="Tendência da taxa" subtitle="últimos 6 meses">
-          <TrendChart data={chartData} series={series} xKey="month" />
+          <LazyMount minHeight={340} rootMargin="400px">
+            <TrendChart data={chartData} series={series} xKey="month" />
+          </LazyMount>
         </Panel>
       </div>
 
@@ -228,13 +233,15 @@ export default async function ClinicOverviewPage({
           subtitle="leads → agendados no CRM, agrupados por dia de criação do card"
         >
           {dailyFunnelRes.ok ? (
-            <DailyRateChart
-              clinicId={id}
-              clinicName={clinic.name}
-              monthOptions={dailyMonthOptions}
-              initialMonth={currentMonth}
-              initialDays={dailyFunnelRes.days}
-            />
+            <LazyMount minHeight={340}>
+              <DailyRateChart
+                clinicId={id}
+                clinicName={clinic.name}
+                monthOptions={dailyMonthOptions}
+                initialMonth={currentMonth}
+                initialDays={dailyFunnelRes.days}
+              />
+            </LazyMount>
           ) : (
             <p className="text-sm text-muted-foreground">{dailyFunnelRes.error}</p>
           )}
@@ -243,16 +250,18 @@ export default async function ClinicOverviewPage({
 
       {/* ── Tarefas ─────────────────────────────────────────────── */}
       <Panel title="Tarefas" subtitle="pendências manuais e sugeridas pela IA para esta clínica">
-        <TaskBoard
-          tasks={clinicTasks}
-          suggestions={clinicTaskSuggestions}
-          clinics={[{ id: clinic.id, name: clinic.name, developerId: clinic.developer_id ?? null }]}
-          profiles={profiles.map((p) => ({ id: p.id, name: p.name, email: p.email }))}
-          categories={taskCategories}
-          currentUserId={currentProfile?.id ?? null}
-          isGestor={currentProfile?.role === "gestor"}
-          defaultClinicId={clinic.id}
-        />
+        <LazyMount minHeight={220}>
+          <TaskBoard
+            tasks={clinicTasks}
+            suggestions={clinicTaskSuggestions}
+            clinics={[{ id: clinic.id, name: clinic.name, developerId: clinic.developer_id ?? null }]}
+            profiles={profiles.map((p) => ({ id: p.id, name: p.name, email: p.email }))}
+            categories={taskCategories}
+            currentUserId={currentProfile?.id ?? null}
+            isGestor={currentProfile?.role === "gestor"}
+            defaultClinicId={clinic.id}
+          />
+        </LazyMount>
       </Panel>
 
       {/* ── Checklist (pessoal do usuário logado) ──────────────── */}

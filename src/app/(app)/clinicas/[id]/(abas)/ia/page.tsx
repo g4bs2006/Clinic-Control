@@ -10,6 +10,7 @@ import { getClinicOpenAiUsage, listOpenAiKeys } from "@/lib/openai-usage/actions
 import { ClinicOpenAiUsagePanel } from "@/components/clinics/clinic-openai-usage"
 import { ClinicOpenAiKeySelect } from "@/components/clinics/clinic-openai-key-select"
 import { InvestigateContacts } from "@/components/clinics/investigate-contacts"
+import { LazyMount } from "@/components/ui/lazy-mount"
 import { monthLabel, lastNMonths } from "../shared"
 
 export const dynamic = "force-dynamic"
@@ -41,12 +42,14 @@ export default async function ClinicIaPage({
         subtitle="tokens da API key da clínica · custo estimado rateado da fatura real da organização · coletado diariamente"
       >
         {openAiUsage.ok && openAiUsage.linked ? (
-          <ClinicOpenAiUsagePanel
-            clinicId={id}
-            monthOptions={lastNMonths(currentMonth, 4, prevMonth).map((k) => ({ key: k, label: monthLabel(k) }))}
-            initialMonth={currentMonth}
-            initial={openAiUsage}
-          />
+          <LazyMount minHeight={560} rootMargin="400px">
+            <ClinicOpenAiUsagePanel
+              clinicId={id}
+              monthOptions={lastNMonths(currentMonth, 4, prevMonth).map((k) => ({ key: k, label: monthLabel(k) }))}
+              initialMonth={currentMonth}
+              initial={openAiUsage}
+            />
+          </LazyMount>
         ) : (
           <p className="text-sm text-muted-foreground">
             {openAiUsage.ok
