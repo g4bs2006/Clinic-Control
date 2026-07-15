@@ -168,16 +168,18 @@ export async function listTopAiSpenders(
   const ym = yearMonth ?? currentYearMonthUtc();
   const { start, end } = monthBounds(ym);
   const [py, pm] = start.split("-").map(Number);
-  const prevStart = new Date(Date.UTC(py, pm - 2, 1)).toISOString().slice(0, 10);
+  const prevYm = new Date(Date.UTC(py, pm - 2, 1)).toISOString().slice(0, 7);
 
+  // Agregado mensal via view (openai_key_monthly): somar as linhas cruas
+  // key×dia×modelo no app estoura o corte de 1000 linhas do PostgREST e o
+  // ranking sai errado — a soma fica no Postgres.
   const keyIds = clinics.map((c) => c.openai_api_key_id as string);
   const [{ data: usage }, { data: alerts }] = await Promise.all([
     supabase
-      .from("openai_key_usage")
-      .select("api_key_id, day, est_cost_usd, input_tokens, output_tokens, requests")
+      .from("openai_key_monthly")
+      .select("api_key_id, month, est_cost_usd, input_tokens, output_tokens")
       .in("api_key_id", keyIds)
-      .gte("day", prevStart)
-      .lt("day", end),
+      .in("month", [prevYm, ym]),
     supabase
       .from("openai_usage_alerts")
       .select("api_key_id")
@@ -186,18 +188,25 @@ export async function listTopAiSpenders(
       .lt("day", end),
   ]);
 
+  type MonthlyRow = {
+    api_key_id: string;
+    month: string;
+    est_cost_usd: number;
+    input_tokens: number;
+    output_tokens: number;
+  };
   const alertedKeys = new Set((alerts ?? []).map((a) => a.api_key_id as string));
   const rows = clinics.map((c) => {
-    const mine = ((usage ?? []) as KeyUsageRow[]).filter((u) => u.api_key_id === c.openai_api_key_id);
-    const inMonth = mine.filter((u) => u.day >= start && u.day < end);
-    const inPrev = mine.filter((u) => u.day < start);
+    const mine = ((usage ?? []) as MonthlyRow[]).filter((u) => u.api_key_id === c.openai_api_key_id);
+    const inMonth = mine.find((u) => u.month === ym);
+    const inPrev = mine.find((u) => u.month === prevYm);
     return {
       clinicId: c.id as string,
       name: c.name as string,
-      costUsd: inMonth.reduce((s, u) => s + Number(u.est_cost_usd), 0),
-      prevMonthCostUsd: inPrev.reduce((s, u) => s + Number(u.est_cost_usd), 0),
-      inputTokens: inMonth.reduce((s, u) => s + Number(u.input_tokens), 0),
-      outputTokens: inMonth.reduce((s, u) => s + Number(u.output_tokens), 0),
+      costUsd: Number(inMonth?.est_cost_usd ?? 0),
+      prevMonthCostUsd: Number(inPrev?.est_cost_usd ?? 0),
+      inputTokens: Number(inMonth?.input_tokens ?? 0),
+      outputTokens: Number(inMonth?.output_tokens ?? 0),
       alerted: alertedKeys.has(c.openai_api_key_id as string),
     };
   });

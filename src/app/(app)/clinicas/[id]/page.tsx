@@ -140,8 +140,16 @@ export default async function ClinicDetailPage({
   const isAuto = clinic.mode === "auto"
   const currentMonth = monthKey(new Date())
 
-  // Fetch all clinics to determine previous/next clinic in order
-  const [allClinics, history, rules, funnelRes, helenaOverviewRes, helenaCustomFieldsRes, takeoverRes, dailyFunnelRes] = await Promise.all([
+  // Todos os fetches em UMA rodada: eram 4 Promise.all sequenciais e o tempo
+  // de servidor virava a SOMA das rodadas — a página só pintava depois de tudo
+  // e a navegação parecia travada. Nenhum destes depende do resultado do
+  // outro, então o custo cai para o fetch mais lento (as chamadas Helena).
+  const [
+    allClinics, history, rules, funnelRes, helenaOverviewRes, helenaCustomFieldsRes, takeoverRes, dailyFunnelRes,
+    agents, files, clinicChecks, formCredentials, responseStats, summaries, provisioning, helenaIntegration,
+    profiles, currentProfile, openAiUsage, openAiKeys,
+    reportJobs, clinicTasks, allTaskSuggestions, taskCategories,
+  ] = await Promise.all([
     listClinics(),
     getClinicHistory(id, 6),
     loadStatusRules(),
@@ -150,6 +158,22 @@ export default async function ClinicDetailPage({
     isAuto ? getHelenaCustomFieldsAggregation(id, currentMonth) : Promise.resolve(null),
     isAuto ? getHelenaTakeoverStats(id, currentMonth) : Promise.resolve(null),
     isAuto ? getDailyFunnelForMonth(id, currentMonth) : Promise.resolve(null),
+    listClinicAgents(id),
+    listClinicFiles(id),
+    listClinicChecks(id),
+    listFormCredentials(id),
+    getClinicResponseStats(id),
+    listClinicSummaries(id),
+    listProvisioning(id),
+    getClinicHelenaIntegration(id),
+    listUserProfiles(),
+    getCurrentProfile(),
+    getClinicOpenAiUsage(id),
+    listOpenAiKeys(),
+    isAuto ? listReportJobs(id) : Promise.resolve([]),
+    listClinicTasks(id),
+    listTaskSuggestions(),
+    listActiveTaskCategories(),
   ])
 
   const dailyMonthOptions = lastNMonths(currentMonth, 6)
@@ -160,29 +184,6 @@ export default async function ClinicDetailPage({
   const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
   const nextClinic = currentIndex < allClinics.length - 1 ? allClinics[currentIndex + 1] : null
 
-  const [agents, files, clinicChecks, formCredentials, responseStats, summaries, provisioning, helenaIntegration, profiles, currentProfile, openAiUsage, openAiKeys] =
-    await Promise.all([
-      listClinicAgents(id),
-      listClinicFiles(id),
-      listClinicChecks(id),
-      listFormCredentials(id),
-      getClinicResponseStats(id),
-      listClinicSummaries(id),
-      listProvisioning(id),
-      getClinicHelenaIntegration(id),
-      listUserProfiles(),
-      getCurrentProfile(),
-      getClinicOpenAiUsage(id),
-      listOpenAiKeys(),
-    ])
-
-  const reportJobs = isAuto ? await listReportJobs(id) : []
-
-  const [clinicTasks, allTaskSuggestions, taskCategories] = await Promise.all([
-    listClinicTasks(id),
-    listTaskSuggestions(),
-    listActiveTaskCategories(),
-  ])
   const clinicTaskSuggestions = allTaskSuggestions.filter((s) => s.clinic_id === id)
 
   // Gestor vê (leitura) o checklist do desenvolvedor responsável pela clínica.

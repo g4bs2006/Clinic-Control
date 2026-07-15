@@ -82,7 +82,7 @@ export function ClinicOpenAiUsagePanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           {usage.monthRequests.toLocaleString("pt-BR")} requisições no mês · dias em UTC,
           igual ao dashboard da OpenAI
