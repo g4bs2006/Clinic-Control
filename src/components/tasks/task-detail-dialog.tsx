@@ -102,6 +102,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [editingCommentText, setEditingCommentText] = useState("")
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
   const [editingAttachmentName, setEditingAttachmentName] = useState("")
+  const [activityFilter, setActivityFilter] = useState<"all" | "comment" | "system">("all")
   // Marca que houve alteração; o board só é re-sincronizado ao fechar (uma vez),
   // em vez de um refetch de página inteira a cada micro-edição.
   const changedRef = useRef(false)
@@ -364,22 +365,6 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
             <div className="flex flex-col gap-5">
               {/* ── Metadados ─────────────────────────────────────── */}
               <div className="flex flex-wrap items-center gap-2">
-                <Select
-                  value={task.status}
-                  items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
-                  onValueChange={(v) => v && changeStatus(v as TaskStatus)}
-                >
-                  <SelectTrigger className="h-8 w-auto text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TASK_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {TASK_STATUS_LABEL[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
                 {task.source === "ia" && (
                   <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.62rem] font-semibold text-amber-400">
                     Origem: IA
@@ -405,6 +390,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 onAssignedToChange={(v) => saveField({ assignedTo: v })}
                 dueDate={task.due_date ?? ""}
                 onDueDateChange={(v) => saveField({ dueDate: v })}
+                status={task.status}
+                onStatusChange={changeStatus}
               />
 
               {/* ── Descrição ─────────────────────────────────────── */}
@@ -584,9 +571,36 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
 
               {/* ── Atividade ─────────────────────────────────────── */}
               <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Atividade</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Atividade</p>
+                  <div className="flex items-center gap-1 rounded-md border border-border p-0.5 text-[0.7rem] bg-accent/10">
+                    <button
+                      type="button"
+                      onClick={() => setActivityFilter("all")}
+                      className={`rounded px-1.5 py-0.5 transition-colors ${activityFilter === "all" ? "bg-background text-foreground shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActivityFilter("comment")}
+                      className={`rounded px-1.5 py-0.5 transition-colors ${activityFilter === "comment" ? "bg-background text-foreground shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Comentários
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActivityFilter("system")}
+                      className={`rounded px-1.5 py-0.5 transition-colors ${activityFilter === "system" ? "bg-background text-foreground shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Histórico
+                    </button>
+                  </div>
+                </div>
                 <ul className="flex max-h-52 flex-col gap-2 overflow-y-auto pr-1">
-                  {activity.map((a) => {
+                  {activity
+                    .filter((a) => activityFilter === "all" || a.kind === activityFilter)
+                    .map((a) => {
                     const canEditOrDelete = a.kind === "comment" &&
                       a.author_id === currentUserId &&
                       (Date.now() - new Date(a.created_at).getTime()) < 30 * 60 * 1000

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
 import { createTasksForClinics } from "@/lib/tasks/actions"
-import type { TaskCategory, TaskPriority } from "@/lib/tasks/categories"
+import type { TaskCategory, TaskPriority, TaskStatus } from "@/lib/tasks/categories"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
 export function CreateTaskDialog({
@@ -67,6 +67,7 @@ export function CreateTaskDialog({
   const [assignedTo, setAssignedTo] = useState<string | null>(() => suggestAssignee(initialClinicIds))
   const [assigneeTouched, setAssigneeTouched] = useState(false)
   const [dueDate, setDueDate] = useState("")
+  const [status, setStatus] = useState<TaskStatus>("pendente")
 
   // Sincroniza o responsável sugerido conforme a seleção de clínicas muda,
   // enquanto o usuário não escolher manualmente (padrão render-time, sem efeito).
@@ -93,6 +94,7 @@ export function CreateTaskDialog({
     setAssignedTo(suggestAssignee(initialClinicIds))
     setAssigneeTouched(false)
     setDueDate("")
+    setStatus("pendente")
   }
 
   function toggleClinic(id: string) {
@@ -108,6 +110,7 @@ export function CreateTaskDialog({
         priority,
         assignedTo,
         dueDate,
+        status,
       })
       if (res.ok) {
         toast.success(res.count > 1 ? `${res.count} tarefas criadas.` : "Tarefa criada.")
@@ -308,6 +311,8 @@ export function CreateTaskDialog({
                 }}
                 dueDate={dueDate}
                 onDueDateChange={setDueDate}
+                status={status}
+                onStatusChange={setStatus}
               />
               <div className="mt-1 flex justify-between gap-2">
                 <Button type="button" variant="ghost" className="h-10" onClick={() => setStep(2)}>
@@ -344,6 +349,8 @@ export function CreateTaskDialog({
             }}
             dueDate={dueDate}
             onDueDateChange={setDueDate}
+            status={status}
+            onStatusChange={setStatus}
           />
         </div>
         <DialogFooter className="hidden sm:flex">

@@ -248,6 +248,7 @@ export type TaskInput = {
   priority: TaskPriority;
   assignedTo: string | null;
   dueDate?: string | null; // YYYY-MM-DD
+  status?: TaskStatus;
 };
 
 export async function createTask(
@@ -268,6 +269,7 @@ export async function createTask(
       description: input.description?.trim() || null,
       category: input.category,
       priority: input.priority,
+      status: input.status || "pendente",
       assigned_to: input.assignedTo,
       due_date: input.dueDate || null,
       source: "manual",
@@ -306,6 +308,7 @@ export async function createTasksForClinics(
     description: base.description?.trim() || null,
     category: base.category,
     priority: base.priority,
+    status: base.status || "pendente",
     assigned_to: base.assignedTo,
     due_date: base.dueDate || null,
     source: "manual" as const,

@@ -11,8 +11,11 @@ import { Input } from "@/components/ui/input"
 import {
   TASK_PRIORITIES,
   TASK_PRIORITY_LABEL,
+  TASK_STATUSES,
+  TASK_STATUS_LABEL,
   type TaskCategory,
   type TaskPriority,
+  type TaskStatus,
 } from "@/lib/tasks/categories"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
@@ -44,6 +47,8 @@ interface TaskFieldsProps {
   lockClinic?: boolean
   /** Oculta o select de clínica (ex.: quando a seleção de clínicas é múltipla, fora daqui). */
   hideClinic?: boolean
+  status?: TaskStatus
+  onStatusChange?: (v: TaskStatus) => void
 }
 
 export function TaskFields({
@@ -62,6 +67,8 @@ export function TaskFields({
   onDueDateChange,
   lockClinic,
   hideClinic,
+  status,
+  onStatusChange,
 }: TaskFieldsProps) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -171,6 +178,28 @@ export function TaskFields({
           className="h-8"
         />
       </label>
+
+      {status !== undefined && onStatusChange && (
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Status
+          <Select
+            value={status}
+            items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
+            onValueChange={(v) => v && onStatusChange(v as TaskStatus)}
+          >
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {TASK_STATUS_LABEL[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      )}
     </div>
   )
 }
