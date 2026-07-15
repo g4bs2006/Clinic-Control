@@ -1,0 +1,125 @@
+// Aba "Cadastro" — setup e referência (mexe-se raramente): ficha da clínica,
+// provisionamento Helena, credenciais de formulário, integração e arquivos.
+import type { ReactNode } from "react"
+import { notFound } from "next/navigation"
+import { getClinic } from "@/lib/clinics/actions"
+import { listClinicFiles } from "@/lib/clinics/files-actions"
+import { listFormCredentials } from "@/lib/clinics/form-credentials-actions"
+import { getClinicHelenaIntegration } from "@/lib/helena/accounts-actions"
+import { ClinicHelenaIntegration } from "@/components/clinics/clinic-helena-integration"
+import { listUserProfiles } from "@/lib/users/actions"
+import { ClinicDeveloperSelect } from "@/components/clinics/clinic-developer-select"
+import { listProvisioning } from "@/lib/clinics/provision-actions"
+import { ClinicProvisioning } from "@/components/clinics/clinic-provisioning"
+import { Panel } from "@/components/dashboard/panel"
+import { ClinicFiles } from "@/components/clinics/clinic-files"
+import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
+import { ClinicStrategistSelect } from "@/components/clinics/clinic-strategist-select"
+import { ClinicOdontoImpact } from "@/components/clinics/clinic-odontoimpact"
+import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
+
+export const dynamic = "force-dynamic"
+
+// Linha da "Ficha da clínica": rótulo à esquerda, controle de edição à direita
+// (empilha no mobile). Reúne os metadados de referência num só lugar.
+function FichaRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="sm:shrink-0">{children}</div>
+    </div>
+  )
+}
+
+export default async function ClinicCadastroPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const clinic = await getClinic(id)
+  if (!clinic) notFound()
+
+  const [profiles, provisioning, formCredentials, helenaIntegration, files] =
+    await Promise.all([
+      listUserProfiles(),
+      listProvisioning(id),
+      listFormCredentials(id),
+      getClinicHelenaIntegration(id),
+      listClinicFiles(id),
+    ])
+
+  return (
+    <>
+      {/* ── Ficha da clínica ───────────────────────────────────── */}
+      <Panel title="Ficha da clínica" subtitle="dados de referência do ecossistema · clique num campo para editar">
+        <div className="flex flex-col divide-y divide-border/50">
+          <FichaRow label="Sistema">
+            <ClinicSystemSelect clinicId={id} current={clinic.system ?? null} />
+          </FichaRow>
+          <FichaRow label="Desenvolvedor responsável">
+            <ClinicDeveloperSelect
+              clinicId={id}
+              current={clinic.developer_id ?? null}
+              profiles={profiles}
+            />
+          </FichaRow>
+          <FichaRow label="Estrategista">
+            <ClinicStrategistSelect clinicId={id} current={clinic.strategist ?? null} />
+          </FichaRow>
+          <FichaRow label="OdontoImpact (tráfego pago)">
+            <ClinicOdontoImpact
+              clinicId={id}
+              currentOdontoImpact={clinic.odontoimpact ?? false}
+              currentTrafficManager={clinic.traffic_manager ?? null}
+            />
+          </FichaRow>
+        </div>
+      </Panel>
+
+      {/* ── Provisionamento Helena ─────────────────────────────── */}
+      {provisioning.length > 0 && (
+        <Panel
+          title="Provisionamento Helena"
+          subtitle="conta, token, usuário, equipes e painel criados automaticamente"
+        >
+          <ClinicProvisioning clinicId={id} rows={provisioning} />
+        </Panel>
+      )}
+
+      {/* ── Credenciais do Formulário ──────────────────────────── */}
+      {(clinic.system === "Google Agenda" || clinic.system === "Clinicorp") && (
+        <Panel
+          title={clinic.system === "Google Agenda" ? "Agendas (Google Calendar)" : "Credenciais do Formulário (Clinicorp)"}
+          subtitle={
+            clinic.system === "Google Agenda"
+              ? "identificadores das agendas de cada unidade"
+              : "dados de integração de cada unidade · clique para copiar"
+          }
+        >
+          <ClinicFormCredentials
+            clinicId={id}
+            credentials={formCredentials}
+            system={clinic.system}
+          />
+        </Panel>
+      )}
+
+      {/* ── Integração Helena (conta, tokens, webhooks, eventos) ── */}
+      {helenaIntegration.ok && helenaIntegration.account && (
+        <ClinicHelenaIntegration
+          account={helenaIntegration.account}
+          events={helenaIntegration.events}
+        />
+      )}
+
+      {/* ── Arquivos da clínica ────────────────────────────────── */}
+      <Panel
+        title="Arquivos da clínica"
+        subtitle="suba a pasta · qualquer pessoa da equipe pode baixar"
+      >
+        <ClinicFiles clinicId={id} files={files} />
+      </Panel>
+    </>
+  )
+}

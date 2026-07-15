@@ -37,6 +37,14 @@ export default function Loading() {
         </div>
       </div>
 
+      {/* Barra de abas */}
+      <div className="flex gap-1 border-b border-border/60 pb-2">
+        <Bar className="h-6 w-24" />
+        <Bar className="h-6 w-24 opacity-60" />
+        <Bar className="h-6 w-20 opacity-60" />
+        <Bar className="h-6 w-20 opacity-60" />
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (

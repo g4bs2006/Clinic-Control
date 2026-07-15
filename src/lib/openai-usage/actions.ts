@@ -260,7 +260,8 @@ export async function updateClinicOpenAiKey(
     .update({ openai_api_key_id: value || null })
     .eq("id", clinicId);
   if (error) return { ok: false, error: error.message };
-  revalidatePath(`/clinicas/${clinicId}`);
+  // "layout" cobre as sub-rotas das abas (o painel de consumo vive em /ia).
+  revalidatePath(`/clinicas/${clinicId}`, "layout");
   revalidatePath("/");
   return { ok: true };
 }
