@@ -55,7 +55,7 @@ export async function updateAiSettings(input: {
     })
     .eq("id", true);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/configuracoes");
+  revalidatePath("/configuracoes/ia");
   return { ok: true };
 }
 

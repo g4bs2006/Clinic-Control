@@ -58,7 +58,7 @@ export function ClinicChecks({ clinicId, checks }: ClinicChecksProps) {
     return (
       <p className="text-sm text-muted-foreground py-2">
         Nenhum item de checklist configurado.{" "}
-        <a href="/configuracoes" className="text-primary hover:underline">
+        <a href="/configuracoes/tarefas" className="text-primary hover:underline">
           Configurar →
         </a>
       </p>

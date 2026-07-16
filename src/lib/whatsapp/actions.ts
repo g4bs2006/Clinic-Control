@@ -251,7 +251,7 @@ export async function syncWhatsappGroups(): Promise<
     return { ok: false, error: e instanceof Error ? e.message : "Falha ao contatar a função de coleta" };
   }
 
-  revalidatePath("/configuracoes");
+  revalidatePath("/configuracoes/whatsapp");
   revalidatePath("/whatsapp");
   return { ok: true, groupsFetched: data.groupsFetched ?? 0, messagesInserted: data.inserted ?? 0 };
 }
@@ -270,7 +270,7 @@ export async function updateGroupClinic(
     .eq("group_jid", groupJid);
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/configuracoes");
+  revalidatePath("/configuracoes/whatsapp");
   revalidatePath("/");
   return { ok: true };
 }
@@ -306,7 +306,7 @@ export async function addTeamMember(member: {
     .insert({ lid, name, kind: member.kind });
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/configuracoes");
+  revalidatePath("/configuracoes/whatsapp");
   return { ok: true };
 }
 
@@ -318,6 +318,6 @@ export async function deleteTeamMember(
 
   const { error } = await supabase.from("whatsapp_team_members").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/configuracoes");
+  revalidatePath("/configuracoes/whatsapp");
   return { ok: true };
 }
