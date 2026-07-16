@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronDown, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import {
   getFunnelMappingSetup,
@@ -18,8 +19,10 @@ interface ClinicFunnelMappingProps {
 
 type Bucket = "lead" | "scheduled" | "closing" | "noshow" | "notscheduled" | "attended";
 
-const BUCKETS: { key: Bucket; label: string; hint: string }[] = [
-  { key: "lead", label: "Chegada", hint: "colunas de entrada de leads" },
+// "Chegada" (lead) ficou FORA da matriz de propósito: não alimenta nenhuma
+// métrica (leads = todos os cards do painel, sempre) e só gerava confusão —
+// o valor salvo/pré-preenchido é preservado no save e usado no aviso abaixo.
+const BUCKETS: { key: Exclude<Bucket, "lead">; label: string; hint: string }[] = [
   { key: "scheduled", label: "Agendado", hint: "colunas que contam como agendamento" },
   { key: "attended", label: "Compareceu", hint: "veio à consulta — conta também como agendado" },
   { key: "closing", label: "Fechamento", hint: "fechou tratamento — faturamento = valor dos cards; conta como compareceu/agendado" },
@@ -27,7 +30,23 @@ const BUCKETS: { key: Bucket; label: string; hint: string }[] = [
   { key: "notscheduled", label: "Não agendou", hint: "lead que não chegou a agendar — não conta como agendado" },
 ];
 
+// Buckets em que marcar a coluna de CHEGADA infla as métricas (todos contam
+// como "agendado" na hierarquia). "Não agendou" fica fora do aviso: a primeira
+// coluna do painel pode legitimamente significar "chegou e não agendou".
+const INFLATING_BUCKETS: Exclude<Bucket, "lead" | "notscheduled">[] = [
+  "scheduled",
+  "attended",
+  "closing",
+  "noshow",
+];
+
+const BUCKET_LABEL = Object.fromEntries(BUCKETS.map((b) => [b.key, b.label])) as Record<
+  Exclude<Bucket, "lead">,
+  string
+>;
+
 export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [steps, setSteps] = useState<FunnelStepOption[]>([]);
@@ -76,8 +95,36 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
     });
   }
 
+  // Coluna de CHEGADA marcada como agendado/compareceu/fechamento/no-show
+  // infla as métricas: cada card recém-chegado contaria como conversão (caso
+  // real: Salutar, 2026-07 — 27 fechamentos falsos). Chegada presumida = o que
+  // está salvo/pré-preenchido em leadStepIds + a PRIMEIRA coluna do painel.
+  const firstStepId = steps[0]?.id;
+  const arrivalIds = new Set([...sel.lead, ...(firstStepId ? [firstStepId] : [])]);
+  const leadConflicts = steps
+    .filter((s) => arrivalIds.has(s.id))
+    .map((s) => ({
+      title: s.title,
+      buckets: INFLATING_BUCKETS.filter((k) => sel[k].has(s.id)).map((k) => BUCKET_LABEL[k]),
+    }))
+    .filter((c) => c.buckets.length > 0);
+
   function handleSave() {
     startSave(async () => {
+      if (leadConflicts.length > 0) {
+        const detail = leadConflicts
+          .map((c) => `"${c.title}" em ${c.buckets.join(", ")}`)
+          .join("; ");
+        const ok = await confirm({
+          title: "Coluna de chegada marcada como conversão",
+          description:
+            `${detail}. Cards recém-chegados contariam como agendado/comparecido/fechamento, inflando as métricas. ` +
+            `Salvar mesmo assim?`,
+          confirmLabel: "Salvar mesmo assim",
+          destructive: true,
+        });
+        if (!ok) return;
+      }
       const res = await saveFunnelMapping(clinicId, {
         leadStepIds: [...sel.lead],
         scheduledStepIds: [...sel.scheduled],
@@ -119,9 +166,10 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
             <>
               <p className="text-xs text-muted-foreground mb-3">
                 Marque, por coluna do painel Helena, o que corresponde a cada etapa. Leads = todos
-                os cards do painel; agendados/faturamento seguem estas colunas. Fechamento também
-                conta como agendado. O número ao lado de cada etapa é o total de cards na coluna
-                desde o início.
+                os cards do painel (nenhuma marcação necessária); colunas que não significam
+                conversão (chegada, sem interesse etc.) ficam sem marcação. Fechamento também conta
+                como comparecido/agendado. O número ao lado de cada etapa é o total de cards na
+                coluna desde o início.
               </p>
 
               {/* Matriz: etapas × buckets */}
@@ -175,6 +223,29 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
                   </tbody>
                 </table>
               </div>
+
+              {leadConflicts.length > 0 && (
+                <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-400">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <div>
+                    <p className="font-medium">
+                      Coluna de chegada de leads marcada como conversão — isso infla as métricas.
+                    </p>
+                    <ul className="mt-1 list-disc pl-4">
+                      {leadConflicts.map((c) => (
+                        <li key={c.title}>
+                          <span className="font-medium">{c.title}</span> parece ser a coluna onde os
+                          leads chegam, mas está marcada em {c.buckets.join(", ")} — cada card
+                          recém-chegado contaria como {c.buckets.join("/").toLowerCase()}.
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1 text-amber-400/80">
+                      Desmarque, a menos que essa coluna realmente signifique conversão nesta clínica.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-3 flex gap-2">
                 <Button type="button" variant="secondary" onClick={handleSave} disabled={isSaving}>
