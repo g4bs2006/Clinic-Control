@@ -1,48 +1,80 @@
 "use server";
 
-// Geração on-demand de sugestões de tarefa a partir dos grupos de WhatsApp.
-// Reusa o pipeline do resumo diário: a Edge Function summarize-groups re-gera
-// o resumo de HOJE das clínicas pedidas e o trigger do banco
-// (expand_pendencias_to_suggestions) transforma highlights.tarefas em
-// task_suggestions, com dedup por pg_trgm + unique. O cliente orquestra em
-// lotes pequenos para não estourar o timeout de uma server action.
+// Geração on-demand de sugestões de tarefa a partir dos grupos de WhatsApp —
+// como JOB em background (padrão dos report_jobs): o clique registra o pedido
+// e o usuário segue navegando; ticks curtos em /api/tasks/generate/process
+// sincronizam as mensagens e analisam as clínicas em lotes. O pipeline de IA é
+// o do resumo diário (summarize-groups + trigger expand_pendencias_to_suggestions),
+// então o dedup e o custo em ai_usage_log valem aqui também.
 
-import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
+import { after } from "next/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getSessionUser } from "@/lib/auth/session";
-import { getCarteiraScope } from "@/lib/users/actions";
+import { getCarteiraScope, getCurrentProfile } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
+import { signSessionToken } from "@/lib/auth/token";
+import type { SuggestionJobStats } from "./generate-runner";
 
-export type GenerationScope = {
-  /** Clínicas da carteira ativa que têm pelo menos um grupo mapeado. */
-  clinics: { id: string; name: string }[];
-  /** Clínicas da carteira sem grupo de WhatsApp mapeado (ficam de fora). */
-  unmappedCount: number;
+export type SuggestionJobRow = {
+  id: string;
+  status: "queued" | "syncing" | "analyzing" | "done" | "error";
+  progress_done: number;
+  progress_total: number;
+  stats: SuggestionJobStats | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-/** Ids das clínicas visíveis na carteira ativa (null = todas, gestor em "Todas"). */
-async function scopedClinicIds(): Promise<string[] | null> {
-  const scope = await getCarteiraScope();
-  if (!scope.developerFilter) return null;
-  const clinics = await listClinics();
-  return clinics.filter((c) => c.developer_id === scope.developerFilter).map((c) => c.id);
+const ACTIVE_STATUSES = ["queued", "syncing", "analyzing"];
+// Sem atualização há mais tempo que isso, o job é considerado travado e o
+// polling da UI dispara um novo tick (cura re-invocações perdidas).
+const STALL_MS = 90_000;
+
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
+async function triggerTick(jobId: string, origin: string) {
+  const sig = await signSessionToken(`suggest:${jobId}`, Date.now() + 10 * 60 * 1000);
+  try {
+    // Timeout curto: só precisamos despachar a request — o processamento
+    // continua no route handler mesmo depois do abort.
+    await fetch(`${origin}/api/tasks/generate/process`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jobId, sig }),
+      signal: AbortSignal.timeout(3_000),
+    });
+  } catch {
+    // abort esperado ou rede — o auto-kick do polling cobre falhas reais
+  }
 }
 
 /**
- * Escopo da geração: clínicas ativas da carteira com grupo mapeado. É o que o
- * dialog mostra antes de rodar e a lista que ele fatia em lotes.
+ * Registra um job de geração para as clínicas da carteira ativa que têm grupo
+ * mapeado e dispara o primeiro tick. O escopo é resolvido AQUI, no clique —
+ * o job carrega a lista de clínicas, então trocar de carteira depois não muda
+ * uma análise já em andamento.
  */
-export async function getSuggestionGenerationScope(): Promise<
-  { ok: true } & GenerationScope | { ok: false; error: string }
+export async function startSuggestionGeneration(): Promise<
+  | { ok: true; jobId: string; clinicCount: number; unmappedCount: number }
+  | { ok: false; error: string }
 > {
   if (!(await getSessionUser())) return { ok: false, error: "Não autenticado" };
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
-  const [scope, clinics, { data: groups, error }] = await Promise.all([
+  const [scope, clinics, profile, { data: groups, error: groupsError }] = await Promise.all([
     getCarteiraScope(),
     listClinics(),
+    getCurrentProfile(),
     supabase.from("whatsapp_groups").select("clinic_id").not("clinic_id", "is", null),
   ]);
-  if (error) return { ok: false, error: error.message };
+  if (groupsError) return { ok: false, error: groupsError.message };
 
   const mapped = new Set((groups ?? []).map((g) => g.clinic_id as string));
   const inScope = clinics.filter(
@@ -50,79 +82,67 @@ export async function getSuggestionGenerationScope(): Promise<
       c.contract_status !== "archived" &&
       (!scope.developerFilter || c.developer_id === scope.developerFilter),
   );
+  const targets = inScope.filter((c) => mapped.has(c.id)).map((c) => c.id);
+  if (!targets.length) {
+    return { ok: false, error: "Nenhuma clínica da carteira ativa tem grupo de WhatsApp mapeado" };
+  }
 
-  const withGroup = inScope
-    .filter((c) => mapped.has(c.id))
-    .map((c) => ({ id: c.id, name: c.name }))
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const { data: active } = await supabase
+    .from("suggestion_jobs")
+    .select("id")
+    .eq("requested_by", profile?.id ?? "")
+    .in("status", ACTIVE_STATUSES)
+    .limit(1);
+  if (active?.length) {
+    return { ok: false, error: "Você já tem uma análise em andamento" };
+  }
 
-  return { ok: true, clinics: withGroup, unmappedCount: inScope.length - withGroup.length };
+  const { data, error } = await supabase
+    .from("suggestion_jobs")
+    .insert({
+      requested_by: profile?.id ?? null,
+      clinic_ids: targets,
+      progress_total: targets.length,
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+
+  const jobId = data.id as string;
+  const origin = await requestOrigin();
+  after(() => triggerTick(jobId, origin));
+
+  return { ok: true, jobId, clinicCount: targets.length, unmappedCount: inScope.length - targets.length };
 }
 
 /**
- * Gera (re-gera) o resumo de hoje para um LOTE de clínicas — o trigger converte
- * as tarefas do resumo em sugestões. Revalida o lote contra a carteira ativa no
- * servidor: o cliente não consegue gerar fora do próprio escopo.
+ * Jobs recentes do usuário logado (mais novos primeiro). Também "cura" jobs
+ * travados: ativo sem atualização há mais de STALL_MS re-dispara o tick.
  */
-export async function generateSuggestionsForClinics(
-  clinicIds: string[],
-): Promise<
-  | { ok: true; summarized: number; skipped: number; errors: string[] }
-  | { ok: false; error: string }
-> {
-  if (!(await getSessionUser())) return { ok: false, error: "Não autenticado" };
-  if (!clinicIds.length) return { ok: true, summarized: 0, skipped: 0, errors: [] };
-  if (clinicIds.length > 10) return { ok: false, error: "Lote grande demais (máx. 10 clínicas)" };
+export async function listSuggestionJobs(): Promise<SuggestionJobRow[]> {
+  if (!(await getSessionUser())) return [];
+  const profile = await getCurrentProfile();
+  if (!profile) return [];
 
-  const allowed = await scopedClinicIds();
-  const targets = allowed === null ? clinicIds : clinicIds.filter((id) => allowed.includes(id));
-  if (!targets.length) return { ok: false, error: "Clínicas fora da carteira ativa" };
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("suggestion_jobs")
+    .select("id, status, progress_done, progress_total, stats, error, created_at, updated_at")
+    .eq("requested_by", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(3);
 
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const secret = process.env.COLLECT_GROUPS_CRON_SECRET;
-  if (!base || !secret) {
-    return { ok: false, error: "Config ausente (NEXT_PUBLIC_SUPABASE_URL / COLLECT_GROUPS_CRON_SECRET)" };
-  }
+  const jobs = (data ?? []) as SuggestionJobRow[];
 
-  const url = `${base}/functions/v1/summarize-groups?clinics=${encodeURIComponent(targets.join(","))}`;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "x-cron-secret": secret, "content-type": "application/json" },
-      body: "{}",
+  const stalled = jobs.filter(
+    (j) => ACTIVE_STATUSES.includes(j.status) && Date.now() - Date.parse(j.updated_at) > STALL_MS,
+  );
+  if (stalled.length) {
+    const origin = await requestOrigin();
+    after(async () => {
+      for (const j of stalled) await triggerTick(j.id, origin);
     });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) return { ok: false, error: json?.error ?? `Falha na análise (HTTP ${res.status})` };
-    return {
-      ok: true,
-      summarized: json?.summarized ?? 0,
-      skipped: json?.skipped_few_messages ?? 0,
-      errors: Array.isArray(json?.errors) ? json.errors : [],
-    };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Falha ao contatar a função de resumo" };
   }
-}
 
-/**
- * Sugestões pendentes visíveis na carteira ativa — o dialog compara antes ×
- * depois da geração para dizer quantas nasceram de fato (o dedup pode descartar
- * tudo se nada mudou nas conversas).
- */
-export async function countPendingSuggestions(): Promise<number> {
-  if (!(await getSessionUser())) return 0;
-  const supabase = await createClient();
-  const clinicIds = await scopedClinicIds();
-
-  let query = supabase
-    .from("task_suggestions")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
-  if (clinicIds !== null) {
-    if (!clinicIds.length) return 0;
-    query = query.in("clinic_id", clinicIds);
-  }
-  const { count, error } = await query;
-  if (error) return 0;
-  return count ?? 0;
+  return jobs;
 }

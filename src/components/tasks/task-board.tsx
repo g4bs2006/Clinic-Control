@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CreateTaskDialog } from "./create-task-dialog"
-import { GenerateSuggestionsDialog } from "./generate-suggestions-dialog"
+import { GenerateSuggestionsButton } from "./generate-suggestions-button"
 import { RecurrencesDialog } from "./recurrences-dialog"
 import { TaskSuggestions } from "./task-suggestions"
 import { TaskDetailDialog } from "./task-detail-dialog"
@@ -41,6 +41,7 @@ import {
   type TaskStatus,
 } from "@/lib/tasks/categories"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
+import type { SuggestionJobRow } from "@/lib/tasks/generate-actions"
 import { agendaBucket, spDateParts, AGENDA_ORDER, AGENDA_LABEL, type AgendaBucket } from "@/lib/tasks/agenda"
 
 const ALL = "__all__"
@@ -190,6 +191,8 @@ function TaskListItem({
 interface TaskBoardProps {
   tasks: TaskRow[]
   suggestions: TaskSuggestionRow[]
+  /** Jobs de geração de sugestões do usuário (botão "Gerar da IA" acompanha o ativo). */
+  suggestionJobs?: SuggestionJobRow[]
   clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
   categories: TaskCategoryRow[]
@@ -201,7 +204,7 @@ interface TaskBoardProps {
   defaultClinicId?: string | null
 }
 
-export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles, categories, currentUserId = null, isGestor = false, defaultClinicId = null }: TaskBoardProps) {
+export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [], clinics, profiles, categories, currentUserId = null, isGestor = false, defaultClinicId = null }: TaskBoardProps) {
   const router = useRouter()
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
@@ -526,7 +529,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
         </div>
 
         <div className="flex-1" />
-        <GenerateSuggestionsDialog onGenerated={refresh} />
+        <GenerateSuggestionsButton initialJobs={suggestionJobs} onGenerated={refresh} />
         <RecurrencesDialog
           clinics={clinics}
           profiles={profiles}

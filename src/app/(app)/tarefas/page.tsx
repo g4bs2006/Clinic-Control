@@ -1,4 +1,5 @@
 import { listTasks, listTaskSuggestions } from "@/lib/tasks/actions"
+import { listSuggestionJobs } from "@/lib/tasks/generate-actions"
 import { listActiveTaskCategories } from "@/lib/tasks/category-actions"
 import { materializeRecurrences } from "@/lib/tasks/recurrence-actions"
 import { listClinics } from "@/lib/clinics/actions"
@@ -13,9 +14,10 @@ export default async function TarefasPage() {
   // abertura do dia (idempotente + anti-empilhamento) — antes da listagem.
   await materializeRecurrences()
 
-  const [tasks, suggestions, clinics, profiles, categories, currentProfile] = await Promise.all([
+  const [tasks, suggestions, suggestionJobs, clinics, profiles, categories, currentProfile] = await Promise.all([
     listTasks(),
     listTaskSuggestions(),
+    listSuggestionJobs(),
     listClinics(),
     listUserProfiles(),
     listActiveTaskCategories(),
@@ -42,6 +44,7 @@ export default async function TarefasPage() {
         <TaskBoard
           tasks={tasks}
           suggestions={suggestions.filter((s) => s.kind !== "acompanhamento")}
+          suggestionJobs={suggestionJobs}
           clinics={clinicOptions}
           profiles={profileOptions}
           categories={categories}
