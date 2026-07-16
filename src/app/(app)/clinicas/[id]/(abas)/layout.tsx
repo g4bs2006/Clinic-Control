@@ -5,7 +5,7 @@
 // e travariam o shell de todas as abas.
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { getClinic, listClinics } from "@/lib/clinics/actions"
+import { getClinic, listClinicsInScope } from "@/lib/clinics/actions"
 import { ClinicPlanBadge } from "@/components/clinics/clinic-plan-badge"
 import { ClinicTabs } from "@/components/clinics/clinic-tabs"
 
@@ -25,12 +25,18 @@ export default async function ClinicTabsLayout({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [clinic, allClinics] = await Promise.all([getClinic(id), listClinics()])
+  // Anterior/Próxima navegam DENTRO da carteira ativa (mesmo recorte da busca
+  // global). Clínica aberta fora do escopo (link direto): página abre normal,
+  // só fica sem a navegação sequencial.
+  const [clinic, scopedClinics] = await Promise.all([getClinic(id), listClinicsInScope()])
   if (!clinic) notFound()
 
-  const currentIndex = allClinics.findIndex((c) => c.id === id)
-  const prevClinic = currentIndex > 0 ? allClinics[currentIndex - 1] : null
-  const nextClinic = currentIndex < allClinics.length - 1 ? allClinics[currentIndex + 1] : null
+  const currentIndex = scopedClinics.findIndex((c) => c.id === id)
+  const prevClinic = currentIndex > 0 ? scopedClinics[currentIndex - 1] : null
+  const nextClinic =
+    currentIndex !== -1 && currentIndex < scopedClinics.length - 1
+      ? scopedClinics[currentIndex + 1]
+      : null
   const cityUf = [clinic.city, clinic.state].filter(Boolean).join("/")
   const isAuto = clinic.mode === "auto"
 
