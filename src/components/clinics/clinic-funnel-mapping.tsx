@@ -120,7 +120,8 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
               <p className="text-xs text-muted-foreground mb-3">
                 Marque, por coluna do painel Helena, o que corresponde a cada etapa. Leads = todos
                 os cards do painel; agendados/faturamento seguem estas colunas. Fechamento também
-                conta como agendado.
+                conta como agendado. O número ao lado de cada etapa é o total de cards na coluna
+                desde o início.
               </p>
 
               {/* Matriz: etapas × buckets */}
@@ -141,8 +142,11 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
                       <tr key={s.id} className="border-b border-border/30 last:border-0">
                         <td className="px-3 py-2">
                           <span className="font-medium text-foreground">{s.title}</span>
-                          <span className="ml-2 text-xs text-muted-foreground tabular-nums">
-                            {s.cardCount}
+                          <span
+                            className="ml-2 text-xs text-muted-foreground tabular-nums"
+                            title="Total de cards na coluna desde o início"
+                          >
+                            {s.cardCount} no total
                           </span>
                         </td>
                         {BUCKETS.map((b) => {

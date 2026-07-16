@@ -243,6 +243,22 @@ describe("buildDailyFunnel", () => {
     expect(points.every((p) => p.rate === null)).toBe(true);
   });
 
+  it("bucketiza pelo dia BRT: 01:00 UTC é a noite do dia anterior no Brasil", () => {
+    const points = buildDailyFunnel(
+      steps,
+      [card("a", "s1", null, "2026-06-05T01:00:00Z")], // 04/06 22:00 BRT
+      "2026-06",
+      today,
+    );
+    expect(points.find((p) => p.day === "2026-06-04")).toEqual({
+      day: "2026-06-04",
+      leads: 1,
+      scheduled: 0,
+      rate: 0,
+    });
+    expect(points.find((p) => p.day === "2026-06-05")?.leads).toBe(0);
+  });
+
   it("Compareceram e Fecharam conta como agendado no dia em que o card foi criado", () => {
     const points = buildDailyFunnel(
       steps,

@@ -22,7 +22,7 @@ import {
   type FunnelMapping,
   type SchedulerTagMapping,
 } from "@/lib/helena/funnel";
-import { monthKey, monthRangeUtc } from "@/lib/snapshots/month";
+import { monthKey, monthRangeBrt } from "@/lib/snapshots/month";
 
 // Converte as colunas de mapeamento da linha de clinic_integrations no
 // FunnelMapping consumido pela lógica pura. NULL nas duas colunas-chave
@@ -148,7 +148,7 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
     const token = decryptToken(data.helena_token_encrypted as string);
     const panelId = data.panel_id as string;
     const { steps } = await getPanelWithSteps(token, panelId);
-    const cards = await listCards(token, panelId, monthRangeUtc(yearMonth));
+    const cards = await listCards(token, panelId, monthRangeBrt(yearMonth));
     return {
       ok: true as const,
       funnel: buildLiveFunnel(steps, cards, rowToMapping(data), rowToTagMapping(data)),
@@ -187,7 +187,7 @@ export async function getDailyFunnelForMonth(
     const token = decryptToken(data.helena_token_encrypted as string);
     const panelId = data.panel_id as string;
     const { steps } = await getPanelWithSteps(token, panelId);
-    const cards = await listCards(token, panelId, monthRangeUtc(yearMonth));
+    const cards = await listCards(token, panelId, monthRangeBrt(yearMonth));
     return {
       ok: true as const,
       days: buildDailyFunnel(steps, cards, yearMonth, new Date(), rowToMapping(data)),
@@ -441,7 +441,7 @@ export async function listClinicLeads(
     const panelId = data.panel_id as string;
     const { steps } = await getPanelWithSteps(token, panelId);
     const titleByStepId = new Map(steps.map((s) => [s.id, s.title]));
-    const cards = await listCards(token, panelId, monthRangeUtc(monthKey(new Date())));
+    const cards = await listCards(token, panelId, monthRangeBrt(monthKey(new Date())));
 
     const leads: ClinicLead[] = cards
       .map((c) => ({
@@ -525,7 +525,7 @@ export async function getHelenaChatStatsForMonth(clinicId: string, yearMonth: st
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
 
     const token = decryptToken(data.helena_token_encrypted as string);
-    const stats = await getChatCounts(token, monthRangeUtc(yearMonth));
+    const stats = await getChatCounts(token, monthRangeBrt(yearMonth));
 
     return { ok: true as const, stats };
   } catch (e) {
@@ -560,7 +560,7 @@ export async function getHelenaTakeoverStats(clinicId: string, yearMonth: string
     if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
 
     const token = decryptToken(data.helena_token_encrypted as string);
-    const stats = await getSessionTakeoverStats(token, monthRangeUtc(yearMonth));
+    const stats = await getSessionTakeoverStats(token, monthRangeBrt(yearMonth));
 
     const result = { ok: true as const, stats };
     takeoverCache.set(cacheKey, { value: result, expires: Date.now() + TAKEOVER_CACHE_MS });
@@ -613,7 +613,7 @@ export async function getHelenaCustomFieldsAggregation(clinicId: string, yearMon
     const token = decryptToken(data.helena_token_encrypted as string);
     const panelId = data.panel_id as string;
 
-    const cards = await listCards(token, panelId, monthRangeUtc(yearMonth));
+    const cards = await listCards(token, panelId, monthRangeBrt(yearMonth));
     
     const counts: Record<string, Record<string, number>> = {};
 

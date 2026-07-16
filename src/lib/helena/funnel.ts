@@ -171,8 +171,15 @@ export function buildLiveFunnel(
 
 export type DailyFunnelPoint = { day: string; leads: number; scheduled: number; rate: number | null };
 
+// Dia no fuso do Brasil (-03:00 fixo desde 2019) — o dia do negócio vira à
+// meia-noite BRT, casando com a janela mensal de monthRangeBrt.
+const BRT_OFFSET_MS = 3 * 3_600_000;
+function brtDay(isoTimestamp: string): string {
+  return new Date(new Date(isoTimestamp).getTime() - BRT_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 /**
- * Bucketiza os cards por dia de criação (UTC) dentro do mês informado.
+ * Bucketiza os cards por dia de criação (fuso BRT) dentro do mês informado.
  * Preenche todos os dias do mês (ou até hoje, se for o mês corrente) —
  * dias sem nenhum lead entram com rate=null (sem dado, não 0%).
  */
@@ -189,7 +196,7 @@ export function buildDailyFunnel(
   for (const card of monthCards) {
     const title = titleByStepId.get(card.stepId);
     if (!title) continue;
-    const day = card.createdAt.slice(0, 10);
+    const day = brtDay(card.createdAt);
     const bucket = byDay.get(day) ?? { leads: 0, scheduled: 0 };
     bucket.leads++;
     if (isScheduled(card.stepId, title)) bucket.scheduled++;
@@ -198,9 +205,10 @@ export function buildDailyFunnel(
 
   const [y, m] = yearMonth.split("-").map(Number);
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const todayBrt = new Date(today.getTime() - BRT_OFFSET_MS);
   const isCurrentMonth =
-    yearMonth === `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}`;
-  const lastDay = isCurrentMonth ? today.getUTCDate() : daysInMonth;
+    yearMonth === `${todayBrt.getUTCFullYear()}-${String(todayBrt.getUTCMonth() + 1).padStart(2, "0")}`;
+  const lastDay = isCurrentMonth ? todayBrt.getUTCDate() : daysInMonth;
 
   const points: DailyFunnelPoint[] = [];
   for (let d = 1; d <= lastDay; d++) {
