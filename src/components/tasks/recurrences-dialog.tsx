@@ -167,7 +167,7 @@ export function RecurrencesDialog({
     })
   }
 
-  function useCandidate(c: RoutineCandidateRow) {
+  function applyCandidate(c: RoutineCandidateRow) {
     setTitle(c.title)
     setFreq(c.cadence.freq)
     if (c.clinicId) {
@@ -397,7 +397,7 @@ export function RecurrencesDialog({
                       </p>
                     </div>
                     <div className="flex w-full gap-2 sm:w-auto">
-                      <Button type="button" size="sm" variant="outline" className="h-9 flex-1 sm:h-8 sm:flex-none" disabled={pending} onClick={() => useCandidate(c)}>
+                      <Button type="button" size="sm" variant="outline" className="h-9 flex-1 sm:h-8 sm:flex-none" disabled={pending} onClick={() => applyCandidate(c)}>
                         <Check className="size-3.5" />
                         Criar regra
                       </Button>

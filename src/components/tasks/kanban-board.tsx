@@ -4,7 +4,6 @@ import { useState } from "react"
 import Link from "next/link"
 import type { TaskRow } from "@/lib/tasks/actions"
 import {
-  TASK_PRIORITY_LABEL,
   TASK_STATUSES,
   TASK_STATUS_LABEL,
   type TaskPriority,

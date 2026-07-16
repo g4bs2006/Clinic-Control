@@ -10,7 +10,6 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle,
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog"
@@ -103,6 +102,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
   const [editingAttachmentName, setEditingAttachmentName] = useState("")
   const [activityFilter, setActivityFilter] = useState<"all" | "comment" | "system">("all")
+  // Instante da última carga da atividade — base estável para a janela de edição
+  // de 30 min sem chamar Date.now() durante o render (o servidor revalida o limite).
+  const [activityLoadedAt, setActivityLoadedAt] = useState(0)
   // Marca que houve alteração; o board só é re-sincronizado ao fechar (uma vez),
   // em vez de um refetch de página inteira a cada micro-edição.
   const changedRef = useRef(false)
@@ -118,21 +120,29 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     setSubtasks(subs)
     setAttachments(atts)
     setActivity(acts)
+    setActivityLoadedAt(Date.now())
     if (t) {
       setTitle(t.title)
       setDescription(t.description ?? "")
     }
   }
 
-  useEffect(() => {
-    if (!taskId) {
+  // Reset ao trocar a tarefa alvo (padrão render-time, sem efeito).
+  const [prevTaskId, setPrevTaskId] = useState<string | null>(null)
+  if (taskId !== prevTaskId) {
+    setPrevTaskId(taskId)
+    if (taskId) {
+      setLoading(true)
+    } else {
       setTask(null)
       setSuggested(null)
-      return
     }
+  }
+
+  useEffect(() => {
+    if (!taskId) return
     changedRef.current = false
-    setLoading(true)
-    reload(taskId).finally(() => setLoading(false))
+    startTransition(() => reload(taskId).finally(() => setLoading(false)))
   }, [taskId])
 
   // Fecha o dialog e, se algo mudou, sincroniza o board uma única vez.
@@ -567,7 +577,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
 
               {/* ── Atividade ─────────────────────────────────────── */}
               <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Atividade</p>
                   <div className="flex items-center gap-1 rounded-md border border-border p-0.5 text-[0.7rem] bg-accent/10">
                     <button
@@ -599,7 +609,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                     .map((a) => {
                     const canEditOrDelete = a.kind === "comment" &&
                       a.author_id === currentUserId &&
-                      (Date.now() - new Date(a.created_at).getTime()) < 30 * 60 * 1000
+                      (activityLoadedAt - new Date(a.created_at).getTime()) < 30 * 60 * 1000
 
                     return (
                       <li key={a.id} className={`group flex flex-col gap-0.5 rounded-md p-1.5 transition-colors hover:bg-accent/20 ${a.kind === "system" ? "text-xs text-muted-foreground italic" : "text-sm"}`}>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Check, X, Eye } from "lucide-react"
@@ -70,9 +70,12 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, cu
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
   const [dueDate, setDueDate] = useState("")
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  useEffect(() => {
+  // Limpa a seleção quando a lista de sugestões muda (padrão render-time, sem efeito).
+  const [prevSuggestions, setPrevSuggestions] = useState(suggestions)
+  if (prevSuggestions !== suggestions) {
+    setPrevSuggestions(suggestions)
     setSelected(new Set())
-  }, [suggestions])
+  }
 
   const acoes = suggestions.filter((s) => s.kind !== "acompanhamento")
   const acomps = suggestions.filter((s) => s.kind === "acompanhamento")
