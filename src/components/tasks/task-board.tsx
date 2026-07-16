@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CreateTaskDialog } from "./create-task-dialog"
+import { GenerateSuggestionsDialog } from "./generate-suggestions-dialog"
 import { RecurrencesDialog } from "./recurrences-dialog"
 import { TaskSuggestions } from "./task-suggestions"
 import { TaskDetailDialog } from "./task-detail-dialog"
@@ -525,6 +526,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, clinics, profiles,
         </div>
 
         <div className="flex-1" />
+        <GenerateSuggestionsDialog onGenerated={refresh} />
         <RecurrencesDialog
           clinics={clinics}
           profiles={profiles}

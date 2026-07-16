@@ -12,6 +12,8 @@
 //   ?date=YYYY-MM-DD (default: hoje no fuso America/Sao_Paulo)
 //   ?force=1 re-gera resumos já existentes do dia.
 //   ?preview=1&clinic=<id> → só devolve o resultado do dia p/ 1 clínica, SEM gravar.
+//   ?clinics=<id,id,...> → restringe a execução a essas clínicas (geração
+//     on-demand da página de tarefas, que manda só as da carteira ativa).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -90,6 +92,10 @@ Deno.serve(async (req) => {
     ? url.searchParams.get("date")!
     : todaySaoPaulo();
   const preview = url.searchParams.get("preview") === "1";
+  const clinicsParam = (url.searchParams.get("clinics") ?? "").trim();
+  const onlyClinics = clinicsParam
+    ? new Set(clinicsParam.split(",").map((s) => s.trim()).filter(Boolean))
+    : null;
   // O dia CORRENTE sempre re-gera (upsert) — a conversa ainda está acontecendo;
   // dias passados só com ?force=1.
   const force = url.searchParams.get("force") === "1" || date === todaySaoPaulo();
@@ -192,6 +198,7 @@ Deno.serve(async (req) => {
   for (const g of groups ?? []) {
     const cid = g.clinic_id as string;
     if (done.has(cid)) continue;
+    if (onlyClinics && !onlyClinics.has(cid)) continue;
     const arr = groupsByClinic.get(cid) ?? [];
     arr.push(g.group_jid as string);
     groupsByClinic.set(cid, arr);
