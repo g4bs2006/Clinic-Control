@@ -100,18 +100,32 @@ export function GlobalSearch() {
     else open();
   }, [open, close]);
 
-  // Listen to Ctrl+K or Cmd+K
+  // Atalhos de abertura: Ctrl/Cmd+K (robusto a Caps Lock/Shift, na fase de
+  // captura para vencer o atalho do navegador enquanto a página tem foco) e
+  // "/" como alternativa que nunca conflita — só fora de campos de texto.
   useEffect(() => {
+    function isTyping(): boolean {
+      const el = document.activeElement as HTMLElement | null;
+      return (
+        !!el &&
+        (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)
+      );
+    }
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-        if (detailRef.current) return; // modal de tarefa aberto — não mexe na paleta
+      if (detailRef.current) return; // modal de tarefa aberto — não mexe na paleta
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        e.stopPropagation();
         toggleOpen();
+      } else if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !isOpenRef.current && !isTyping()) {
+        e.preventDefault();
+        open();
       }
     }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleOpen]);
+    // capture: true → roda antes de qualquer outro handler da página.
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [toggleOpen, open]);
 
   // Listen to custom sidebar click event
   useEffect(() => {

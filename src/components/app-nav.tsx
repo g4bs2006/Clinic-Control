@@ -195,14 +195,14 @@ export function AppNav({
                 "flex h-11 w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/15 text-left text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all cursor-pointer md:h-9",
                 open ? "px-3" : "justify-center px-0 size-11 md:size-9",
               )}
-              title="Buscar clínica (Ctrl+K)"
+              title="Buscar clínica (Ctrl+K ou /)"
             >
               <Search className="size-4 shrink-0" />
               {open && (
                 <>
                   <span className="flex-1 truncate text-sidebar-foreground/70">Buscar clínica...</span>
                   <span className="hidden text-[0.6rem] border border-sidebar-border bg-sidebar text-muted-foreground/80 rounded px-1.5 py-0.5 font-mono tabular-nums leading-none md:inline">
-                    Ctrl+K
+                    Ctrl+K · /
                   </span>
                 </>
               )}
