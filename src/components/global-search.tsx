@@ -2,10 +2,38 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Building2, MapPin, X } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Search,
+  Building2,
+  MapPin,
+  X,
+  CheckCircle2,
+  Circle,
+  ArrowLeft,
+  Plus,
+  ListTodo,
+} from "lucide-react";
 import { listClinicsInScope } from "@/lib/clinics/actions";
+import { listClinicTasks, updateTaskStatus, createTask, type TaskRow } from "@/lib/tasks/actions";
+import { listActiveTaskCategories } from "@/lib/tasks/category-actions";
 import type { Clinic } from "@/lib/clinics/schema";
+import type { TaskPriority } from "@/lib/tasks/categories";
 import { cn } from "@/lib/utils";
+
+const PRIORITY_DOT: Record<TaskPriority, string> = {
+  urgente: "bg-red-400",
+  alta: "bg-orange-400",
+  media: "bg-amber-400",
+  baixa: "bg-zinc-400",
+};
+
+const OPEN_STATUSES = new Set(["pendente", "em_andamento"]);
+
+function dueLabel(d: string): string {
+  const [, m, day] = d.split("-");
+  return `${day}/${m}`;
+}
 
 export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,6 +41,17 @@ export function GlobalSearch() {
   // null = ainda não carregado (loading derivado disso, sem estado extra)
   const [clinics, setClinics] = useState<Clinic[] | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  // ── Modo tarefas: clínica selecionada via Tab/botão "Tarefas" ─────────────
+  const [taskClinic, setTaskClinic] = useState<Clinic | null>(null);
+  const [tasks, setTasks] = useState<TaskRow[] | null>(null); // null = carregando
+  // Tarefas tocadas nesta sessão da paleta: concluídas seguem visíveis
+  // (riscadas) para permitir desfazer com o mesmo Enter.
+  const [touched, setTouched] = useState<Set<string>>(new Set());
+  const [defaultCategory, setDefaultCategory] = useState<string>("outro");
+  const [saving, setSaving] = useState(false);
+  // Alguma tarefa mudou? Ao fechar, refresh para as páginas refletirem.
+  const dirtyRef = useRef(false);
 
   const router = useRouter();
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -26,6 +65,9 @@ export function GlobalSearch() {
     setIsOpen(true);
     setQuery("");
     setActiveIndex(0);
+    setTaskClinic(null);
+    setTasks(null);
+    setTouched(new Set());
     // Recarrega a cada abertura para refletir a carteira atual (o gestor pode ter
     // trocado o seletor global desde a última vez).
     setClinics(null);
@@ -35,7 +77,11 @@ export function GlobalSearch() {
   const close = useCallback(() => {
     isOpenRef.current = false;
     setIsOpen(false);
-  }, []);
+    if (dirtyRef.current) {
+      dirtyRef.current = false;
+      router.refresh();
+    }
+  }, [router]);
 
   const toggleOpen = useCallback(() => {
     if (isOpenRef.current) close();
@@ -77,11 +123,30 @@ export function GlobalSearch() {
     };
   }, [isOpen, clinics]);
 
-  const loading = isOpen && clinics === null;
+  // Fetch das tarefas ao entrar no modo tarefas
+  useEffect(() => {
+    if (!isOpen || !taskClinic || tasks !== null) return;
+    let cancelled = false;
+    Promise.all([listClinicTasks(taskClinic.id), listActiveTaskCategories()])
+      .then(([rows, categories]) => {
+        if (cancelled) return;
+        setTasks(rows);
+        setDefaultCategory(categories[0]?.slug ?? "outro");
+      })
+      .catch((err) => {
+        console.error("Erro ao carregar tarefas da clínica:", err);
+        if (!cancelled) setTasks([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, taskClinic, tasks]);
 
-  // Filter clinics
+  const loading = isOpen && (taskClinic ? tasks === null : clinics === null);
+
+  // ── Itens do estágio atual ─────────────────────────────────────────────────
   const loaded = clinics ?? [];
-  const filtered = query.trim()
+  const filteredClinics = query.trim()
     ? loaded.filter((c) => {
         const term = query.toLowerCase();
         return (
@@ -94,11 +159,107 @@ export function GlobalSearch() {
       })
     : loaded.slice(0, 5); // show top 5 when empty
 
-  // Handle navigate
-  const handleSelect = useCallback((clinicId: string) => {
-    close();
-    router.push(`/clinicas/${clinicId}`);
-  }, [router, close]);
+  // Modo tarefas: abertas + as concluídas nesta sessão (para desfazer), filtradas pela busca.
+  const visibleTasks = (tasks ?? [])
+    .filter((t) => OPEN_STATUSES.has(t.status) || touched.has(t.id))
+    .filter((t) => !query.trim() || t.title.toLowerCase().includes(query.toLowerCase()));
+  const canCreate = taskClinic !== null && query.trim().length >= 3;
+  // Índice virtual: tarefas + (opcional) o item "criar tarefa" no fim.
+  const taskItemCount = visibleTasks.length + (canCreate ? 1 : 0);
+  const itemCount = taskClinic ? taskItemCount : filteredClinics.length;
+
+  // ── Ações ──────────────────────────────────────────────────────────────────
+  const handleSelect = useCallback(
+    (clinicId: string) => {
+      close();
+      router.push(`/clinicas/${clinicId}`);
+    },
+    [router, close],
+  );
+
+  const enterTasks = useCallback((clinic: Clinic) => {
+    setTaskClinic(clinic);
+    setTasks(null);
+    setTouched(new Set());
+    setQuery("");
+    setActiveIndex(0);
+    inputRef.current?.focus();
+  }, []);
+
+  const exitTasks = useCallback(() => {
+    setTaskClinic(null);
+    setQuery("");
+    setActiveIndex(0);
+    inputRef.current?.focus();
+  }, []);
+
+  const toggleTask = useCallback(
+    (task: TaskRow) => {
+      const nextStatus = task.status === "concluida" ? "pendente" : "concluida";
+      // Otimista: muda na hora; reverte se o servidor recusar.
+      setTasks((prev) =>
+        (prev ?? []).map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t)),
+      );
+      setTouched((prev) => new Set(prev).add(task.id));
+      dirtyRef.current = true;
+      updateTaskStatus(task.id, nextStatus).then((res) => {
+        if (!res.ok) {
+          setTasks((prev) =>
+            (prev ?? []).map((t) => (t.id === task.id ? { ...t, status: task.status } : t)),
+          );
+          toast.error(res.error);
+        }
+      });
+    },
+    [],
+  );
+
+  const createQuickTask = useCallback(() => {
+    if (!taskClinic || !canCreate || saving) return;
+    const title = query.trim();
+    setSaving(true);
+    createTask({
+      clinicId: taskClinic.id,
+      title,
+      category: defaultCategory,
+      priority: "media",
+      // Responsável padrão = dev da clínica (mesma regra das sugestões da IA).
+      assignedTo: taskClinic.developer_id ?? null,
+    })
+      .then((res) => {
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        dirtyRef.current = true;
+        setTasks((prev) => [
+          {
+            id: res.id,
+            clinic_id: taskClinic.id,
+            clinic_name: taskClinic.name,
+            title,
+            description: null,
+            category: defaultCategory as TaskRow["category"],
+            priority: "media",
+            status: "pendente",
+            assigned_to: taskClinic.developer_id ?? null,
+            assigned_to_name: null,
+            due_date: null,
+            source: "manual",
+            parent_task_id: null,
+            recurrence_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            completed_at: null,
+          },
+          ...(prev ?? []),
+        ]);
+        setQuery("");
+        setActiveIndex(0);
+        toast.success("Tarefa criada.");
+      })
+      .finally(() => setSaving(false));
+  }, [taskClinic, canCreate, saving, query, defaultCategory]);
 
   // Keyboard navigation inside list
   useEffect(() => {
@@ -107,15 +268,25 @@ export function GlobalSearch() {
     function handleKeys(e: KeyboardEvent) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setActiveIndex((prev) => (filtered.length ? (prev + 1) % filtered.length : 0));
+        setActiveIndex((prev) => (itemCount ? (prev + 1) % itemCount : 0));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setActiveIndex((prev) => (filtered.length ? (prev - 1 + filtered.length) % filtered.length : 0));
+        setActiveIndex((prev) => (itemCount ? (prev - 1 + itemCount) % itemCount : 0));
+      } else if (e.key === "Tab" && !taskClinic) {
+        // Tab na lista de clínicas = entrar nas tarefas da clínica ativa.
+        e.preventDefault();
+        if (filteredClinics[activeIndex]) enterTasks(filteredClinics[activeIndex]);
       } else if (e.key === "Enter") {
         e.preventDefault();
-        if (filtered.length && filtered[activeIndex]) {
-          handleSelect(filtered[activeIndex].id);
+        if (taskClinic) {
+          if (activeIndex < visibleTasks.length) toggleTask(visibleTasks[activeIndex]);
+          else if (canCreate) createQuickTask();
+        } else if (filteredClinics[activeIndex]) {
+          handleSelect(filteredClinics[activeIndex].id);
         }
+      } else if (e.key === "Backspace" && taskClinic && query === "") {
+        e.preventDefault();
+        exitTasks();
       } else if (e.key === "Escape") {
         e.preventDefault();
         close();
@@ -124,7 +295,22 @@ export function GlobalSearch() {
 
     window.addEventListener("keydown", handleKeys);
     return () => window.removeEventListener("keydown", handleKeys);
-  }, [isOpen, filtered, activeIndex, handleSelect, close]);
+  }, [
+    isOpen,
+    itemCount,
+    taskClinic,
+    filteredClinics,
+    visibleTasks,
+    activeIndex,
+    canCreate,
+    query,
+    handleSelect,
+    enterTasks,
+    exitTasks,
+    toggleTask,
+    createQuickTask,
+    close,
+  ]);
 
   if (!isOpen) return null;
 
@@ -139,7 +325,23 @@ export function GlobalSearch() {
       <div className="bg-zinc-950 border border-zinc-800 w-full max-w-lg rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100">
         {/* Input area */}
         <div className="flex items-center gap-3 px-4 border-b border-zinc-900 h-12">
-          <Search className="size-4.5 text-muted-foreground shrink-0" />
+          {taskClinic ? (
+            <button
+              onClick={exitTasks}
+              title="Voltar para a busca de clínicas"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="size-4.5 shrink-0" />
+            </button>
+          ) : (
+            <Search className="size-4.5 text-muted-foreground shrink-0" />
+          )}
+          {taskClinic && (
+            <span className="flex max-w-[10rem] items-center gap-1.5 truncate rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 text-[0.68rem] font-medium text-muted-foreground shrink-0">
+              <ListTodo className="size-3 shrink-0" />
+              <span className="truncate">{taskClinic.name}</span>
+            </span>
+          )}
           <input
             ref={inputRef}
             type="text"
@@ -148,7 +350,11 @@ export function GlobalSearch() {
               setQuery(e.target.value);
               setActiveIndex(0); // volta ao topo a cada mudança da busca
             }}
-            placeholder="Buscar clínica por nome, cidade ou sistema..."
+            placeholder={
+              taskClinic
+                ? "Filtrar tarefas ou digitar uma nova..."
+                : "Buscar clínica por nome, cidade ou sistema..."
+            }
             className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground placeholder:text-muted-foreground/60"
           />
           {query && (
@@ -171,18 +377,105 @@ export function GlobalSearch() {
         <div className="max-h-[320px] overflow-y-auto p-2 scrollbar-none">
           {loading ? (
             <div className="flex items-center justify-center py-12 text-xs text-muted-foreground">
-              Carregando clínicas...
+              {taskClinic ? "Carregando tarefas..." : "Carregando clínicas..."}
             </div>
-          ) : filtered.length === 0 ? (
+          ) : taskClinic ? (
+            /* ── Modo tarefas ─────────────────────────────────────── */
+            <div className="space-y-0.5">
+              <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2 py-1.5">
+                Tarefas abertas · {taskClinic.name}
+              </div>
+              {visibleTasks.length === 0 && !canCreate && (
+                <div className="flex flex-col items-center justify-center py-10 text-center text-xs text-muted-foreground">
+                  <span>Nenhuma tarefa aberta</span>
+                  <span className="mt-1 text-[0.68rem] text-muted-foreground/70">
+                    digite um título para criar uma nova
+                  </span>
+                </div>
+              )}
+              {visibleTasks.map((task, index) => {
+                const isActive = index === activeIndex;
+                const isDone = task.status === "concluida";
+                return (
+                  <button
+                    key={task.id}
+                    onClick={() => toggleTask(task)}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all cursor-pointer",
+                      isActive
+                        ? "bg-primary/10 text-primary border border-primary/20"
+                        : "text-foreground border border-transparent hover:bg-zinc-900/60",
+                    )}
+                  >
+                    {isDone ? (
+                      <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                    ) : (
+                      <Circle
+                        className={cn(
+                          "size-4 shrink-0",
+                          isActive ? "text-primary" : "text-muted-foreground/50",
+                        )}
+                      />
+                    )}
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        PRIORITY_DOT[task.priority],
+                      )}
+                    />
+                    <span className={cn("min-w-0 flex-1 truncate font-medium", isDone && "line-through text-muted-foreground")}>
+                      {task.title}
+                    </span>
+                    {task.due_date && (
+                      <span
+                        className={cn(
+                          "shrink-0 text-[0.65rem] tabular-nums",
+                          !isDone && task.due_date < new Date().toISOString().slice(0, 10)
+                            ? "text-red-400"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {dueLabel(task.due_date)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+              {canCreate && (
+                <button
+                  onClick={createQuickTask}
+                  onMouseEnter={() => setActiveIndex(visibleTasks.length)}
+                  disabled={saving}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all cursor-pointer",
+                    activeIndex === visibleTasks.length
+                      ? "bg-primary/10 text-primary border border-primary/20"
+                      : "text-muted-foreground border border-transparent hover:bg-zinc-900/60",
+                  )}
+                >
+                  <Plus className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {saving ? "Criando…" : (
+                      <>
+                        Criar tarefa: <span className="font-medium text-foreground">{query.trim()}</span>
+                      </>
+                    )}
+                  </span>
+                </button>
+              )}
+            </div>
+          ) : filteredClinics.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center text-xs text-muted-foreground">
               <span>Nenhuma clínica encontrada</span>
             </div>
           ) : (
+            /* ── Modo clínicas ────────────────────────────────────── */
             <div className="space-y-0.5">
               <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2 py-1.5">
                 {query.trim() ? "Resultados" : "Sugestões de Clínicas"}
               </div>
-              {filtered.map((clinic, index) => {
+              {filteredClinics.map((clinic, index) => {
                 const isActive = index === activeIndex;
                 const cityUf = [clinic.city, clinic.state].filter(Boolean).join("/");
 
@@ -210,11 +503,32 @@ export function GlobalSearch() {
                         )}
                       </div>
                     </div>
-                    {clinic.system && (
-                      <span className="text-[0.65rem] bg-zinc-900 border border-zinc-800 text-muted-foreground rounded px-1.5 py-0.5 font-medium shrink-0">
-                        {clinic.system}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {clinic.system && (
+                        <span className="text-[0.65rem] bg-zinc-900 border border-zinc-800 text-muted-foreground rounded px-1.5 py-0.5 font-medium">
+                          {clinic.system}
+                        </span>
+                      )}
+                      {/* Entra nas tarefas sem navegar (Tab faz o mesmo) */}
+                      <span
+                        role="button"
+                        tabIndex={-1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          enterTasks(clinic);
+                        }}
+                        title={`Tarefas de ${clinic.name}`}
+                        className={cn(
+                          "flex items-center gap-1 rounded border px-1.5 py-0.5 text-[0.65rem] font-medium transition-colors",
+                          isActive
+                            ? "border-primary/30 text-primary hover:bg-primary/15"
+                            : "border-zinc-800 bg-zinc-900 text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        <ListTodo className="size-3" />
+                        Tarefas
                       </span>
-                    )}
+                    </div>
                   </button>
                 );
               })}
@@ -226,7 +540,17 @@ export function GlobalSearch() {
         <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/40 border-t border-zinc-900 text-[0.65rem] text-muted-foreground select-none">
           <div className="flex items-center gap-3">
             <span>↑↓ para navegar</span>
-            <span>↵ para selecionar</span>
+            {taskClinic ? (
+              <>
+                <span>↵ concluir/reabrir</span>
+                <span className="hidden sm:inline">⌫ voltar</span>
+              </>
+            ) : (
+              <>
+                <span>↵ para abrir</span>
+                <span>Tab: tarefas</span>
+              </>
+            )}
           </div>
           <span>fechar com ESC</span>
         </div>
