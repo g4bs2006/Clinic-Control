@@ -16,9 +16,12 @@ import {
 } from "lucide-react";
 import { listClinicsInScope } from "@/lib/clinics/actions";
 import { listClinicTasks, updateTaskStatus, createTask, type TaskRow } from "@/lib/tasks/actions";
-import { listActiveTaskCategories } from "@/lib/tasks/category-actions";
+import { listActiveTaskCategories, type TaskCategoryRow } from "@/lib/tasks/category-actions";
+import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions";
+import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
+import type { ProfileOption } from "@/components/tasks/task-fields";
 import type { Clinic } from "@/lib/clinics/schema";
-import type { TaskPriority } from "@/lib/tasks/categories";
+import type { TaskPriority, TaskStatus } from "@/lib/tasks/categories";
 import { cn } from "@/lib/utils";
 
 const PRIORITY_DOT: Record<TaskPriority, string> = {
@@ -48,16 +51,25 @@ export function GlobalSearch() {
   // Tarefas tocadas nesta sessão da paleta: concluídas seguem visíveis
   // (riscadas) para permitir desfazer com o mesmo Enter.
   const [touched, setTouched] = useState<Set<string>>(new Set());
-  const [defaultCategory, setDefaultCategory] = useState<string>("outro");
+  const [categories, setCategories] = useState<TaskCategoryRow[]>([]);
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Detalhe aberto a partir da paleta — a paleta se esconde enquanto o modal
+  // está na tela e volta (com a lista recarregada) quando ele fecha.
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   // Alguma tarefa mudou? Ao fechar, refresh para as páginas refletirem.
   const dirtyRef = useRef(false);
+
+  const defaultCategory = categories[0]?.slug ?? "outro";
 
   const router = useRouter();
   const backdropRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Espelho do isOpen para o atalho de teclado decidir abrir/fechar sem stale closure
   const isOpenRef = useRef(false);
+  // Espelho do detalhe aberto: Ctrl+K não deve fechar a paleta por baixo do modal
+  const detailRef = useRef(false);
 
   // O reset de busca/índice acontece no ato de abrir (handler), não em effect.
   const open = useCallback(() => {
@@ -92,6 +104,7 @@ export function GlobalSearch() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        if (detailRef.current) return; // modal de tarefa aberto — não mexe na paleta
         e.preventDefault();
         toggleOpen();
       }
@@ -123,15 +136,23 @@ export function GlobalSearch() {
     };
   }, [isOpen, clinics]);
 
-  // Fetch das tarefas ao entrar no modo tarefas
+  // Fetch das tarefas ao entrar no modo tarefas (+ dados que o modal de
+  // detalhe precisa: categorias, perfis e usuário logado).
   useEffect(() => {
     if (!isOpen || !taskClinic || tasks !== null) return;
     let cancelled = false;
-    Promise.all([listClinicTasks(taskClinic.id), listActiveTaskCategories()])
-      .then(([rows, categories]) => {
+    Promise.all([
+      listClinicTasks(taskClinic.id),
+      listActiveTaskCategories(),
+      listUserProfiles(),
+      getCurrentProfile(),
+    ])
+      .then(([rows, cats, users, me]) => {
         if (cancelled) return;
         setTasks(rows);
-        setDefaultCategory(categories[0]?.slug ?? "outro");
+        setCategories(cats);
+        setProfiles(users.map((u) => ({ id: u.id, name: u.name, email: u.email })));
+        setCurrentUserId(me?.id ?? null);
       })
       .catch((err) => {
         console.error("Erro ao carregar tarefas da clínica:", err);
@@ -214,6 +235,28 @@ export function GlobalSearch() {
     [],
   );
 
+  const openDetail = useCallback((taskId: string) => {
+    detailRef.current = true;
+    setDetailTaskId(taskId);
+  }, []);
+
+  const closeDetail = useCallback(() => {
+    detailRef.current = false;
+    setDetailTaskId(null);
+    // Recarrega a lista: o modal pode ter mudado título/status/prazo.
+    setTasks(null);
+    setTouched(new Set());
+    setActiveIndex(0);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, []);
+
+  // Troca de status feita DENTRO do modal reflete na lista da paleta na hora.
+  const detailStatusChange = useCallback((id: string, status: TaskStatus) => {
+    dirtyRef.current = true;
+    setTasks((prev) => (prev ?? []).map((t) => (t.id === id ? { ...t, status } : t)));
+    setTouched((prev) => new Set(prev).add(id));
+  }, []);
+
   const createQuickTask = useCallback(() => {
     if (!taskClinic || !canCreate || saving) return;
     const title = query.trim();
@@ -263,7 +306,8 @@ export function GlobalSearch() {
 
   // Keyboard navigation inside list
   useEffect(() => {
-    if (!isOpen) return;
+    // Com o modal de detalhe aberto, o teclado é dele (Esc fecha o modal, não a paleta).
+    if (!isOpen || detailTaskId !== null) return;
 
     function handleKeys(e: KeyboardEvent) {
       if (e.key === "ArrowDown") {
@@ -284,6 +328,11 @@ export function GlobalSearch() {
         } else if (filteredClinics[activeIndex]) {
           handleSelect(filteredClinics[activeIndex].id);
         }
+      } else if (e.key === "ArrowRight" && taskClinic && query === "") {
+        // → abre o detalhe da tarefa ativa (só com a busca vazia, para não
+        // roubar o cursor de quem está digitando).
+        e.preventDefault();
+        if (activeIndex < visibleTasks.length) openDetail(visibleTasks[activeIndex].id);
       } else if (e.key === "Backspace" && taskClinic && query === "") {
         e.preventDefault();
         exitTasks();
@@ -297,6 +346,7 @@ export function GlobalSearch() {
     return () => window.removeEventListener("keydown", handleKeys);
   }, [
     isOpen,
+    detailTaskId,
     itemCount,
     taskClinic,
     filteredClinics,
@@ -309,12 +359,28 @@ export function GlobalSearch() {
     exitTasks,
     toggleTask,
     createQuickTask,
+    openDetail,
     close,
   ]);
 
   if (!isOpen) return null;
 
   return (
+    <>
+    {/* Modal de detalhe aberto pela paleta — a paleta se esconde e volta ao fechar */}
+    <TaskDetailDialog
+      taskId={detailTaskId}
+      clinics={loaded.map((c) => ({ id: c.id, name: c.name, developerId: c.developer_id ?? null }))}
+      profiles={profiles}
+      categories={categories}
+      onClose={closeDetail}
+      onStatusChange={detailStatusChange}
+      onChanged={() => {
+        dirtyRef.current = true;
+      }}
+      currentUserId={currentUserId}
+    />
+    {detailTaskId === null && (
     <div
       ref={backdropRef}
       onClick={(e) => {
@@ -399,8 +465,9 @@ export function GlobalSearch() {
                 return (
                   <button
                     key={task.id}
-                    onClick={() => toggleTask(task)}
+                    onClick={() => openDetail(task.id)}
                     onMouseEnter={() => setActiveIndex(index)}
+                    title="Abrir detalhes da tarefa"
                     className={cn(
                       "w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all cursor-pointer",
                       isActive
@@ -408,16 +475,28 @@ export function GlobalSearch() {
                         : "text-foreground border border-transparent hover:bg-zinc-900/60",
                     )}
                   >
-                    {isDone ? (
-                      <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
-                    ) : (
-                      <Circle
-                        className={cn(
-                          "size-4 shrink-0",
-                          isActive ? "text-primary" : "text-muted-foreground/50",
-                        )}
-                      />
-                    )}
+                    {/* Bolinha = concluir/reabrir sem abrir o modal */}
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTask(task);
+                      }}
+                      title={isDone ? "Reabrir tarefa" : "Concluir tarefa"}
+                      className="flex size-6 -m-1 shrink-0 items-center justify-center"
+                    >
+                      {isDone ? (
+                        <CheckCircle2 className="size-4 text-emerald-500" />
+                      ) : (
+                        <Circle
+                          className={cn(
+                            "size-4 transition-colors hover:text-emerald-500",
+                            isActive ? "text-primary" : "text-muted-foreground/50",
+                          )}
+                        />
+                      )}
+                    </span>
                     <span
                       className={cn(
                         "size-1.5 shrink-0 rounded-full",
@@ -542,7 +621,8 @@ export function GlobalSearch() {
             <span>↑↓ para navegar</span>
             {taskClinic ? (
               <>
-                <span>↵ concluir/reabrir</span>
+                <span>↵ concluir</span>
+                <span className="hidden sm:inline">→ abrir detalhes</span>
                 <span className="hidden sm:inline">⌫ voltar</span>
               </>
             ) : (
@@ -556,5 +636,7 @@ export function GlobalSearch() {
         </div>
       </div>
     </div>
+    )}
+    </>
   );
 }
