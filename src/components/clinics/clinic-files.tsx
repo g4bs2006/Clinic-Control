@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { Upload, Download, FileText, FolderUp, Trash2, X, Folder, ChevronRight } from "lucide-react"
+import { Upload, Download, FileText, FolderUp, Trash2, X, Folder, ChevronRight, StickyNote, Plus } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
@@ -13,13 +13,23 @@ import {
   deleteAllClinicFiles,
   getClinicFileDownloadUrl,
   createClinicFileUploadUrls,
+  setClinicFileNote,
 } from "@/lib/clinics/files-actions"
 import {
   CLINIC_FILES_BUCKET,
   toStorageKey,
   type StoredFile,
 } from "@/lib/storage/clinic-files"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog"
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -83,13 +93,17 @@ type ViewState =
 export function ClinicFiles({
   clinicId,
   files: initialFiles,
+  notes: initialNotes,
 }: {
   clinicId: string
   files: StoredFile[]
+  notes: Record<string, string>
 }) {
   const router = useRouter()
   const confirm = useConfirm()
   const inputRef = useRef<HTMLInputElement>(null)
+  // Prefixo destino do próximo upload ("" = raiz; ou o caminho de uma pasta).
+  const uploadTargetRef = useRef<string>("")
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [view, setView] = useState<ViewState | null>(null)
@@ -104,6 +118,14 @@ export function ClinicFiles({
     setPrevFiles(initialFiles)
     setFiles(initialFiles)
   }
+  // Anotações por caminho (pasta/arquivo), otimista + resync.
+  const [notes, setNotes] = useState(initialNotes)
+  const [prevNotes, setPrevNotes] = useState(initialNotes)
+  if (prevNotes !== initialNotes) {
+    setPrevNotes(initialNotes)
+    setNotes(initialNotes)
+  }
+  const [noteEditing, setNoteEditing] = useState<{ path: string; value: string } | null>(null)
 
   async function openFile(f: StoredFile) {
     setViewLoading(f.fullPath)
@@ -141,6 +163,37 @@ export function ClinicFiles({
     })
   }
 
+  function openNoteEditor(path: string) {
+    setNoteEditing({ path, value: notes[path] ?? "" })
+  }
+
+  // Salva (texto) ou remove (vazio) a nota, otimista com rollback.
+  function persistNote(path: string, value: string) {
+    const clean = value.trim()
+    const snapshot = notes
+    setNotes((prev) => {
+      const next = { ...prev }
+      if (clean) next[path] = clean
+      else delete next[path]
+      return next
+    })
+    setNoteEditing(null)
+    ;(async () => {
+      const res = await setClinicFileNote(clinicId, path, clean)
+      if (!res.ok) {
+        setNotes(snapshot)
+        toast.error(res.error)
+      }
+    })()
+  }
+
+  // Abre o seletor de pasta apontando o upload para dentro de `prefix`
+  // ("" = raiz). O handlePick lê uploadTargetRef e prefixa as chaves.
+  function uploadInto(prefix: string) {
+    uploadTargetRef.current = prefix
+    inputRef.current?.click()
+  }
+
   // Renderiza a árvore: pastas recolhíveis (fechadas por padrão) + arquivos, com
   // indentação por profundidade. Arquivo mostra só o nome (a pasta dá o contexto).
   // A abertura/fechamento anima a altura (grid-rows 0fr→1fr) e o chevron gira.
@@ -152,21 +205,54 @@ export function ClinicFiles({
         {folderNames.map((name) => {
           const folderPath = prefix ? `${prefix}/${name}` : name
           const isOpen = expanded.has(folderPath)
+          const note = notes[folderPath]
           return (
             <div key={`folder:${folderPath}`}>
-              <button
-                type="button"
-                onClick={() => toggleFolder(folderPath)}
-                aria-expanded={isOpen}
+              <div
+                className="group flex items-center gap-1.5 rounded-md pr-2 transition-colors hover:bg-accent/40"
                 style={{ paddingLeft: depth * 14 + 4 }}
-                className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm font-medium text-foreground/80 transition-colors hover:bg-accent/40"
               >
-                <ChevronRight
-                  className={`size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
-                />
-                <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">{name}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => toggleFolder(folderPath)}
+                  aria-expanded={isOpen}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-sm font-medium text-foreground/80"
+                >
+                  <ChevronRight
+                    className={`size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+                  />
+                  <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{name}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => uploadInto(folderPath)}
+                  disabled={busy}
+                  title="Subir uma pasta aqui dentro"
+                  aria-label={`Subir dentro de ${name}`}
+                  className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground group-hover:opacity-100 disabled:opacity-50"
+                >
+                  <Plus className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openNoteEditor(folderPath)}
+                  title={note ? "Editar anotação" : "Adicionar anotação"}
+                  aria-label="Anotação da pasta"
+                  className={`flex size-6 shrink-0 items-center justify-center rounded transition hover:bg-accent hover:text-foreground ${note ? "text-amber-500 opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-100"}`}
+                >
+                  <StickyNote className="size-3.5" />
+                </button>
+              </div>
+              {note && (
+                <p
+                  className="truncate text-xs italic text-muted-foreground/80"
+                  style={{ paddingLeft: depth * 14 + 26 }}
+                  title={note}
+                >
+                  {note}
+                </p>
+              )}
               <div
                 className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
               >
@@ -177,34 +263,56 @@ export function ClinicFiles({
             </div>
           )
         })}
-        {nodeFiles.map((f) => (
-          <div
-            key={f.fullPath}
-            style={{ paddingLeft: depth * 14 + 22 }}
-            className="group flex items-center gap-2 rounded-md py-1.5 pr-2 text-sm hover:bg-accent/50"
-          >
-            <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-            <button
-              type="button"
-              onClick={() => openFile(f)}
-              disabled={viewLoading === f.fullPath}
-              className="flex-1 truncate text-left text-foreground/90 hover:text-primary hover:underline disabled:opacity-50"
-              title={`Abrir ${f.path}`}
-            >
-              {f.name}
-            </button>
-            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{fmtBytes(f.size)}</span>
-            <button
-              type="button"
-              onClick={() => handleDelete(f.path)}
-              aria-label={`Excluir ${f.path}`}
-              title="Excluir"
-              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
-        ))}
+        {nodeFiles.map((f) => {
+          const note = notes[f.path]
+          return (
+            <div key={f.fullPath}>
+              <div
+                style={{ paddingLeft: depth * 14 + 22 }}
+                className="group flex items-center gap-2 rounded-md py-1.5 pr-2 text-sm hover:bg-accent/50"
+              >
+                <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                <button
+                  type="button"
+                  onClick={() => openFile(f)}
+                  disabled={viewLoading === f.fullPath}
+                  className="min-w-0 flex-1 truncate text-left text-foreground/90 hover:text-primary hover:underline disabled:opacity-50"
+                  title={`Abrir ${f.path}`}
+                >
+                  {f.name}
+                </button>
+                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{fmtBytes(f.size)}</span>
+                <button
+                  type="button"
+                  onClick={() => openNoteEditor(f.path)}
+                  title={note ? "Editar anotação" : "Adicionar anotação"}
+                  aria-label="Anotação do arquivo"
+                  className={`flex size-6 shrink-0 items-center justify-center rounded transition hover:bg-accent hover:text-foreground ${note ? "text-amber-500 opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-100"}`}
+                >
+                  <StickyNote className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(f.path)}
+                  aria-label={`Excluir ${f.path}`}
+                  title="Excluir"
+                  className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+              {note && (
+                <p
+                  className="truncate text-xs italic text-muted-foreground/80"
+                  style={{ paddingLeft: depth * 14 + 40 }}
+                  title={note}
+                >
+                  {note}
+                </p>
+              )}
+            </div>
+          )
+        })}
       </>
     )
   }
@@ -252,6 +360,9 @@ export function ClinicFiles({
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const list = e.target.files
+    // Prefixo definido pelo botão que abriu o seletor ("" = raiz, ou uma pasta).
+    const target = uploadTargetRef.current
+    uploadTargetRef.current = ""
     if (!list || list.length === 0) return
     const arr = Array.from(list)
     setBusy(true)
@@ -259,12 +370,11 @@ export function ClinicFiles({
     const supabase = createClient()
 
     // Upload via URLs assinadas (o navegador não tem mais sessão no Storage).
-    const keyed = arr.map((file) => ({
-      file,
-      key: toStorageKey(
-        (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
-      ),
-    }))
+    // `target` aninha o conteúdo dentro de uma pasta existente.
+    const keyed = arr.map((file) => {
+      const rel = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+      return { file, key: toStorageKey(target ? `${target}/${rel}` : rel) }
+    })
     const signed = await createClinicFileUploadUrls(clinicId, keyed.map((k) => k.key))
     if (!signed.ok) {
       toast.error(signed.error)
@@ -291,9 +401,11 @@ export function ClinicFiles({
       setProgress({ done: i + 1, total: arr.length })
     }
 
-    if (failed === 0) toast.success("Pasta enviada")
+    if (failed === 0) toast.success(target ? "Enviado para a pasta" : "Pasta enviada")
     else toast.warning(`Enviado com ${failed} falha(s)`)
 
+    // Abre a pasta de destino pra mostrar o que acabou de entrar.
+    if (target) setExpanded((prev) => new Set(prev).add(target))
     router.refresh()
     setBusy(false)
     setProgress(null)
@@ -312,7 +424,7 @@ export function ClinicFiles({
           onChange={handlePick}
           {...{ webkitdirectory: "", directory: "" }}
         />
-        <Button type="button" size="sm" disabled={busy} onClick={() => inputRef.current?.click()}>
+        <Button type="button" size="sm" disabled={busy} onClick={() => uploadInto("")}>
           <FolderUp className="size-4" />
           {busy ? (progress ? `Enviando ${progress.done}/${progress.total}…` : "Enviando…") : "Subir pasta"}
         </Button>
@@ -432,6 +544,47 @@ export function ClinicFiles({
           </div>
         </div>
       )}
+
+      {/* Editor de anotação (pasta ou arquivo) */}
+      <Dialog open={noteEditing != null} onOpenChange={(v) => !v && setNoteEditing(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <StickyNote className="size-4" /> Anotação
+            </DialogTitle>
+            <DialogDescription className="truncate">{noteEditing?.path}</DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={noteEditing?.value ?? ""}
+            onChange={(e) => setNoteEditing((prev) => (prev ? { ...prev, value: e.target.value } : prev))}
+            rows={5}
+            autoFocus
+            placeholder="Escreva uma anotação para esta pasta ou arquivo…"
+            className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
+          />
+          <DialogFooter className="sm:justify-between">
+            {noteEditing && notes[noteEditing.path] ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10"
+                onClick={() => noteEditing && persistNote(noteEditing.path, "")}
+              >
+                <Trash2 className="size-3.5" />
+                Remover
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <DialogClose className={buttonVariants({ variant: "outline" })}>Cancelar</DialogClose>
+              <Button type="button" onClick={() => noteEditing && persistNote(noteEditing.path, noteEditing.value)}>
+                Salvar
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
