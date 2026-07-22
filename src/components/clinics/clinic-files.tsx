@@ -62,7 +62,7 @@ type ViewState =
 
 export function ClinicFiles({
   clinicId,
-  files,
+  files: initialFiles,
 }: {
   clinicId: string
   files: StoredFile[]
@@ -72,9 +72,16 @@ export function ClinicFiles({
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
-  const [deleting, setDeleting] = useState<string | null>(null)
   const [view, setView] = useState<ViewState | null>(null)
   const [viewLoading, setViewLoading] = useState<string | null>(null)
+  // Cópia local para exclusão otimista (some da lista na hora). Re-sincroniza
+  // quando o servidor envia nova lista (padrão render-time, sem efeito).
+  const [files, setFiles] = useState(initialFiles)
+  const [prevFiles, setPrevFiles] = useState(initialFiles)
+  if (prevFiles !== initialFiles) {
+    setPrevFiles(initialFiles)
+    setFiles(initialFiles)
+  }
 
   async function openFile(f: StoredFile) {
     setViewLoading(f.fullPath)
@@ -111,13 +118,16 @@ export function ClinicFiles({
       destructive: true,
     })
     if (!ok) return
-    setDeleting(path)
+    // Otimista: some da lista na hora; reverte só se o servidor recusar.
+    const snapshot = files
+    setFiles((prev) => prev.filter((f) => f.path !== path))
     const res = await deleteClinicFile(clinicId, path)
-    setDeleting(null)
     if (res.ok) {
       toast.success("Arquivo excluído")
-      router.refresh()
-    } else toast.error(res.error)
+    } else {
+      setFiles(snapshot)
+      toast.error(res.error)
+    }
   }
 
   async function handleDeleteAll() {
@@ -128,13 +138,17 @@ export function ClinicFiles({
       destructive: true,
     })
     if (!ok) return
+    const snapshot = files
     setBusy(true)
+    setFiles([])
     const res = await deleteAllClinicFiles(clinicId)
     setBusy(false)
     if (res.ok) {
       toast.success(`${res.deleted} arquivo(s) excluído(s)`)
-      router.refresh()
-    } else toast.error(res.error)
+    } else {
+      setFiles(snapshot)
+      toast.error(res.error)
+    }
   }
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -269,7 +283,6 @@ export function ClinicFiles({
               <button
                 type="button"
                 onClick={() => handleDelete(f.path)}
-                disabled={deleting === f.path}
                 aria-label={`Excluir ${f.path}`}
                 title="Excluir"
                 className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"

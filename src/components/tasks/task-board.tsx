@@ -302,12 +302,15 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       destructive: true,
     })
     if (!ok) return
+    // Otimista: some da lista/board na hora; só re-insere se o servidor recusar.
+    const snapshot = tasks
+    setTasks((ts) => ts.filter((t) => t.id !== id))
     startTransition(async () => {
       const res = await deleteTask(id)
       if (res.ok) {
         toast.success("Tarefa excluída.")
-        refresh()
       } else {
+        setTasks(snapshot)
         toast.error(res.error)
       }
     })
@@ -700,6 +703,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         categories={categories}
         onClose={() => setOpenTaskId(null)}
         onStatusChange={changeStatus}
+        onDeleted={(id) => setTasks((ts) => ts.filter((t) => t.id !== id))}
         onChanged={refresh}
         currentUserId={currentUserId}
       />

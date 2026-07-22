@@ -79,11 +79,13 @@ interface TaskDetailDialogProps {
   onClose: () => void
   /** Reflete a troca de status no board na hora (otimista, sem refetch). */
   onStatusChange?: (id: string, status: TaskStatus) => void
+  /** Remove a tarefa do board na hora ao excluir (otimista, sem refetch). */
+  onDeleted?: (id: string) => void
   onChanged: () => void
   currentUserId?: string | null
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onChanged, currentUserId = null }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onChanged, currentUserId = null }: TaskDetailDialogProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
@@ -162,10 +164,38 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
 
   function saveField(patch: Parameters<typeof updateTask>[1]) {
     if (!taskId) return
+    // Otimista: aplica a mudança no dialog na hora; o board re-sincroniza ao fechar
+    // (changedRef). Reverte só se o servidor recusar.
+    const snapshot = task
+    setTask((t) => {
+      if (!t) return t
+      const next = { ...t }
+      if (patch.title !== undefined) next.title = patch.title.trim()
+      if (patch.description !== undefined) next.description = patch.description?.trim() || null
+      if (patch.category !== undefined) next.category = patch.category
+      if (patch.priority !== undefined) next.priority = patch.priority
+      if (patch.assignedTo !== undefined) {
+        next.assigned_to = patch.assignedTo
+        next.assigned_to_name = patch.assignedTo
+          ? profiles.find((p) => p.id === patch.assignedTo)?.name ?? null
+          : null
+      }
+      if (patch.dueDate !== undefined) next.due_date = patch.dueDate || null
+      if (patch.clinicId !== undefined) {
+        next.clinic_id = patch.clinicId
+        next.clinic_name = patch.clinicId
+          ? clinics.find((c) => c.id === patch.clinicId)?.name ?? null
+          : null
+      }
+      return next
+    })
+    changedRef.current = true
     startTransition(async () => {
       const res = await updateTask(taskId, patch)
-      if (res.ok) refreshAll()
-      else toast.error(res.error)
+      if (!res.ok) {
+        setTask(snapshot)
+        toast.error(res.error)
+      }
     })
   }
 
@@ -192,12 +222,14 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       destructive: true,
     })
     if (!ok) return
+    const id = taskId
     startTransition(async () => {
-      const res = await deleteTask(taskId)
+      const res = await deleteTask(id)
       if (res.ok) {
         toast.success("Tarefa excluída.")
-        changedRef.current = true
-        handleClose()
+        // Otimista: remove do board na hora (sem refetch) e fecha.
+        onDeleted?.(id)
+        onClose()
       } else toast.error(res.error)
     })
   }
@@ -227,10 +259,20 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   }
 
   function changeSubtaskStatus(subtaskId: string, status: TaskStatus) {
+    const snapshot = subtasks
+    setSubtasks((prev) =>
+      prev.map((s) =>
+        s.id === subtaskId
+          ? { ...s, status, completed_at: status === "concluida" ? new Date().toISOString() : null }
+          : s,
+      ),
+    )
     startTransition(async () => {
       const res = await updateTaskStatus(subtaskId, status)
-      if (res.ok) refreshAll()
-      else toast.error(res.error)
+      if (!res.ok) {
+        setSubtasks(snapshot)
+        toast.error(res.error)
+      }
     })
   }
 
@@ -290,10 +332,14 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       destructive: true,
     })
     if (!ok) return
+    const snapshot = attachments
+    setAttachments((prev) => prev.filter((a) => a.id !== id))
     startTransition(async () => {
       const res = await deleteTaskAttachment(id)
-      if (res.ok) refreshAll()
-      else toast.error(res.error)
+      if (!res.ok) {
+        setAttachments(snapshot)
+        toast.error(res.error)
+      }
     })
   }
 
@@ -305,13 +351,15 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   function submitAttachmentRename(id: string) {
     const name = editingAttachmentName.trim()
     if (!name) return
+    // Otimista: o novo nome aparece na hora; reverte só se o servidor recusar.
+    const snapshot = attachments
+    setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, file_name: name } : a)))
+    setEditingAttachmentId(null)
+    setEditingAttachmentName("")
     startTransition(async () => {
       const res = await renameTaskAttachment(id, name)
-      if (res.ok) {
-        setEditingAttachmentId(null)
-        setEditingAttachmentName("")
-        refreshAll()
-      } else {
+      if (!res.ok) {
+        setAttachments(snapshot)
         toast.error(res.error)
       }
     })
@@ -336,13 +384,15 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   function submitCommentEdit(id: string) {
     const text = editingCommentText.trim()
     if (!text) return
+    const snapshot = activity
+    const editedAt = new Date().toISOString()
+    setActivity((prev) => prev.map((a) => (a.id === id ? { ...a, body: text, updated_at: editedAt } : a)))
+    setEditingCommentId(null)
+    setEditingCommentText("")
     startTransition(async () => {
       const res = await updateTaskComment(id, text)
-      if (res.ok) {
-        setEditingCommentId(null)
-        setEditingCommentText("")
-        refreshAll()
-      } else {
+      if (!res.ok) {
+        setActivity(snapshot)
         toast.error(res.error)
       }
     })
@@ -356,12 +406,14 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       destructive: true,
     })
     if (!ok) return
+    const snapshot = activity
+    setActivity((prev) => prev.filter((a) => a.id !== id))
     startTransition(async () => {
       const res = await deleteTaskComment(id)
       if (res.ok) {
         toast.success("Comentário excluído.")
-        refreshAll()
       } else {
+        setActivity(snapshot)
         toast.error(res.error)
       }
     })

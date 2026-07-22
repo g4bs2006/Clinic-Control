@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { toast } from "sonner"
@@ -31,20 +30,32 @@ function EditableMarkdown({
   emptyLabel: string
   onSave: (next: string) => Promise<{ ok: true } | { ok: false; error: string }>
 }) {
-  const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value ?? "")
   const [saving, setSaving] = useState(false)
+  // Valor exibido: otimista (mostra o texto salvo na hora). Re-sincroniza quando
+  // o servidor envia novo valor (padrão render-time, sem efeito).
+  const [current, setCurrent] = useState(value)
+  const [prevValue, setPrevValue] = useState(value)
+  if (prevValue !== value) {
+    setPrevValue(value)
+    setCurrent(value)
+    setDraft(value ?? "")
+  }
 
   async function save() {
+    const snapshot = current
     setSaving(true)
+    // Otimista: mostra o conteúdo salvo na hora e sai do modo edição.
+    setCurrent(draft)
+    setEditing(false)
     const res = await onSave(draft)
     setSaving(false)
     if (res.ok) {
       toast.success("Salvo")
-      setEditing(false)
-      router.refresh()
     } else {
+      setCurrent(snapshot)
+      setEditing(true)
       toast.error(res.error)
     }
   }
@@ -66,7 +77,7 @@ function EditableMarkdown({
             size="sm"
             variant="ghost"
             onClick={() => {
-              setDraft(value ?? "")
+              setDraft(current ?? "")
               setEditing(false)
             }}
             disabled={saving}
@@ -87,8 +98,8 @@ function EditableMarkdown({
       >
         <Pencil className="size-3" /> Editar
       </button>
-      {value ? (
-        <Markdown>{value}</Markdown>
+      {current ? (
+        <Markdown>{current}</Markdown>
       ) : (
         <p className="text-sm text-muted-foreground">{emptyLabel}</p>
       )}

@@ -58,7 +58,7 @@ interface TaskSuggestionsProps {
   onChanged: () => void
 }
 
-export function TaskSuggestions({ suggestions, clinics, profiles, categories, currentUserId = null, onChanged }: TaskSuggestionsProps) {
+export function TaskSuggestions({ suggestions: initialSuggestions, clinics, profiles, categories, currentUserId = null, onChanged }: TaskSuggestionsProps) {
   // Responsável padrão da sugestão = dev da clínica; fallback = quem confirma.
   const suggestedAssignee = (clinicId: string | null): string | null =>
     (clinicId ? clinics.find((c) => c.id === clinicId)?.developerId : null) ?? currentUserId ?? null
@@ -70,10 +70,13 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, cu
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
   const [dueDate, setDueDate] = useState("")
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  // Limpa a seleção quando a lista de sugestões muda (padrão render-time, sem efeito).
-  const [prevSuggestions, setPrevSuggestions] = useState(suggestions)
-  if (prevSuggestions !== suggestions) {
-    setPrevSuggestions(suggestions)
+  // Cópia local para remoção otimista (confirmar/descartar some da fila na hora).
+  const [suggestions, setSuggestions] = useState(initialSuggestions)
+  // Re-sincroniza com o servidor quando chega nova lista (padrão render-time, sem efeito).
+  const [prevSuggestions, setPrevSuggestions] = useState(initialSuggestions)
+  if (prevSuggestions !== initialSuggestions) {
+    setPrevSuggestions(initialSuggestions)
+    setSuggestions(initialSuggestions)
     setSelected(new Set())
   }
 
@@ -93,6 +96,10 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, cu
   function bulkConfirm() {
     const chosen = suggestions.filter((s) => selected.has(s.id))
     if (!chosen.length) return
+    const snapshot = suggestions
+    // Otimista: some da fila na hora.
+    setSuggestions((prev) => prev.filter((s) => !selected.has(s.id)))
+    setSelected(new Set())
     startTransition(async () => {
       const results = await Promise.all(
         chosen.map((s) => {
@@ -109,24 +116,30 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, cu
           })
         }),
       )
-      const okCount = results.filter((r) => r.ok).length
+      const okIds = new Set(chosen.filter((_, i) => results[i].ok).map((s) => s.id))
+      const okCount = okIds.size
       const failCount = results.length - okCount
+      // Reconcilia: mantém na fila só as que falharam (ordem original).
+      setSuggestions(snapshot.filter((s) => !okIds.has(s.id)))
       if (okCount) toast.success(`${okCount} sugestão(ões) confirmada(s).`)
       if (failCount) toast.error(`${failCount} sugestão(ões) não puderam ser confirmadas.`)
-      setSelected(new Set())
-      onChanged()
+      if (okCount) onChanged()
     })
   }
 
   function bulkDismiss() {
-    const ids = [...selected]
-    if (!ids.length) return
+    const chosen = suggestions.filter((s) => selected.has(s.id))
+    if (!chosen.length) return
+    const snapshot = suggestions
+    setSuggestions((prev) => prev.filter((s) => !selected.has(s.id)))
+    setSelected(new Set())
     startTransition(async () => {
-      const results = await Promise.all(ids.map((id) => dismissTaskSuggestion(id)))
-      const okCount = results.filter((r) => r.ok).length
+      const results = await Promise.all(chosen.map((s) => dismissTaskSuggestion(s.id)))
+      const okIds = new Set(chosen.filter((_, i) => results[i].ok).map((s) => s.id))
+      const okCount = okIds.size
+      setSuggestions(snapshot.filter((s) => !okIds.has(s.id)))
       if (okCount) toast.success(`${okCount} sugestão(ões) descartada(s).`)
-      setSelected(new Set())
-      onChanged()
+      if (okCount) onChanged()
     })
   }
 
@@ -140,19 +153,19 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, cu
 
   function accept() {
     if (!reviewing) return
+    const id = reviewing.id
+    const snapshot = suggestions
+    const payload = { clinicId: reviewing.clinic_id, category, priority, assignedTo, dueDate }
+    // Otimista: fecha o diálogo e tira da fila na hora.
+    setSuggestions((prev) => prev.filter((s) => s.id !== id))
+    setReviewing(null)
     startTransition(async () => {
-      const res = await acceptTaskSuggestion(reviewing.id, {
-        clinicId: reviewing.clinic_id,
-        category,
-        priority,
-        assignedTo,
-        dueDate,
-      })
+      const res = await acceptTaskSuggestion(id, payload)
       if (res.ok) {
         toast.success("Tarefa criada a partir da sugestão.")
-        setReviewing(null)
         onChanged()
       } else {
+        setSuggestions(snapshot)
         toast.error(res.error)
       }
     })
@@ -160,22 +173,30 @@ export function TaskSuggestions({ suggestions, clinics, profiles, categories, cu
 
   // Confirma um acompanhamento direto (sem categoria/prioridade — só o responsável padrão).
   function confirmAcompanhamento(s: TaskSuggestionRow) {
+    const snapshot = suggestions
+    setSuggestions((prev) => prev.filter((x) => x.id !== s.id))
     startTransition(async () => {
       const res = await acceptSuggestionAsAcompanhamento(s.id, { assignedTo: suggestedAssignee(s.clinic_id) })
       if (res.ok) {
         toast.success("Acompanhamento criado a partir da sugestão.")
         onChanged()
       } else {
+        setSuggestions(snapshot)
         toast.error(res.error)
       }
     })
   }
 
   function dismiss(id: string) {
+    const snapshot = suggestions
+    setSuggestions((prev) => prev.filter((s) => s.id !== id))
     startTransition(async () => {
       const res = await dismissTaskSuggestion(id)
       if (res.ok) onChanged()
-      else toast.error(res.error)
+      else {
+        setSuggestions(snapshot)
+        toast.error(res.error)
+      }
     })
   }
 

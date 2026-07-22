@@ -1,8 +1,7 @@
 "use client"
 
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { useConfirm } from "@/components/ui/confirm-dialog"
@@ -26,10 +25,17 @@ interface ChurnTableProps {
   churns: ChurnRow[]
 }
 
-export function ChurnTable({ churns }: ChurnTableProps) {
-  const router = useRouter()
+export function ChurnTable({ churns: initialChurns }: ChurnTableProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
+  // Cópia local para remoção otimista (some da tabela na hora). Re-sincroniza
+  // quando o servidor envia nova lista (padrão render-time, sem efeito).
+  const [churns, setChurns] = useState(initialChurns)
+  const [prevChurns, setPrevChurns] = useState(initialChurns)
+  if (prevChurns !== initialChurns) {
+    setPrevChurns(initialChurns)
+    setChurns(initialChurns)
+  }
 
   async function remove(id: string, reactivate: boolean) {
     const c = churns.find((x) => x.id === id)
@@ -49,12 +55,15 @@ export function ChurnTable({ churns }: ChurnTableProps) {
           },
     )
     if (!ok) return
+    // Otimista: some da tabela na hora; reverte só se o servidor recusar.
+    const snapshot = churns
+    setChurns((prev) => prev.filter((x) => x.id !== id))
     startTransition(async () => {
       const res = await removeChurn(id, reactivate)
       if (res.ok) {
         toast.success(reactivate ? "Registro removido e clínica reativada." : "Registro removido.")
-        router.refresh()
       } else {
+        setChurns(snapshot)
         toast.error(res.error)
       }
     })

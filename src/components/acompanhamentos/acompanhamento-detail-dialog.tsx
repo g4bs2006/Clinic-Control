@@ -142,10 +142,15 @@ export function AcompanhamentoDetailDialog({
 
   function removeAttachment(attId: string) {
     if (!id) return
+    // Otimista: some da lista na hora; reverte só se o servidor recusar.
+    const snapshot = attachments
+    setAttachments((prev) => prev.filter((a) => a.id !== attId))
     startTransition(async () => {
       const res = await deleteAcompanhamentoAttachment(attId)
-      if (res.ok) startTransition(() => reload(id))
-      else toast.error(res.error)
+      if (!res.ok) {
+        setAttachments(snapshot)
+        toast.error(res.error)
+      }
     })
   }
 
