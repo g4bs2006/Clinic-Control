@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
-import { SnoozeButton } from "./snooze-button"
+import { SnoozeButton, fmtSnoozeDate } from "./snooze-button"
 import { spDateParts } from "@/lib/tasks/agenda"
 import { createClient } from "@/lib/supabase/client"
 import { imageFilesFromClipboard } from "@/lib/paste-images"
@@ -297,9 +297,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     })
   }
 
-  function handleSnooze(until: string | null) {
-    if (!taskId) return
-    const id = taskId
+  function applySnooze(id: string, until: string | null) {
     const snapshot = task
     setTask((t) => (t ? { ...t, snoozed_until: until } : t))
     onSnoozed?.(id, until)
@@ -310,6 +308,22 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
         toast.error(res.error)
       }
     })
+  }
+
+  function handleSnooze(until: string | null) {
+    if (!taskId) return
+    const id = taskId
+    const prev = task?.snoozed_until ?? null
+    const title = task?.title
+    applySnooze(id, until)
+    if (until) {
+      toast.success(`Adiada para ${fmtSnoozeDate(until, today)}`, {
+        description: title,
+        action: { label: "Desfazer", onClick: () => applySnooze(id, prev) },
+      })
+    } else {
+      toast.success("Adiamento removido", { description: title })
+    }
   }
 
   function changeSubtaskStatus(subtaskId: string, status: TaskStatus) {

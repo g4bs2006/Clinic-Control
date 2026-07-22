@@ -21,7 +21,7 @@ import { RecurrencesDialog } from "./recurrences-dialog"
 import { TaskSuggestions } from "./task-suggestions"
 import { TaskDetailDialog } from "./task-detail-dialog"
 import { KanbanBoard } from "./kanban-board"
-import { SnoozeButton } from "./snooze-button"
+import { SnoozeButton, fmtSnoozeDate } from "./snooze-button"
 import type { ClinicOption, ProfileOption } from "./task-fields"
 import {
   updateTaskStatus,
@@ -56,6 +56,14 @@ const PRIORITY_DOT: Record<TaskPriority, string> = {
 }
 
 const DONE_STATUSES = new Set<TaskStatus>(["concluida", "cancelada"])
+
+// Frase curta pro toast de feedback ao mudar status (o "o que acabei de fazer").
+const STATUS_TOAST: Record<TaskStatus, string> = {
+  pendente: "Marcada como pendente",
+  em_andamento: "Marcada como em andamento",
+  concluida: "Tarefa concluída",
+  cancelada: "Tarefa descartada",
+}
 
 function dateLabel(d: string): string {
   const [y, m, day] = d.split("-").map(Number)
@@ -297,6 +305,9 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
 
   function changeStatus(id: string, status: TaskStatus) {
     // Move na hora (otimista); só re-busca se o servidor recusar.
+    const current = tasks.find((t) => t.id === id)
+    const prev = current?.status
+    const title = current?.title
     const snapshot = tasks
     setTasks((ts) =>
       ts.map((t) =>
@@ -310,12 +321,22 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       if (!res.ok) {
         setTasks(snapshot)
         toast.error(res.error)
+        return
       }
+      // Feedback claro: o que aconteceu + desfazer (a ação some da vista quando
+      // conclui/descarta com o filtro ligado, então o toast é a confirmação).
+      toast.success(STATUS_TOAST[status], {
+        description: title,
+        action:
+          prev && prev !== status
+            ? { label: "Desfazer", onClick: () => changeStatus(id, prev) }
+            : undefined,
+      })
     })
   }
 
-  function snooze(id: string, until: string | null) {
-    // Otimista: some da vista na hora (o filtro esconde as adiadas no futuro).
+  // Aplica o adiamento sem toast (usado tanto pela ação quanto pelo "Desfazer").
+  function applySnooze(id: string, until: string | null) {
     const snapshot = tasks
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, snoozed_until: until } : t)))
     startTransition(async () => {
@@ -327,6 +348,21 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     })
   }
 
+  function snooze(id: string, until: string | null) {
+    const current = tasks.find((t) => t.id === id)
+    const prev = current?.snoozed_until ?? null
+    applySnooze(id, until)
+    // A tarefa some da vista — o toast narra pra onde foi e deixa desfazer.
+    if (until) {
+      toast.success(`Adiada para ${fmtSnoozeDate(until, today)}`, {
+        description: current?.title,
+        action: { label: "Desfazer", onClick: () => applySnooze(id, prev) },
+      })
+    } else {
+      toast.success("Adiamento removido", { description: current?.title })
+    }
+  }
+
   async function remove(id: string) {
     const ok = await confirm({
       title: "Excluir tarefa?",
@@ -336,12 +372,13 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     })
     if (!ok) return
     // Otimista: some da lista/board na hora; só re-insere se o servidor recusar.
+    const title = tasks.find((t) => t.id === id)?.title
     const snapshot = tasks
     setTasks((ts) => ts.filter((t) => t.id !== id))
     startTransition(async () => {
       const res = await deleteTask(id)
       if (res.ok) {
-        toast.success("Tarefa excluída.")
+        toast.success("Tarefa excluída", { description: title })
       } else {
         setTasks(snapshot)
         toast.error(res.error)

@@ -40,6 +40,13 @@ function fmtShort(iso: string): string {
   })
 }
 
+/** Rótulo amigável pra feedback: "amanhã (qua, 23/07)" ou só "qua, 23/07". */
+export function fmtSnoozeDate(iso: string, today?: string): string {
+  const short = fmtShort(iso)
+  if (today && iso === addDaysISO(today, 1)) return `amanhã (${short})`
+  return short
+}
+
 interface SnoozeButtonProps {
   /** "Hoje" em America/Sao_Paulo (YYYY-MM-DD) — base dos presets e do "está adiada?". */
   today: string
