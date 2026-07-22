@@ -110,13 +110,8 @@ function TaskListItem({
   const isInProgress = t.status === "em_andamento"
   return (
     // Mobile: card com borda (edição de status via detalhe/sheet); desktop: linha densa.
-    // Em andamento ganha realce âmbar (faixa à esquerda + leve tint) pra bater o olho.
-    <li
-      className={`relative flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5 ${isInProgress ? "bg-amber-500/[0.04] sm:bg-amber-500/[0.04]" : ""}`}
-    >
-      {isInProgress && (
-        <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-full bg-amber-400" />
-      )}
+    // Em andamento é sinalizado só pelo selo "em andamento" (sem faixa lateral).
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5">
       {selectable && (
         <Checkbox
           checked={selected}
