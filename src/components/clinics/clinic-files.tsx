@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { Upload, Download, FileText, FolderUp, Trash2, X } from "lucide-react"
+import { Upload, Download, FileText, FolderUp, Trash2, X, Folder, ChevronRight } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
@@ -29,6 +29,29 @@ function fmtBytes(n: number): string {
 
 const TEXT_EXTS = ["md", "txt", "csv", "json", "js", "ts", "py", "yml", "yaml", "html", "xml", "log", "env"]
 const ext = (p: string) => p.split(".").pop()?.toLowerCase() ?? ""
+
+// Árvore de pastas a partir dos caminhos relativos (path = "Pasta/Sub/arquivo.md").
+// O upload preserva as subpastas na chave do Storage; aqui reconstruímos a hierarquia.
+type FileTree = { folders: Map<string, FileTree>; files: StoredFile[] }
+
+function buildFileTree(files: StoredFile[]): FileTree {
+  const root: FileTree = { folders: new Map(), files: [] }
+  for (const f of files) {
+    const parts = f.path.split("/").filter(Boolean)
+    let node = root
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i]
+      let child = node.folders.get(seg)
+      if (!child) {
+        child = { folders: new Map(), files: [] }
+        node.folders.set(seg, child)
+      }
+      node = child
+    }
+    node.files.push(f)
+  }
+  return root
+}
 
 // CSV simples com suporte a aspas; detecta ; ou , pelo cabeçalho.
 function parseCsv(text: string): string[][] {
@@ -105,6 +128,58 @@ export function ClinicFiles({
   function closeView() {
     if (view?.kind === "binary") URL.revokeObjectURL(view.url)
     setView(null)
+  }
+
+  // Renderiza a árvore: pastas recolhíveis (abertas por padrão) + arquivos,
+  // com indentação por profundidade. Arquivo mostra só o nome (a pasta dá o contexto).
+  function renderTree(tree: FileTree, depth: number): React.ReactNode {
+    const folderNames = [...tree.folders.keys()].sort((a, b) => a.localeCompare(b, "pt-BR"))
+    const nodeFiles = [...tree.files].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+    return (
+      <>
+        {folderNames.map((name) => (
+          <details key={`folder:${depth}:${name}`} open className="group/folder">
+            <summary
+              style={{ paddingLeft: depth * 14 + 4 }}
+              className="flex cursor-pointer list-none items-center gap-1.5 rounded-md py-1.5 pr-2 text-sm font-medium text-foreground/80 hover:bg-accent/40"
+            >
+              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/folder:rotate-90" />
+              <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">{name}</span>
+            </summary>
+            {renderTree(tree.folders.get(name)!, depth + 1)}
+          </details>
+        ))}
+        {nodeFiles.map((f) => (
+          <div
+            key={f.fullPath}
+            style={{ paddingLeft: depth * 14 + 22 }}
+            className="group flex items-center gap-2 rounded-md py-1.5 pr-2 text-sm hover:bg-accent/50"
+          >
+            <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+            <button
+              type="button"
+              onClick={() => openFile(f)}
+              disabled={viewLoading === f.fullPath}
+              className="flex-1 truncate text-left text-foreground/90 hover:text-primary hover:underline disabled:opacity-50"
+              title={`Abrir ${f.path}`}
+            >
+              {f.name}
+            </button>
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{fmtBytes(f.size)}</span>
+            <button
+              type="button"
+              onClick={() => handleDelete(f.path)}
+              aria-label={`Excluir ${f.path}`}
+              title="Excluir"
+              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        ))}
+      </>
+    )
   }
 
   async function handleDelete(path: string) {
@@ -247,37 +322,9 @@ export function ClinicFiles({
           </span>
         </div>
       ) : (
-        <ul className="flex flex-col gap-0.5">
-          {files.map((f) => (
-            <li
-              key={f.fullPath}
-              className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent/50"
-            >
-              <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-              <button
-                type="button"
-                onClick={() => openFile(f)}
-                disabled={viewLoading === f.fullPath}
-                className="flex-1 truncate text-left text-foreground/90 hover:text-primary hover:underline disabled:opacity-50"
-                title={`Abrir ${f.path}`}
-              >
-                {f.path}
-              </button>
-              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                {fmtBytes(f.size)}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleDelete(f.path)}
-                aria-label={`Excluir ${f.path}`}
-                title="Excluir"
-                className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col gap-0.5">
+          {renderTree(buildFileTree(files), 0)}
+        </div>
       )}
 
       {/* Visualizador */}
