@@ -100,6 +100,11 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [suggested, setSuggested] = useState<string[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
+  // Linhas "pendentes" das criações — aparecem na hora (esmaecidas, sem ações) e
+  // somem quando o refetch traz a versão real. Evita expor id temporário a ações.
+  const [pendingSubtasks, setPendingSubtasks] = useState<{ id: string; title: string }[]>([])
+  const [pendingUploads, setPendingUploads] = useState<{ id: string; name: string }[]>([])
+  const [pendingComments, setPendingComments] = useState<{ id: string; body: string }[]>([])
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editingCommentText, setEditingCommentText] = useState("")
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
@@ -134,6 +139,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [prevTaskId, setPrevTaskId] = useState<string | null>(null)
   if (taskId !== prevTaskId) {
     setPrevTaskId(taskId)
+    setPendingSubtasks([])
+    setPendingUploads([])
+    setPendingComments([])
     if (taskId) {
       setLoading(true)
     } else {
@@ -248,13 +256,22 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
 
   function confirmSubtasks() {
     if (!taskId || !suggested?.length) return
+    const id = taskId
+    const titles = suggested
+    // Aparecem como linhas pendentes na hora; o refetch troca pelas reais.
+    const pend = titles.map((title, i) => ({ id: `pend-sub-${Date.now()}-${i}`, title }))
+    setPendingSubtasks((prev) => [...prev, ...pend])
+    setSuggested(null)
     startTransition(async () => {
-      const res = await createSubtasks(taskId, suggested)
+      const res = await createSubtasks(id, titles)
       if (res.ok) {
         toast.success("Subtarefas criadas.")
-        setSuggested(null)
-        refreshAll()
-      } else toast.error(res.error)
+        await reload(id)
+      } else {
+        toast.error(res.error)
+      }
+      const pendIds = new Set(pend.map((p) => p.id))
+      setPendingSubtasks((prev) => prev.filter((p) => !pendIds.has(p.id)))
     })
   }
 
@@ -280,13 +297,17 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     const files = Array.from(e.target.files ?? [])
     e.target.value = ""
     if (!files.length || !taskId) return
+    const id = taskId
+    // Cada arquivo vira uma linha pendente na hora; o refetch ao final troca pelas reais.
+    const pend = files.map((f, i) => ({ id: `pend-up-${Date.now()}-${i}`, name: f.name }))
+    setPendingUploads((prev) => [...prev, ...pend])
     setUploading(true)
     setUploadProgress({ done: 0, total: files.length })
     let failed = 0
     try {
       for (const file of files) {
         try {
-          const signed = await createTaskAttachmentUploadUrl(taskId, file.name)
+          const signed = await createTaskAttachmentUploadUrl(id, file.name)
           if (!signed.ok) throw new Error(signed.error)
           const supabase = createClient()
           const { error } = await supabase.storage
@@ -294,7 +315,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
             .uploadToSignedUrl(signed.path, signed.token, file)
           if (error) throw new Error(error.message)
           const confirmed = await confirmTaskAttachment({
-            taskId,
+            taskId: id,
             filePath: signed.path,
             fileName: file.name,
             contentType: file.type || null,
@@ -310,11 +331,13 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       const sent = files.length - failed
       if (sent > 0) {
         toast.success(sent === 1 ? "Anexo enviado." : `${sent} anexos enviados.`)
-        refreshAll()
+        await reload(id)
       }
     } finally {
       setUploading(false)
       setUploadProgress(null)
+      const pendIds = new Set(pend.map((p) => p.id))
+      setPendingUploads((prev) => prev.filter((p) => !pendIds.has(p.id)))
     }
   }
 
@@ -367,12 +390,22 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
 
   function submitComment() {
     if (!taskId || !comment.trim()) return
+    const id = taskId
+    const body = comment.trim()
+    const tempId = `pend-cmt-${Date.now()}`
+    // Aparece na hora como comentário pendente; o refetch troca pelo real.
+    setPendingComments((prev) => [...prev, { id: tempId, body }])
+    setComment("")
     startTransition(async () => {
-      const res = await addTaskComment(taskId, comment)
+      const res = await addTaskComment(id, body)
       if (res.ok) {
-        setComment("")
-        refreshAll()
-      } else toast.error(res.error)
+        await reload(id)
+        setPendingComments((prev) => prev.filter((p) => p.id !== tempId))
+      } else {
+        setPendingComments((prev) => prev.filter((p) => p.id !== tempId))
+        setComment(body)
+        toast.error(res.error)
+      }
     })
   }
 
@@ -520,8 +553,14 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   </div>
                 )}
 
-                {subtasks.length > 0 && (
+                {(subtasks.length > 0 || pendingSubtasks.length > 0) && (
                   <ul className="flex flex-col divide-y divide-border/40">
+                    {pendingSubtasks.map((p) => (
+                      <li key={p.id} className="flex items-center gap-2 py-1.5 text-sm opacity-60">
+                        <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                        <span className="flex-1">{p.title}</span>
+                      </li>
+                    ))}
                     {subtasks.map((s) => (
                       <li key={s.id} className="flex items-center gap-2 py-1.5 text-sm">
                         <span className={`flex-1 ${s.status === "concluida" ? "text-muted-foreground line-through" : ""}`}>
@@ -561,10 +600,17 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                     <input type="file" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
                   </label>
                 </div>
-                {attachments.length === 0 ? (
+                {attachments.length === 0 && pendingUploads.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Nenhum anexo ainda.</p>
                 ) : (
                   <ul className="flex flex-col divide-y divide-border/40">
+                    {pendingUploads.map((p) => (
+                      <li key={p.id} className="flex items-center gap-2 py-2 text-sm opacity-60">
+                        <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                        <span className="flex-1 truncate">{p.name}</span>
+                        <span className="shrink-0 text-[0.68rem] text-muted-foreground">enviando…</span>
+                      </li>
+                    ))}
                     {attachments.map((a) => (
                       <li key={a.id} className="group flex items-center gap-2 py-2 text-sm transition-colors hover:bg-accent/10 rounded px-1.5">
                         {editingAttachmentId === a.id ? (
@@ -749,6 +795,13 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                       </li>
                     )
                   })}
+                  {(activityFilter === "all" || activityFilter === "comment") &&
+                    pendingComments.map((p) => (
+                      <li key={p.id} className="flex items-center gap-1.5 rounded-md p-1.5 text-sm opacity-60">
+                        <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+                        <span className="break-words">{p.body}</span>
+                      </li>
+                    ))}
                 </ul>
                 <div className="flex items-center gap-2 border-t border-border/40 pt-2">
                   <Input

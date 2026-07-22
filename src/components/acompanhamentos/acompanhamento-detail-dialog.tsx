@@ -60,6 +60,10 @@ export function AcompanhamentoDetailDialog({
   const [comment, setComment] = useState("")
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
+  // Linhas "pendentes" das criações — aparecem na hora (esmaecidas) e somem
+  // quando o refetch traz a versão real.
+  const [pendingUploads, setPendingUploads] = useState<{ id: string; name: string }[]>([])
+  const [pendingComments, setPendingComments] = useState<{ id: string; body: string }[]>([])
 
   async function reload(aId: string) {
     const [cs, atts] = await Promise.all([
@@ -71,6 +75,8 @@ export function AcompanhamentoDetailDialog({
   }
 
   useEffect(() => {
+    setPendingUploads([])
+    setPendingComments([])
     if (!id) {
       setComments([])
       setAttachments([])
@@ -83,12 +89,21 @@ export function AcompanhamentoDetailDialog({
 
   function submitComment() {
     if (!id || !comment.trim()) return
+    const aId = id
+    const body = comment.trim()
+    const tempId = `pend-cmt-${Date.now()}`
+    setPendingComments((prev) => [...prev, { id: tempId, body }])
+    setComment("")
     startTransition(async () => {
-      const res = await addAcompanhamentoComment(id, comment)
+      const res = await addAcompanhamentoComment(aId, body)
       if (res.ok) {
-        setComment("")
-        startTransition(() => reload(id))
-      } else toast.error(res.error)
+        await reload(aId)
+        setPendingComments((prev) => prev.filter((p) => p.id !== tempId))
+      } else {
+        setPendingComments((prev) => prev.filter((p) => p.id !== tempId))
+        setComment(body)
+        toast.error(res.error)
+      }
     })
   }
 
@@ -96,13 +111,16 @@ export function AcompanhamentoDetailDialog({
     const files = Array.from(e.target.files ?? [])
     e.target.value = ""
     if (!files.length || !id) return
+    const aId = id
+    const pend = files.map((f, i) => ({ id: `pend-up-${Date.now()}-${i}`, name: f.name }))
+    setPendingUploads((prev) => [...prev, ...pend])
     setUploading(true)
     setUploadProgress({ done: 0, total: files.length })
     let failed = 0
     try {
       for (const file of files) {
         try {
-          const signed = await createAcompanhamentoAttachmentUploadUrl(id, file.name)
+          const signed = await createAcompanhamentoAttachmentUploadUrl(aId, file.name)
           if (!signed.ok) throw new Error(signed.error)
           const supabase = createClient()
           const { error } = await supabase.storage
@@ -110,7 +128,7 @@ export function AcompanhamentoDetailDialog({
             .uploadToSignedUrl(signed.path, signed.token, file)
           if (error) throw new Error(error.message)
           const confirmed = await confirmAcompanhamentoAttachment({
-            acompanhamentoId: id,
+            acompanhamentoId: aId,
             filePath: signed.path,
             fileName: file.name,
             contentType: file.type || null,
@@ -126,11 +144,13 @@ export function AcompanhamentoDetailDialog({
       const sent = files.length - failed
       if (sent > 0) {
         toast.success(sent === 1 ? "Anexo enviado." : `${sent} anexos enviados.`)
-        await reload(id)
+        await reload(aId)
       }
     } finally {
       setUploading(false)
       setUploadProgress(null)
+      const pendIds = new Set(pend.map((p) => p.id))
+      setPendingUploads((prev) => prev.filter((p) => !pendIds.has(p.id)))
     }
   }
 
@@ -198,10 +218,17 @@ export function AcompanhamentoDetailDialog({
                     <input type="file" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
                   </label>
                 </div>
-                {attachments.length === 0 ? (
+                {attachments.length === 0 && pendingUploads.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Nenhum anexo ainda.</p>
                 ) : (
                   <ul className="flex flex-col divide-y divide-border/40">
+                    {pendingUploads.map((p) => (
+                      <li key={p.id} className="flex items-center gap-2 py-2 text-sm opacity-60">
+                        <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                        <span className="flex-1 truncate">{p.name}</span>
+                        <span className="shrink-0 text-[0.68rem] text-muted-foreground">enviando…</span>
+                      </li>
+                    ))}
                     {attachments.map((a) => (
                       <li key={a.id} className="flex items-center gap-2 py-2 text-sm">
                         <button
@@ -233,7 +260,7 @@ export function AcompanhamentoDetailDialog({
               <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comentários</p>
                 <ul className="flex max-h-52 flex-col gap-2 overflow-y-auto pr-1">
-                  {comments.length === 0 && (
+                  {comments.length === 0 && pendingComments.length === 0 && (
                     <li className="text-xs text-muted-foreground">Nenhum comentário ainda.</li>
                   )}
                   {comments.map((c) => (
@@ -241,6 +268,12 @@ export function AcompanhamentoDetailDialog({
                       {c.kind === "comment" && <span className="font-semibold">{c.author_name ?? "Alguém"}: </span>}
                       {c.body}
                       <span className="ml-1.5 text-[0.62rem] text-muted-foreground/70">{fmtDateTime(c.created_at)}</span>
+                    </li>
+                  ))}
+                  {pendingComments.map((p) => (
+                    <li key={p.id} className="flex items-center gap-1.5 text-sm opacity-60">
+                      <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+                      <span className="break-words">{p.body}</span>
                     </li>
                   ))}
                 </ul>
