@@ -94,6 +94,8 @@ export function ClinicFiles({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [view, setView] = useState<ViewState | null>(null)
   const [viewLoading, setViewLoading] = useState<string | null>(null)
+  // Pastas expandidas (por caminho completo). Vazio = tudo fechado por padrão.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   // Cópia local para exclusão otimista (some da lista na hora). Re-sincroniza
   // quando o servidor envia nova lista (padrão render-time, sem efeito).
   const [files, setFiles] = useState(initialFiles)
@@ -130,26 +132,51 @@ export function ClinicFiles({
     setView(null)
   }
 
-  // Renderiza a árvore: pastas recolhíveis (abertas por padrão) + arquivos,
-  // com indentação por profundidade. Arquivo mostra só o nome (a pasta dá o contexto).
-  function renderTree(tree: FileTree, depth: number): React.ReactNode {
+  function toggleFolder(path: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }
+
+  // Renderiza a árvore: pastas recolhíveis (fechadas por padrão) + arquivos, com
+  // indentação por profundidade. Arquivo mostra só o nome (a pasta dá o contexto).
+  // A abertura/fechamento anima a altura (grid-rows 0fr→1fr) e o chevron gira.
+  function renderTree(tree: FileTree, depth: number, prefix: string): React.ReactNode {
     const folderNames = [...tree.folders.keys()].sort((a, b) => a.localeCompare(b, "pt-BR"))
     const nodeFiles = [...tree.files].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
     return (
       <>
-        {folderNames.map((name) => (
-          <details key={`folder:${depth}:${name}`} open className="group/folder">
-            <summary
-              style={{ paddingLeft: depth * 14 + 4 }}
-              className="flex cursor-pointer list-none items-center gap-1.5 rounded-md py-1.5 pr-2 text-sm font-medium text-foreground/80 hover:bg-accent/40"
-            >
-              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/folder:rotate-90" />
-              <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">{name}</span>
-            </summary>
-            {renderTree(tree.folders.get(name)!, depth + 1)}
-          </details>
-        ))}
+        {folderNames.map((name) => {
+          const folderPath = prefix ? `${prefix}/${name}` : name
+          const isOpen = expanded.has(folderPath)
+          return (
+            <div key={`folder:${folderPath}`}>
+              <button
+                type="button"
+                onClick={() => toggleFolder(folderPath)}
+                aria-expanded={isOpen}
+                style={{ paddingLeft: depth * 14 + 4 }}
+                className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm font-medium text-foreground/80 transition-colors hover:bg-accent/40"
+              >
+                <ChevronRight
+                  className={`size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+                />
+                <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{name}</span>
+              </button>
+              <div
+                className={`grid transition-[grid-template-rows] duration-200 ease-out ${isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+              >
+                <div className="overflow-hidden">
+                  {renderTree(tree.folders.get(name)!, depth + 1, folderPath)}
+                </div>
+              </div>
+            </div>
+          )
+        })}
         {nodeFiles.map((f) => (
           <div
             key={f.fullPath}
@@ -323,7 +350,7 @@ export function ClinicFiles({
         </div>
       ) : (
         <div className="flex flex-col gap-0.5">
-          {renderTree(buildFileTree(files), 0)}
+          {renderTree(buildFileTree(files), 0, "")}
         </div>
       )}
 
