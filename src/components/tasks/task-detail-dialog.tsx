@@ -97,6 +97,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [comment, setComment] = useState("")
   const [suggested, setSuggested] = useState<string[] | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editingCommentText, setEditingCommentText] = useState("")
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
@@ -234,32 +235,44 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ""
-    if (!file || !taskId) return
+    if (!files.length || !taskId) return
     setUploading(true)
+    setUploadProgress({ done: 0, total: files.length })
+    let failed = 0
     try {
-      const signed = await createTaskAttachmentUploadUrl(taskId, file.name)
-      if (!signed.ok) throw new Error(signed.error)
-      const supabase = createClient()
-      const { error } = await supabase.storage
-        .from(TASK_ATTACHMENTS_BUCKET)
-        .uploadToSignedUrl(signed.path, signed.token, file)
-      if (error) throw new Error(error.message)
-      const confirmed = await confirmTaskAttachment({
-        taskId,
-        filePath: signed.path,
-        fileName: file.name,
-        contentType: file.type || null,
-        sizeBytes: file.size,
-      })
-      if (!confirmed.ok) throw new Error(confirmed.error)
-      toast.success("Anexo enviado.")
-      refreshAll()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha no upload")
+      for (const file of files) {
+        try {
+          const signed = await createTaskAttachmentUploadUrl(taskId, file.name)
+          if (!signed.ok) throw new Error(signed.error)
+          const supabase = createClient()
+          const { error } = await supabase.storage
+            .from(TASK_ATTACHMENTS_BUCKET)
+            .uploadToSignedUrl(signed.path, signed.token, file)
+          if (error) throw new Error(error.message)
+          const confirmed = await confirmTaskAttachment({
+            taskId,
+            filePath: signed.path,
+            fileName: file.name,
+            contentType: file.type || null,
+            sizeBytes: file.size,
+          })
+          if (!confirmed.ok) throw new Error(confirmed.error)
+        } catch (e) {
+          failed++
+          toast.error(`${file.name}: ${e instanceof Error ? e.message : "Falha no upload"}`)
+        }
+        setUploadProgress((p) => (p ? { ...p, done: p.done + 1 } : p))
+      }
+      const sent = files.length - failed
+      if (sent > 0) {
+        toast.success(sent === 1 ? "Anexo enviado." : `${sent} anexos enviados.`)
+        refreshAll()
+      }
     } finally {
       setUploading(false)
+      setUploadProgress(null)
     }
   }
 
@@ -492,8 +505,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   </p>
                   <label className={buttonVariants({ size: "sm", variant: "outline", className: "cursor-pointer" })}>
                     {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Paperclip className="size-3.5" />}
-                    Anexar arquivo
-                    <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+                    {uploadProgress ? `Enviando ${uploadProgress.done}/${uploadProgress.total}` : "Anexar arquivos"}
+                    <input type="file" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
                   </label>
                 </div>
                 {attachments.length === 0 ? (
