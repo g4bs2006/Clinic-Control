@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw, Pencil, Check, Play, Pause } from "lucide-react"
+import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw, Pencil, Check, Plus } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useConfirm } from "@/components/ui/confirm-dialog"
@@ -103,6 +103,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [comment, setComment] = useState("")
+  const [newSubtask, setNewSubtask] = useState("")
   const [suggested, setSuggested] = useState<string[] | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
@@ -149,6 +150,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     setPendingSubtasks([])
     setPendingUploads([])
     setPendingComments([])
+    setNewSubtask("")
     if (taskId) {
       setLoading(true)
     } else {
@@ -324,6 +326,29 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     } else {
       toast.success("Adiamento removido", { description: title })
     }
+  }
+
+  function addSubtask() {
+    const title = newSubtask.trim()
+    if (!taskId) return
+    if (title.length < 3) {
+      toast.error("Título muito curto (mín. 3 caracteres).")
+      return
+    }
+    const id = taskId
+    const pendId = `pend-sub-${Date.now()}`
+    setPendingSubtasks((prev) => [...prev, { id: pendId, title }])
+    setNewSubtask("")
+    startTransition(async () => {
+      const res = await createSubtasks(id, [title], "manual")
+      if (res.ok) {
+        await reload(id)
+      } else {
+        setNewSubtask(title)
+        toast.error(res.error)
+      }
+      setPendingSubtasks((prev) => prev.filter((p) => p.id !== pendId))
+    })
   }
 
   function changeSubtaskStatus(subtaskId: string, status: TaskStatus) {
@@ -641,6 +666,19 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                     ))}
                   </ul>
                 )}
+
+                <div className="flex items-center gap-2 border-t border-border/40 pt-2">
+                  <Input
+                    value={newSubtask}
+                    onChange={(e) => setNewSubtask(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addSubtask()}
+                    placeholder="Adicionar subtarefa…"
+                    className="h-8 flex-1"
+                  />
+                  <Button type="button" size="icon-sm" disabled={pending || !newSubtask.trim()} onClick={addSubtask} title="Adicionar subtarefa">
+                    <Plus className="size-3.5" />
+                  </Button>
+                </div>
               </div>
 
               {/* ── Anexos ────────────────────────────────────────── */}
@@ -879,56 +917,27 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
             </div>
 
             <DialogFooter className="sm:justify-between">
-              <div className="flex flex-wrap gap-2">
-                {/* Iniciar/Pausar — só faz sentido enquanto a tarefa está em aberto. */}
-                {task.status !== "concluida" && task.status !== "cancelada" && (
-                  task.status === "em_andamento" ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={pending}
-                      onClick={() => changeStatus("pendente")}
-                      title="Voltar para pendente"
-                    >
-                      <Pause className="size-4" />
-                      Pausar
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={pending}
-                      onClick={() => changeStatus("em_andamento")}
-                      className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
-                      title="Marcar como em andamento"
-                    >
-                      <Play className="size-4" />
-                      Iniciar
-                    </Button>
-                  )
-                )}
-                {task.status === "concluida" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={pending}
-                    onClick={() => changeStatus("pendente")}
-                  >
-                    <RotateCcw className="size-4" />
-                    Reabrir tarefa
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => changeStatus("concluida")}
-                    className="bg-emerald-600 text-white hover:bg-emerald-600/90"
-                  >
-                    <CheckCircle2 className="size-4" />
-                    Concluir tarefa
-                  </Button>
-                )}
-              </div>
+              {task.status === "concluida" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => changeStatus("pendente")}
+                >
+                  <RotateCcw className="size-4" />
+                  Reabrir tarefa
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => changeStatus("concluida")}
+                  className="bg-emerald-600 text-white hover:bg-emerald-600/90"
+                >
+                  <CheckCircle2 className="size-4" />
+                  Concluir tarefa
+                </Button>
+              )}
               <div className="flex gap-2 mt-2 sm:mt-0">
                 <SnoozeButton
                   today={today}

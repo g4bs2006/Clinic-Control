@@ -545,6 +545,7 @@ export async function listSubtasks(parentTaskId: string): Promise<TaskRow[]> {
 export async function createSubtasks(
   parentTaskId: string,
   titles: string[],
+  source: "manual" | "ia" = "ia",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
@@ -568,7 +569,7 @@ export async function createSubtasks(
       category: parent.category,
       title,
       priority: "media",
-      source: "ia" as const,
+      source,
       created_by: user!.id,
     })),
   );

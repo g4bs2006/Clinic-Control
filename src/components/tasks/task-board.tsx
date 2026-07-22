@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -206,6 +206,21 @@ function TaskListItem({
           ))}
         </SelectContent>
       </Select>
+
+      {(t.status === "pendente" || t.status === "em_andamento") && (
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          disabled={pending}
+          title={isInProgress ? "Pausar (voltar para pendente)" : "Iniciar (marcar em andamento)"}
+          aria-label={isInProgress ? "Pausar tarefa" : "Iniciar tarefa"}
+          className={`size-9 sm:size-8 ${isInProgress ? "text-amber-500 hover:text-amber-600" : "text-muted-foreground/60 hover:text-amber-500"}`}
+          onClick={() => onChangeStatus(t.id, isInProgress ? "pendente" : "em_andamento")}
+        >
+          {isInProgress ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+        </Button>
+      )}
 
       <SnoozeButton
         today={today}
