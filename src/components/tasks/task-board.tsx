@@ -107,9 +107,16 @@ function TaskListItem({
 }) {
   const isDone = t.status === "concluida"
   const isSnoozed = t.snoozed_until != null && t.snoozed_until > today
+  const isInProgress = t.status === "em_andamento"
   return (
     // Mobile: card com borda (edição de status via detalhe/sheet); desktop: linha densa.
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5">
+    // Em andamento ganha realce âmbar (faixa à esquerda + leve tint) pra bater o olho.
+    <li
+      className={`relative flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5 ${isInProgress ? "bg-amber-500/[0.04] sm:bg-amber-500/[0.04]" : ""}`}
+    >
+      {isInProgress && (
+        <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-full bg-amber-400" />
+      )}
       {selectable && (
         <Checkbox
           checked={selected}
@@ -154,6 +161,12 @@ function TaskListItem({
           {t.due_date && (
             <span className={isOverdue(t) ? "font-semibold text-red-400" : undefined}>
               · prazo {dateLabel(t.due_date)}
+            </span>
+          )}
+          {isInProgress && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-amber-500">
+              <span className="size-1.5 rounded-full bg-amber-500" />
+              em andamento
             </span>
           )}
           {t.source === "ia" && (
