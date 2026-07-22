@@ -8,7 +8,6 @@ import remarkGfm from "remark-gfm"
 import { Upload, Download, FileText, FolderUp, Trash2, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useConfirm } from "@/components/ui/confirm-dialog"
-import { importParsedAgents } from "@/lib/agents/actions"
 import {
   deleteClinicFile,
   deleteAllClinicFiles,
@@ -21,7 +20,6 @@ import {
   type StoredFile,
 } from "@/lib/storage/clinic-files"
 import { Button } from "@/components/ui/button"
-import type { InputFile } from "@/lib/agents/parser"
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -29,7 +27,6 @@ function fmtBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-const isAgentMd = (rel: string) => /\.md$/i.test(rel)
 const TEXT_EXTS = ["md", "txt", "csv", "json", "js", "ts", "py", "yml", "yaml", "html", "xml", "log", "env"]
 const ext = (p: string) => p.split(".").pop()?.toLowerCase() ?? ""
 
@@ -176,7 +173,6 @@ export function ClinicFiles({
     }
     const tokenByPath = new Map(signed.uploads.map((u) => [u.path, u]))
 
-    const promptFiles: InputFile[] = []
     let failed = 0
     for (let i = 0; i < keyed.length; i++) {
       const { file, key } = keyed[i]
@@ -189,22 +185,12 @@ export function ClinicFiles({
       const { error } = await supabase.storage
         .from(CLINIC_FILES_BUCKET)
         .uploadToSignedUrl(upload.fullPath, upload.token, file)
-      if (error) {
-        failed++ // não aborta o lote: segue para os demais
-      } else if (isAgentMd(key)) {
-        promptFiles.push({ path: key, content: await file.text() })
-      }
+      if (error) failed++ // não aborta o lote: segue para os demais
       setProgress({ done: i + 1, total: arr.length })
     }
 
-    // Importação de agentes é best-effort — não bloqueia o upload.
-    let importMsg = ""
-    if (promptFiles.length) {
-      const res = await importParsedAgents(clinicId, promptFiles)
-      if (res.ok) importMsg = ` · ${res.agents} agente(s), ${res.stages} estágio(s)`
-    }
-    if (failed === 0) toast.success(`Pasta enviada${importMsg}`)
-    else toast.warning(`Enviado com ${failed} falha(s)${importMsg}`)
+    if (failed === 0) toast.success("Pasta enviada")
+    else toast.warning(`Enviado com ${failed} falha(s)`)
 
     router.refresh()
     setBusy(false)
