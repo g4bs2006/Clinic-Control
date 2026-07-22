@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   deleteClinicFile,
+  deleteClinicFolder,
   deleteAllClinicFiles,
   getClinicFileDownloadUrl,
   createClinicFileUploadUrls,
@@ -194,6 +195,34 @@ export function ClinicFiles({
     inputRef.current?.click()
   }
 
+  async function deleteFolder(folderPath: string) {
+    const ok = await confirm({
+      title: "Excluir pasta?",
+      description: `A pasta "${folderPath}" e todo o seu conteúdo serão removidos em definitivo. Essa ação não pode ser desfeita.`,
+      confirmLabel: "Excluir pasta",
+      destructive: true,
+    })
+    if (!ok) return
+    const under = (p: string) => p === folderPath || p.startsWith(`${folderPath}/`)
+    // Otimista: some a pasta inteira (arquivos + notas) na hora.
+    const filesSnapshot = files
+    const notesSnapshot = notes
+    setFiles((prev) => prev.filter((f) => !under(f.path)))
+    setNotes((prev) => {
+      const next = { ...prev }
+      for (const k of Object.keys(next)) if (under(k)) delete next[k]
+      return next
+    })
+    const res = await deleteClinicFolder(clinicId, folderPath)
+    if (res.ok) {
+      toast.success(`Pasta excluída (${res.deleted} arquivo${res.deleted === 1 ? "" : "s"})`)
+    } else {
+      setFiles(filesSnapshot)
+      setNotes(notesSnapshot)
+      toast.error(res.error)
+    }
+  }
+
   // Renderiza a árvore: pastas recolhíveis (fechadas por padrão) + arquivos, com
   // indentação por profundidade. Arquivo mostra só o nome (a pasta dá o contexto).
   // A abertura/fechamento anima a altura (grid-rows 0fr→1fr) e o chevron gira.
@@ -234,6 +263,14 @@ export function ClinicFiles({
                 >
                   <Plus className="size-3.5" />
                 </button>
+                <a
+                  href={`/clinicas/${clinicId}/arquivos?path=${encodeURIComponent(folderPath)}`}
+                  title="Baixar esta pasta (.zip)"
+                  aria-label={`Baixar pasta ${name}`}
+                  className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground group-hover:opacity-100"
+                >
+                  <Download className="size-3.5" />
+                </a>
                 <button
                   type="button"
                   onClick={() => openNoteEditor(folderPath)}
@@ -242,6 +279,16 @@ export function ClinicFiles({
                   className={`flex size-6 shrink-0 items-center justify-center rounded transition hover:bg-accent hover:text-foreground ${note ? "text-amber-500 opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-100"}`}
                 >
                   <StickyNote className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteFolder(folderPath)}
+                  disabled={busy}
+                  title="Excluir esta pasta"
+                  aria-label={`Excluir pasta ${name}`}
+                  className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+                >
+                  <Trash2 className="size-3.5" />
                 </button>
               </div>
               {note && (

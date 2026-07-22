@@ -133,6 +133,41 @@ export async function deleteClinicFile(
   return { ok: true }
 }
 
+// Exclui uma PASTA específica (todos os arquivos sob o prefixo) + as anotações
+// da pasta e de seus descendentes. `folderPath` é relativo à clínica.
+export async function deleteClinicFolder(
+  clinicId: string,
+  folderPath: string,
+): Promise<{ ok: true; deleted: number } | { ok: false; error: string }> {
+  if (!(await getSessionUser())) return { ok: false, error: "Não autenticado" }
+  const prefix = folderPath.replace(/^\/+|\/+$/g, "")
+  if (!prefix) return { ok: false, error: "Caminho inválido" }
+  const supabase = await createClient()
+
+  const files = await listAllFiles(supabase, clinicId)
+  const targets = files.filter((f) => f.path === prefix || f.path.startsWith(`${prefix}/`))
+  if (targets.length === 0) return { ok: true, deleted: 0 }
+
+  const { error } = await supabase.storage
+    .from(CLINIC_FILES_BUCKET)
+    .remove(targets.map((f) => f.fullPath))
+  if (error) return { ok: false, error: error.message }
+
+  // Limpa as anotações órfãs (filtra em JS para não escapar filtro do PostgREST).
+  const { data: noteRows } = await supabase
+    .from("clinic_file_notes")
+    .select("path")
+    .eq("clinic_id", clinicId)
+  const orphanPaths = (noteRows ?? [])
+    .map((r) => r.path as string)
+    .filter((p) => p === prefix || p.startsWith(`${prefix}/`))
+  if (orphanPaths.length) {
+    await supabase.from("clinic_file_notes").delete().eq("clinic_id", clinicId).in("path", orphanPaths)
+  }
+
+  return { ok: true, deleted: targets.length }
+}
+
 // Exclui TODOS os arquivos do repositório da clínica.
 export async function deleteAllClinicFiles(
   clinicId: string,
