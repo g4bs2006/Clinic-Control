@@ -305,6 +305,7 @@ export function GlobalSearch() {
             source: "manual",
             parent_task_id: null,
             recurrence_id: null,
+            snoozed_until: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             completed_at: null,

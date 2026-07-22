@@ -24,13 +24,14 @@ export type TaskRow = {
   source: "manual" | "ia";
   parent_task_id: string | null;
   recurrence_id: string | null;
+  snoozed_until: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
 };
 
 const TASK_SELECT =
-  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, recurrence_id, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
+  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, recurrence_id, snoozed_until, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
 
 export type TaskSuggestionRow = {
   id: string;
@@ -93,6 +94,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     source: row.source as "manual" | "ia",
     parent_task_id: row.parent_task_id as string | null,
     recurrence_id: (row.recurrence_id as string | null) ?? null,
+    snoozed_until: (row.snoozed_until as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     completed_at: row.completed_at as string | null,
@@ -414,6 +416,24 @@ export async function bulkUpdateTaskStatus(
     );
   }
   return { ok: true, count: ids.length };
+}
+
+/**
+ * Adia ("snooze") uma tarefa até `until` (YYYY-MM-DD) ou remove o adiamento
+ * (`until = null`). A tarefa some das listagens enquanto snoozed_until estiver
+ * no futuro e reaparece sozinha na data. Sem revalidatePath: a lista atualiza
+ * de forma otimista no cliente (mesmo motivo de updateTaskStatus).
+ */
+export async function snoozeTask(
+  id: string,
+  until: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const { error } = await supabase.from("tasks").update({ snoozed_until: until }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 export async function deleteTask(id: string): Promise<{ ok: true } | { ok: false; error: string }> {

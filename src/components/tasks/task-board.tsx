@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -21,11 +21,13 @@ import { RecurrencesDialog } from "./recurrences-dialog"
 import { TaskSuggestions } from "./task-suggestions"
 import { TaskDetailDialog } from "./task-detail-dialog"
 import { KanbanBoard } from "./kanban-board"
+import { SnoozeButton } from "./snooze-button"
 import type { ClinicOption, ProfileOption } from "./task-fields"
 import {
   updateTaskStatus,
   bulkUpdateTaskStatus,
   deleteTask,
+  snoozeTask,
   listArchivedTasks,
   unarchiveTask,
   type TaskRow,
@@ -74,9 +76,11 @@ function TaskListItem({
   t,
   categoryLabel,
   pending,
+  today,
   onOpen,
   onChangeStatus,
   onRemove,
+  onSnooze,
   selectable = false,
   selected = false,
   onToggleSelect,
@@ -84,14 +88,17 @@ function TaskListItem({
   t: TaskRow
   categoryLabel: Record<string, string>
   pending: boolean
+  today: string
   onOpen: (id: string) => void
   onChangeStatus: (id: string, status: TaskStatus) => void
   onRemove: (id: string) => void
+  onSnooze: (id: string, until: string | null) => void
   selectable?: boolean
   selected?: boolean
   onToggleSelect?: (id: string) => void
 }) {
   const isDone = t.status === "concluida"
+  const isSnoozed = t.snoozed_until != null && t.snoozed_until > today
   return (
     // Mobile: card com borda (edição de status via detalhe/sheet); desktop: linha densa.
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5">
@@ -152,6 +159,12 @@ function TaskListItem({
               recorrente
             </span>
           )}
+          {isSnoozed && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[0.62rem] font-semibold text-muted-foreground">
+              <Clock className="size-2.5" />
+              adiada
+            </span>
+          )}
         </p>
       </div>
 
@@ -172,6 +185,12 @@ function TaskListItem({
           ))}
         </SelectContent>
       </Select>
+
+      <SnoozeButton
+        today={today}
+        snoozedUntil={t.snoozed_until}
+        onSnooze={(until) => onSnooze(t.id, until)}
+      />
 
       <Button
         type="button"
@@ -228,6 +247,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
   const [view, setView] = useState<"list" | "board" | "week">("list")
   const [showDone, setShowDone] = useState(false)
+  const [showSnoozed, setShowSnoozed] = useState(false)
   // Mobile: filtros recolhidos num botão "Filtros" (no desktop ficam sempre visíveis).
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
@@ -287,6 +307,19 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     )
     startTransition(async () => {
       const res = await updateTaskStatus(id, status)
+      if (!res.ok) {
+        setTasks(snapshot)
+        toast.error(res.error)
+      }
+    })
+  }
+
+  function snooze(id: string, until: string | null) {
+    // Otimista: some da vista na hora (o filtro esconde as adiadas no futuro).
+    const snapshot = tasks
+    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, snoozed_until: until } : t)))
+    startTransition(async () => {
+      const res = await snoozeTask(id, until)
       if (!res.ok) {
         setTasks(snapshot)
         toast.error(res.error)
@@ -358,8 +391,13 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   // Na Lista, esconde concluídas/canceladas por padrão (a menos que o usuário
   // ligue "Mostrar concluídas" ou filtre explicitamente por um status). No Board
   // as colunas Concluída/Cancelada continuam visíveis.
+  const { today, endOfWeek } = spDateParts(new Date())
+  const isSnoozedActive = (t: TaskRow) => t.snoozed_until != null && t.snoozed_until > today
+  const snoozedCount = tasks.filter(isSnoozedActive).length
+
   const hideDone = (view === "list" || view === "board") && !showDone && statusFilter === ALL
   const filtered = tasks
+    .filter((t) => showSnoozed || !isSnoozedActive(t))
     .filter((t) => statusFilter === ALL || t.status === statusFilter)
     .filter((t) => !(hideDone && DONE_STATUSES.has(t.status)))
     .filter((t) => categoryFilter === ALL || t.category === categoryFilter)
@@ -377,9 +415,8 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     })
 
   // ── Agenda "Minha semana": só as minhas tarefas abertas, agrupadas por prazo ──
-  const { today, endOfWeek } = spDateParts(new Date())
   const myOpenTasks = tasks.filter(
-    (t) => t.assigned_to === currentUserId && !DONE_STATUSES.has(t.status),
+    (t) => t.assigned_to === currentUserId && !DONE_STATUSES.has(t.status) && (showSnoozed || !isSnoozedActive(t)),
   )
   const weekGroups = new Map<AgendaBucket, TaskRow[]>(AGENDA_ORDER.map((b) => [b, []]))
   for (const t of myOpenTasks) {
@@ -483,6 +520,19 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           </Button>
         )}
 
+        {snoozedCount > 0 && (
+          <Button
+            type="button"
+            size="sm"
+            variant={showSnoozed ? "secondary" : "outline"}
+            onClick={() => setShowSnoozed((v) => !v)}
+            title={showSnoozed ? "Ocultar tarefas adiadas" : "Mostrar tarefas adiadas"}
+          >
+            <Clock className="size-3.5" />
+            {showSnoozed ? "Ocultar adiadas" : `Adiadas (${snoozedCount})`}
+          </Button>
+        )}
+
         {view === "list" && (
           <Button
             type="button"
@@ -575,9 +625,11 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                         t={t}
                         categoryLabel={categoryLabel}
                         pending={pending}
+                        today={today}
                         onOpen={setOpenTaskId}
                         onChangeStatus={changeStatus}
                         onRemove={remove}
+                        onSnooze={snooze}
                       />
                     ))}
                   </ul>
@@ -629,9 +681,11 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                 t={t}
                 categoryLabel={categoryLabel}
                 pending={pending}
+                today={today}
                 onOpen={setOpenTaskId}
                 onChangeStatus={changeStatus}
                 onRemove={remove}
+                onSnooze={snooze}
                 selectable
                 selected={selected.has(t.id)}
                 onToggleSelect={toggleSelect}
@@ -704,6 +758,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         onClose={() => setOpenTaskId(null)}
         onStatusChange={changeStatus}
         onDeleted={(id) => setTasks((ts) => ts.filter((t) => t.id !== id))}
+        onSnoozed={(id, until) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, snoozed_until: until } : t)))}
         onChanged={refresh}
         currentUserId={currentUserId}
       />

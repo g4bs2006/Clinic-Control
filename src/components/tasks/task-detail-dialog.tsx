@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
+import { SnoozeButton } from "./snooze-button"
+import { spDateParts } from "@/lib/tasks/agenda"
 import { createClient } from "@/lib/supabase/client"
 import { imageFilesFromClipboard } from "@/lib/paste-images"
 import {
@@ -28,6 +30,7 @@ import {
   updateTask,
   updateTaskStatus,
   deleteTask,
+  snoozeTask,
   listSubtasks,
   createSubtasks,
   suggestSubtasks,
@@ -82,11 +85,13 @@ interface TaskDetailDialogProps {
   onStatusChange?: (id: string, status: TaskStatus) => void
   /** Remove a tarefa do board na hora ao excluir (otimista, sem refetch). */
   onDeleted?: (id: string) => void
+  /** Reflete o adiamento no board na hora (some da vista se no futuro). */
+  onSnoozed?: (id: string, until: string | null) => void
   onChanged: () => void
   currentUserId?: string | null
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onChanged, currentUserId = null }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onSnoozed, onChanged, currentUserId = null }: TaskDetailDialogProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
@@ -117,6 +122,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   // Marca que houve alteração; o board só é re-sincronizado ao fechar (uma vez),
   // em vez de um refetch de página inteira a cada micro-edição.
   const changedRef = useRef(false)
+  const today = spDateParts(new Date()).today
 
   async function reload(id: string) {
     const [t, subs, atts, acts] = await Promise.all([
@@ -288,6 +294,21 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       }
       const pendIds = new Set(pend.map((p) => p.id))
       setPendingSubtasks((prev) => prev.filter((p) => !pendIds.has(p.id)))
+    })
+  }
+
+  function handleSnooze(until: string | null) {
+    if (!taskId) return
+    const id = taskId
+    const snapshot = task
+    setTask((t) => (t ? { ...t, snoozed_until: until } : t))
+    onSnoozed?.(id, until)
+    startTransition(async () => {
+      const res = await snoozeTask(id, until)
+      if (!res.ok) {
+        setTask(snapshot)
+        toast.error(res.error)
+      }
     })
   }
 
@@ -866,6 +887,13 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 </Button>
               )}
               <div className="flex gap-2 mt-2 sm:mt-0">
+                <SnoozeButton
+                  today={today}
+                  snoozedUntil={task.snoozed_until}
+                  onSnooze={handleSnooze}
+                  variant="button"
+                  disabled={pending}
+                />
                 <Button
                   type="button"
                   variant="ghost"
