@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
 import { createClient } from "@/lib/supabase/client"
+import { imageFilesFromClipboard } from "@/lib/paste-images"
 import {
   getTask,
   updateTask,
@@ -154,6 +155,21 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     if (!taskId) return
     changedRef.current = false
     startTransition(() => reload(taskId).finally(() => setLoading(false)))
+  }, [taskId])
+
+  // Colar print (Ctrl+V) com o diálogo aberto vira anexo. Se o clipboard não
+  // tiver imagem (colar texto num campo), deixa o Ctrl+V seguir normal.
+  useEffect(() => {
+    if (!taskId) return
+    function onPaste(e: ClipboardEvent) {
+      const imgs = imageFilesFromClipboard(e.clipboardData)
+      if (!imgs.length) return
+      e.preventDefault()
+      uploadFiles(imgs)
+    }
+    window.addEventListener("paste", onPaste)
+    return () => window.removeEventListener("paste", onPaste)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId])
 
   // Fecha o dialog e, se algo mudou, sincroniza o board uma única vez.
@@ -293,9 +309,13 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     })
   }
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     e.target.value = ""
+    uploadFiles(files)
+  }
+
+  async function uploadFiles(files: File[]) {
     if (!files.length || !taskId) return
     const id = taskId
     // Cada arquivo vira uma linha pendente na hora; o refetch ao final troca pelas reais.
@@ -594,14 +614,19 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Anexos {attachments.length > 0 && `(${attachments.length})`}
                   </p>
-                  <label className={buttonVariants({ size: "sm", variant: "outline", className: "cursor-pointer" })}>
+                  <label
+                    title="Anexar arquivos — ou cole um print com Ctrl+V"
+                    className={buttonVariants({ size: "sm", variant: "outline", className: "cursor-pointer" })}
+                  >
                     {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Paperclip className="size-3.5" />}
                     {uploadProgress ? `Enviando ${uploadProgress.done}/${uploadProgress.total}` : "Anexar arquivos"}
                     <input type="file" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
                   </label>
                 </div>
                 {attachments.length === 0 && pendingUploads.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum anexo ainda.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum anexo ainda — cole um print com <kbd className="rounded border border-border px-1 text-[0.7em]">Ctrl+V</kbd> ou use Anexar arquivos.
+                  </p>
                 ) : (
                   <ul className="flex flex-col divide-y divide-border/40">
                     {pendingUploads.map((p) => (

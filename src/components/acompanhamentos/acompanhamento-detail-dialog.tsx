@@ -14,6 +14,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { createClient } from "@/lib/supabase/client"
+import { imageFilesFromClipboard } from "@/lib/paste-images"
 import { TASK_ATTACHMENTS_BUCKET } from "@/lib/tasks/categories"
 import {
   listAcompanhamentoComments,
@@ -87,6 +88,21 @@ export function AcompanhamentoDetailDialog({
     reload(id).finally(() => setLoading(false))
   }, [id])
 
+  // Colar print (Ctrl+V) com o diálogo aberto vira anexo. Sem imagem no
+  // clipboard (colar texto num campo), o Ctrl+V segue normal.
+  useEffect(() => {
+    if (!id) return
+    function onPaste(e: ClipboardEvent) {
+      const imgs = imageFilesFromClipboard(e.clipboardData)
+      if (!imgs.length) return
+      e.preventDefault()
+      uploadFiles(imgs)
+    }
+    window.addEventListener("paste", onPaste)
+    return () => window.removeEventListener("paste", onPaste)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
   function submitComment() {
     if (!id || !comment.trim()) return
     const aId = id
@@ -107,9 +123,13 @@ export function AcompanhamentoDetailDialog({
     })
   }
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     e.target.value = ""
+    uploadFiles(files)
+  }
+
+  async function uploadFiles(files: File[]) {
     if (!files.length || !id) return
     const aId = id
     const pend = files.map((f, i) => ({ id: `pend-up-${Date.now()}-${i}`, name: f.name }))
@@ -212,14 +232,19 @@ export function AcompanhamentoDetailDialog({
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Anexos {attachments.length > 0 && `(${attachments.length})`}
                   </p>
-                  <label className={buttonVariants({ size: "sm", variant: "outline", className: "cursor-pointer" })}>
+                  <label
+                    title="Anexar arquivos — ou cole um print com Ctrl+V"
+                    className={buttonVariants({ size: "sm", variant: "outline", className: "cursor-pointer" })}
+                  >
                     {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Paperclip className="size-3.5" />}
                     {uploadProgress ? `Enviando ${uploadProgress.done}/${uploadProgress.total}` : "Anexar arquivos"}
                     <input type="file" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
                   </label>
                 </div>
                 {attachments.length === 0 && pendingUploads.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum anexo ainda.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum anexo ainda — cole um print com <kbd className="rounded border border-border px-1 text-[0.7em]">Ctrl+V</kbd> ou use Anexar arquivos.
+                  </p>
                 ) : (
                   <ul className="flex flex-col divide-y divide-border/40">
                     {pendingUploads.map((p) => (
