@@ -4,46 +4,17 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Building2,
-  CalendarDays,
-  BarChart3,
-  Map as MapIcon,
-  MessageCircle,
-  UserMinus,
-  Plug,
-  Settings,
-  ListTodo,
   PanelLeftClose,
   PanelLeftOpen,
   Activity,
   Search,
   LogOut,
-  Eye,
   X,
-  KeyRound,
-  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/actions";
 import { CarteiraSwitcher } from "@/components/carteira-switcher";
-
-const navItems: { href: string; label: string; icon: LucideIcon; gestorOnly?: boolean }[] = [
-  { href: "/", label: "Início", icon: LayoutDashboard },
-  { href: "/clinicas", label: "Clínicas", icon: Building2 },
-  { href: "/mensal", label: "Mensal", icon: CalendarDays },
-  { href: "/comparativo", label: "Comparativo", icon: BarChart3 },
-  { href: "/tarefas", label: "Tarefas", icon: ListTodo },
-  { href: "/acompanhamentos", label: "Acompanhamentos", icon: Eye },
-  { href: "/mapa", label: "Mapa", icon: MapIcon },
-  { href: "/whatsapp", label: "Gerenciador de grupos", icon: MessageCircle },
-  { href: "/churns", label: "Churns", icon: UserMinus },
-  { href: "/helena", label: "Contas Helena", icon: Plug },
-  // Cofre: devs também acessam — veem só os itens que o gestor compartilhou
-  // (filtro por visible_to_devs no servidor).
-  { href: "/cofre", label: "Cofre", icon: KeyRound },
-  { href: "/configuracoes", label: "Configurações", icon: Settings },
-];
+import { navItems } from "@/lib/nav-items";
 
 const STORAGE_KEY = "cc-sidebar-pinned";
 const PIN_EVENT = "cc-sidebar-pin-change";
@@ -195,12 +166,12 @@ export function AppNav({
                 "flex h-11 w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/15 text-left text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all cursor-pointer md:h-9",
                 open ? "px-3" : "justify-center px-0 size-11 md:size-9",
               )}
-              title="Buscar clínica (Ctrl+K ou /)"
+              title="Ir para página ou buscar clínica (Ctrl+K ou /)"
             >
               <Search className="size-4 shrink-0" />
               {open && (
                 <>
-                  <span className="flex-1 truncate text-sidebar-foreground/70">Buscar clínica...</span>
+                  <span className="flex-1 truncate text-sidebar-foreground/70">Buscar ou ir para...</span>
                   <span className="hidden text-[0.6rem] border border-sidebar-border bg-sidebar text-muted-foreground/80 rounded px-1.5 py-0.5 font-mono tabular-nums leading-none md:inline">
                     Ctrl+K · /
                   </span>
