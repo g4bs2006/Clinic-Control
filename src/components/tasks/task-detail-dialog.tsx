@@ -53,6 +53,11 @@ import {
 } from "@/lib/tasks/categories"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i
+function isImageAttachment(a: TaskAttachmentRow): boolean {
+  return (a.content_type?.startsWith("image/") ?? false) || IMAGE_EXT.test(a.file_name)
+}
+
 function fmtBytes(n: number | null): string {
   if (n == null) return ""
   if (n < 1024) return `${n} B`
@@ -115,6 +120,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [editingCommentText, setEditingCommentText] = useState("")
   const [editingAttachmentId, setEditingAttachmentId] = useState<string | null>(null)
   const [editingAttachmentName, setEditingAttachmentName] = useState("")
+  // URLs assinadas dos anexos de imagem (para thumbnail/lightbox) e a imagem aberta.
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({})
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
   const [activityFilter, setActivityFilter] = useState<"all" | "comment" | "system">("all")
   // Instante da última carga da atividade — base estável para a janela de edição
   // de 30 min sem chamar Date.now() durante o render (o servidor revalida o limite).
@@ -178,6 +186,25 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     return () => window.removeEventListener("paste", onPaste)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId])
+
+  // Busca as URLs assinadas dos anexos de imagem para exibir thumbnail. Re-roda
+  // só quando o conjunto de imagens muda (a chave é o join dos ids).
+  const imageAttachmentIds = attachments.filter(isImageAttachment).map((a) => a.id).join(",")
+  useEffect(() => {
+    const imgs = attachments.filter(isImageAttachment)
+    if (imgs.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      for (const a of imgs) {
+        const res = await getTaskAttachmentUrl(a.id)
+        if (!cancelled && res.ok) setImageUrls((prev) => ({ ...prev, [a.id]: res.url }))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageAttachmentIds])
 
   // Fecha o dialog e, se algo mudou, sincroniza o board uma única vez.
   function handleClose() {
@@ -765,6 +792,17 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                           </div>
                         ) : (
                           <>
+                            {isImageAttachment(a) && imageUrls[a.id] && (
+                              <button
+                                type="button"
+                                onClick={() => setLightbox({ url: imageUrls[a.id], name: a.file_name })}
+                                className="shrink-0 overflow-hidden rounded border border-border/60 transition-opacity hover:opacity-80"
+                                title="Ver imagem"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={imageUrls[a.id]} alt={a.file_name} className="size-10 object-cover" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => downloadAttachment(a.id)}
@@ -991,6 +1029,29 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 )}
               </div>
             </div>
+
+            {lightbox && (
+              <div
+                className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/80 p-4"
+                onClick={() => setLightbox(null)}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={lightbox.url}
+                  alt={lightbox.name}
+                  className="max-h-[90vh] max-w-full rounded-lg object-contain"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <button
+                  type="button"
+                  onClick={() => setLightbox(null)}
+                  aria-label="Fechar imagem"
+                  className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-md bg-black/50 text-white hover:bg-black/70"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+            )}
       </>
     )
 
