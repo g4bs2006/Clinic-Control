@@ -55,9 +55,11 @@ interface SnoozeButtonProps {
   /** "icon" (linhas densas) ou "button" (rótulo, no rodapé do detalhe). */
   variant?: "icon" | "button"
   disabled?: boolean
+  /** Classes extras aplicadas ao gatilho (ex.: `flex-1` no rodapé do rail). */
+  className?: string
 }
 
-export function SnoozeButton({ today, snoozedUntil, onSnooze, variant = "icon", disabled }: SnoozeButtonProps) {
+export function SnoozeButton({ today, snoozedUntil, onSnooze, variant = "icon", disabled, className }: SnoozeButtonProps) {
   const [open, setOpen] = useState(false)
   const [custom, setCustom] = useState("")
   const isSnoozed = snoozedUntil != null && snoozedUntil > today
@@ -92,6 +94,7 @@ export function SnoozeButton({ today, snoozedUntil, onSnooze, variant = "icon", 
           size="sm"
           variant="outline"
           disabled={disabled}
+          className={className}
           onClick={() => setOpen(true)}
         >
           <Clock className="size-4" />

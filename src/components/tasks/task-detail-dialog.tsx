@@ -46,12 +46,28 @@ import {
 import {
   TASK_STATUSES,
   TASK_STATUS_LABEL,
+  TASK_PRIORITY_LABEL,
   TASK_ATTACHMENTS_BUCKET,
   type TaskCategory,
   type TaskPriority,
   type TaskStatus,
 } from "@/lib/tasks/categories"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
+
+// Pílulas de resumo (glance) do rail no modo página — os controles editáveis
+// seguem em TaskFields logo abaixo; estas só dão o estado de relance.
+const STATUS_PILL: Record<TaskStatus, string> = {
+  pendente: "border-amber-500/25 bg-amber-500/10 text-amber-400",
+  em_andamento: "border-sky-500/25 bg-sky-500/10 text-sky-300",
+  concluida: "border-emerald-500/25 bg-emerald-500/10 text-emerald-400",
+  cancelada: "border-border bg-muted/40 text-muted-foreground",
+}
+const PRIORITY_PILL: Record<TaskPriority, string> = {
+  baixa: "border-border bg-muted/40 text-muted-foreground",
+  media: "border-sky-500/25 bg-sky-500/10 text-sky-300",
+  alta: "border-red-400/30 bg-red-400/10 text-red-300",
+  urgente: "border-red-500/30 bg-red-500/15 text-red-400",
+}
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i
 function isImageAttachment(a: TaskAttachmentRow): boolean {
@@ -636,88 +652,24 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     })
   }
 
-  const inner =
-    loading || !task ? (
-      <div className="flex items-center justify-center py-16 text-muted-foreground">
-        <Loader2 className="size-5 animate-spin" />
-      </div>
-    ) : (
-      <>
-            <div className="flex flex-col gap-1">
-              {asPage && task.clinic_id && (
-                <Link
-                  href={`/clinicas/${task.clinic_id}`}
-                  className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <Building2 className="size-3.5" />
-                  {task.clinic_name}
-                </Link>
-              )}
-              <div className="flex items-center gap-2">
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  onBlur={() => title.trim().length >= 3 && title !== task.title && saveField({ title })}
-                  className={`flex-1 border-none px-0 font-semibold shadow-none focus-visible:ring-0 ${asPage ? "text-2xl" : "text-lg"}`}
-                />
-                {!asPage && taskId && (
-                  <Link
-                    href={`/tarefas/${taskId}`}
-                    title="Abrir em página"
-                    aria-label="Abrir em página"
-                    className="mr-6 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    <ExternalLink className="size-4" />
-                  </Link>
-                )}
-              </div>
-            </div>
+  // ── Seções de conteúdo (compartilhadas entre o modal e a página 1b) ──────────
+  const descriptionField = (
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      Descrição — o que precisa ser feito
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        onBlur={() => {
+          if (task && description !== (task.description ?? "")) saveField({ description })
+        }}
+        rows={3}
+        placeholder="Descreva a tarefa com detalhe suficiente para a IA conseguir quebrar em passos, se precisar."
+        className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
+      />
+    </label>
+  )
 
-            <div className={asPage ? "grid gap-5 lg:grid-cols-[19rem_minmax(0,1fr)] lg:items-start" : "flex flex-col gap-5"}>
-              <div className="flex flex-col gap-5">
-              {/* ── Metadados ─────────────────────────────────────── */}
-              {task.source === "ia" && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.62rem] font-semibold text-amber-400">
-                    Origem: IA
-                  </span>
-                </div>
-              )}
-
-              <TaskFields
-                clinics={clinics}
-                profiles={profiles}
-                categories={categories}
-                clinicId={task.clinic_id}
-                onClinicIdChange={(v) => saveField({ clinicId: v })}
-                category={task.category}
-                onCategoryChange={(v: TaskCategory) => saveField({ category: v })}
-                priority={task.priority}
-                onPriorityChange={(v: TaskPriority) => saveField({ priority: v })}
-                assignedTo={task.assigned_to}
-                onAssignedToChange={(v) => saveField({ assignedTo: v })}
-                dueDate={task.due_date ?? ""}
-                onDueDateChange={(v) => saveField({ dueDate: v })}
-                status={task.status}
-                onStatusChange={changeStatus}
-              />
-              </div>
-
-              <div className="flex flex-col gap-5">
-              {/* ── Descrição ─────────────────────────────────────── */}
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                Descrição — o que precisa ser feito
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  onBlur={() => description !== (task.description ?? "") && saveField({ description })}
-                  rows={3}
-                  placeholder="Descreva a tarefa com detalhe suficiente para a IA conseguir quebrar em passos, se precisar."
-                  className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
-                />
-              </label>
-
-              {/* ── Subtarefas ────────────────────────────────────── */}
+  const subtasksBlock = (
               <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -834,8 +786,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   </Button>
                 </div>
               </div>
+  )
 
-              {/* ── Anexos ────────────────────────────────────────── */}
+  const anexosBlock = (
               <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -948,8 +901,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   </ul>
                 )}
               </div>
+  )
 
-              {/* ── Atividade ─────────────────────────────────────── */}
+  const atividadeBlock = (
               <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Atividade</p>
@@ -1099,92 +1053,265 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   </div>
                 </div>
               </div>
+  )
+
+  const lightboxEl = lightbox && (
+    <div
+      className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/80 p-4"
+      onClick={() => setLightbox(null)}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={lightbox.url}
+        alt={lightbox.name}
+        className="max-h-[90vh] max-w-full rounded-lg object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
+      <button
+        type="button"
+        onClick={() => setLightbox(null)}
+        aria-label="Fechar imagem"
+        className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-md bg-black/50 text-white hover:bg-black/70"
+      >
+        <X className="size-5" />
+      </button>
+    </div>
+  )
+
+  // ── Estado de carregamento ───────────────────────────────────────────────────
+  if (loading || !task) {
+    const spinner = (
+      <div className="flex items-center justify-center py-16 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" />
+      </div>
+    )
+    if (asPage) return <div className="mx-auto w-full max-w-3xl px-1 pb-6">{spinner}</div>
+    return (
+      <Dialog open={taskId != null} onOpenChange={(v) => !v && handleClose()}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">{spinner}</DialogContent>
+      </Dialog>
+    )
+  }
+
+  // ── Página (direção 1b): rail de detalhes à esquerda + fluxo central ──────────
+  if (asPage) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-1 pb-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+          <aside className="flex flex-col overflow-hidden rounded-xl border border-border bg-card lg:sticky lg:top-6 lg:w-[21rem] lg:flex-none lg:self-start">
+            {/* Cabeçalho do rail: origem + título + resumo de estado */}
+            <div className="flex flex-col gap-3 border-b border-border p-5">
+              {task.clinic_id ? (
+                <Link
+                  href={`/clinicas/${task.clinic_id}`}
+                  className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Building2 className="size-3.5" />
+                  {task.clinic_name}
+                </Link>
+              ) : (
+                <span className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
+                  <Building2 className="size-3.5" />
+                  Tarefa interna
+                </span>
+              )}
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={() => title.trim().length >= 3 && title !== task.title && saveField({ title })}
+                className="border-none px-0 text-xl font-bold leading-tight shadow-none focus-visible:ring-0"
+              />
+              <div className="flex flex-wrap gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${STATUS_PILL[task.status]}`}>
+                  <span className="size-1.5 rounded-full bg-current" />
+                  {TASK_STATUS_LABEL[task.status]}
+                </span>
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs ${PRIORITY_PILL[task.priority]}`}>
+                  Prioridade {TASK_PRIORITY_LABEL[task.priority].toLowerCase()}
+                </span>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            {/* Detalhes editáveis */}
+            <div className="flex flex-col gap-3 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Detalhes</p>
+              {task.source === "ia" && (
+                <span className="w-fit rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.62rem] font-semibold text-amber-400">
+                  Origem: IA
+                </span>
+              )}
+              <TaskFields
+                clinics={clinics}
+                profiles={profiles}
+                categories={categories}
+                clinicId={task.clinic_id}
+                onClinicIdChange={(v) => saveField({ clinicId: v })}
+                category={task.category}
+                onCategoryChange={(v: TaskCategory) => saveField({ category: v })}
+                priority={task.priority}
+                onPriorityChange={(v: TaskPriority) => saveField({ priority: v })}
+                assignedTo={task.assigned_to}
+                onAssignedToChange={(v) => saveField({ assignedTo: v })}
+                dueDate={task.due_date ?? ""}
+                onDueDateChange={(v) => saveField({ dueDate: v })}
+                status={task.status}
+                onStatusChange={changeStatus}
+              />
+            </div>
+
+            {/* Ações principais fixadas no rodapé do rail */}
+            <div className="mt-auto flex flex-col gap-2 border-t border-border p-4">
               {task.status === "concluida" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() => changeStatus("pendente")}
-                >
+                <Button type="button" variant="outline" className="w-full" disabled={pending} onClick={() => changeStatus("pendente")}>
                   <RotateCcw className="size-4" />
                   Reabrir tarefa
                 </Button>
               ) : (
                 <Button
                   type="button"
+                  className="w-full bg-emerald-600 text-white hover:bg-emerald-600/90"
                   disabled={pending}
                   onClick={() => changeStatus("concluida")}
-                  className="bg-emerald-600 text-white hover:bg-emerald-600/90"
                 >
                   <CheckCircle2 className="size-4" />
                   Concluir tarefa
                 </Button>
               )}
-              <div className="flex gap-2 mt-2 sm:mt-0">
+              <div className="flex gap-2">
                 <SnoozeButton
                   today={today}
                   snoozedUntil={task.snoozed_until}
                   onSnooze={handleSnooze}
                   variant="button"
                   disabled={pending}
+                  className="flex-1"
                 />
                 <Button
                   type="button"
                   variant="ghost"
-                  className="text-red-400 hover:text-red-500 hover:bg-red-500/10 h-9 px-3"
+                  className="flex-1 text-red-400 hover:bg-red-500/10 hover:text-red-500"
                   disabled={pending}
                   onClick={remove}
                   title="Excluir tarefa"
                 >
-                  <Trash2 className="size-4 mr-1" />
+                  <Trash2 className="size-4" />
                   Excluir
                 </Button>
-                {asPage ? (
-                  <Link href={backHref} className={buttonVariants({ variant: "outline" })}>
-                    <ArrowLeft className="size-4" />
-                    Voltar
-                  </Link>
-                ) : (
-                  <Button type="button" variant="outline" onClick={handleClose}>
-                    Fechar
-                  </Button>
-                )}
               </div>
             </div>
+          </aside>
 
-            {lightbox && (
-              <div
-                className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/80 p-4"
-                onClick={() => setLightbox(null)}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={lightbox.url}
-                  alt={lightbox.name}
-                  className="max-h-[90vh] max-w-full rounded-lg object-contain"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <button
-                  type="button"
-                  onClick={() => setLightbox(null)}
-                  aria-label="Fechar imagem"
-                  className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-md bg-black/50 text-white hover:bg-black/70"
-                >
-                  <X className="size-5" />
-                </button>
-              </div>
-            )}
-      </>
+          {/* Fluxo central: descrição, subtarefas, anexos e atividade */}
+          <div className="flex min-w-0 flex-1 flex-col gap-5">
+            <Link
+              href={backHref}
+              className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="size-4" />
+              Voltar
+            </Link>
+            {descriptionField}
+            {subtasksBlock}
+            {anexosBlock}
+            {atividadeBlock}
+          </div>
+        </div>
+        {lightboxEl}
+      </div>
     )
+  }
 
-  if (asPage) return <div className="mx-auto w-full max-w-3xl px-1 pb-6">{inner}</div>
+  // ── Modal (mantém o layout de coluna única) ───────────────────────────────────
   return (
     <Dialog open={taskId != null} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">{inner}</DialogContent>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center gap-2">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => title.trim().length >= 3 && title !== task.title && saveField({ title })}
+            className="flex-1 border-none px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
+          />
+          {taskId && (
+            <Link
+              href={`/tarefas/${taskId}`}
+              title="Abrir em página"
+              aria-label="Abrir em página"
+              className="mr-6 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <ExternalLink className="size-4" />
+            </Link>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-5">
+          {task.source === "ia" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.62rem] font-semibold text-amber-400">
+                Origem: IA
+              </span>
+            </div>
+          )}
+          <TaskFields
+            clinics={clinics}
+            profiles={profiles}
+            categories={categories}
+            clinicId={task.clinic_id}
+            onClinicIdChange={(v) => saveField({ clinicId: v })}
+            category={task.category}
+            onCategoryChange={(v: TaskCategory) => saveField({ category: v })}
+            priority={task.priority}
+            onPriorityChange={(v: TaskPriority) => saveField({ priority: v })}
+            assignedTo={task.assigned_to}
+            onAssignedToChange={(v) => saveField({ assignedTo: v })}
+            dueDate={task.due_date ?? ""}
+            onDueDateChange={(v) => saveField({ dueDate: v })}
+            status={task.status}
+            onStatusChange={changeStatus}
+          />
+          {descriptionField}
+          {subtasksBlock}
+          {anexosBlock}
+          {atividadeBlock}
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          {task.status === "concluida" ? (
+            <Button type="button" variant="outline" disabled={pending} onClick={() => changeStatus("pendente")}>
+              <RotateCcw className="size-4" />
+              Reabrir tarefa
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              disabled={pending}
+              onClick={() => changeStatus("concluida")}
+              className="bg-emerald-600 text-white hover:bg-emerald-600/90"
+            >
+              <CheckCircle2 className="size-4" />
+              Concluir tarefa
+            </Button>
+          )}
+          <div className="mt-2 flex gap-2 sm:mt-0">
+            <SnoozeButton today={today} snoozedUntil={task.snoozed_until} onSnooze={handleSnooze} variant="button" disabled={pending} />
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-9 px-3 text-red-400 hover:bg-red-500/10 hover:text-red-500"
+              disabled={pending}
+              onClick={remove}
+              title="Excluir tarefa"
+            >
+              <Trash2 className="mr-1 size-4" />
+              Excluir
+            </Button>
+            <Button type="button" variant="outline" onClick={handleClose}>
+              Fechar
+            </Button>
+          </div>
+        </div>
+        {lightboxEl}
+      </DialogContent>
     </Dialog>
   )
 }

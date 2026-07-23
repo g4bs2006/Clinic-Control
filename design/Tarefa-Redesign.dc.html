@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#0a0a0f; --panel:#131319; --panel2:#17171f; --field:#1c1c25; --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.11); --tx:#f2f2f6; --tx2:#a2a2af; --tx3:#71717e; --pur:#8b5cf6; --mag:#c026d3; --grn:#10b981; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:#050508; font-family:'Plus Jakarta Sans',-apple-system,system-ui,sans-serif; }
+  a{ color:var(--pur); text-decoration:none; }
+  a:hover{ color:#a78bfa; }
+  ::-webkit-scrollbar{ width:8px;height:8px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12);border-radius:8px; }
+</style>
+</helmet>
+
+<div style="min-width:4400px;padding:56px 64px 120px;background:radial-gradient(1200px 700px at 20% -10%, rgba(139,92,246,.08), transparent 60%), #050508;font-family:'Plus Jakarta Sans',sans-serif;color:var(--tx);">
+
+  <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:44px;">
+    <div style="font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--pur);">Turno 1 — Redesenho da página de tarefas</div>
+    <div style="font-size:28px;font-weight:800;letter-spacing:-.02em;">Três direções de layout</div>
+    <div style="font-size:15px;color:var(--tx2);max-width:720px;line-height:1.6;">Mesma paleta e conteúdo, três formas de organizar a página. Cada opção resolve o espaço vazio à esquerda, elimina os painéis com scroll minúsculo e reposiciona as ações principais. Referencie por <a href="#1a">1a</a>, <a href="#1b">1b</a>, <a href="#1c">1c</a>.</div>
+  </div>
+
+  <div style="display:flex;gap:56px;align-items:flex-start;flex-wrap:nowrap;">
+
+    <!-- ============ OPTION 1a ============ -->
+    <div id="1a" style="display:flex;flex-direction:column;gap:16px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:28px;padding:0 10px;background:var(--pur);color:#fff;font-weight:800;font-size:14px;border-radius:8px;">1a</span>
+        <div><div style="font-size:17px;font-weight:700;">Cabeçalho largo + duas colunas</div><div style="font-size:13px;color:var(--tx3);">Ações no topo · detalhes à direita · leitura sem scroll interno</div></div>
+      </div>
+
+      <div style="width:1360px;height:820px;border-radius:20px;overflow:hidden;border:1px solid var(--line);display:flex;background:var(--bg);box-shadow:0 40px 90px -40px rgba(0,0,0,.8);">
+        <!-- rail -->
+        <div style="width:60px;flex:0 0 60px;background:#08080c;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:16px;">
+          <div style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--pur),var(--mag));display:flex;align-items:center;justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;margin-top:6px;">
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(139,92,246,.22);box-shadow:inset 0 0 0 1px rgba(139,92,246,.5);display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+          </div>
+        </div>
+        <!-- page -->
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+          <!-- header band -->
+          <div style="padding:20px 28px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(139,92,246,.06),transparent);display:flex;align-items:center;justify-content:space-between;gap:24px;">
+            <div style="min-width:0;">
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tx3);margin-bottom:6px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V7l6-4 6 4v14M10 9h.01M14 9h.01M10 13h.01M14 13h.01"/></svg>
+                Clínica Vassoler
+                <span style="color:var(--tx3);">·</span>
+                <span style="display:inline-flex;align-items:center;gap:5px;color:#fbbf24;"><span style="width:6px;height:6px;border-radius:50%;background:#fbbf24;"></span>Pendente</span>
+                <span style="color:var(--tx3);">·</span>
+                <span style="display:inline-flex;align-items:center;gap:5px;color:#f87171;"><span style="width:6px;height:6px;border-radius:50%;background:#f87171;"></span>Prioridade alta</span>
+              </div>
+              <div style="font-size:22px;font-weight:800;letter-spacing:-.02em;">Fazer as alterações referentes ao tom da IA</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex:0 0 auto;">
+              <button style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);color:var(--tx2);border:1px solid var(--line2);border-radius:10px;padding:10px 14px;font:600 13px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>Voltar</button>
+              <button style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);color:var(--tx2);border:1px solid var(--line2);border-radius:10px;padding:10px 14px;font:600 13px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>Adiar</button>
+              <button style="display:inline-flex;align-items:center;gap:8px;background:rgba(248,113,113,.1);color:#fca5a5;border:1px solid rgba(248,113,113,.25);border-radius:10px;padding:10px 14px;font:600 13px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Excluir</button>
+              <button style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#10b981,#0d9668);color:#fff;border:none;border-radius:10px;padding:11px 18px;font:700 13px 'Plus Jakarta Sans';cursor:pointer;box-shadow:0 8px 24px -8px rgba(16,185,129,.6);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Concluir tarefa</button>
+            </div>
+          </div>
+          <!-- body -->
+          <div style="flex:1;overflow:auto;padding:24px 28px;display:grid;grid-template-columns:1fr 380px;gap:22px;align-content:start;">
+            <!-- left column -->
+            <div style="display:flex;flex-direction:column;gap:20px;min-width:0;">
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;">
+                <div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:12px;">Descrição — o que precisa ser feito</div>
+                <div style="font-size:15px;line-height:1.7;color:#d8d8e0;">Foi solicitado pelo cliente que algumas modificações fossem feitas em relação ao <strong style="color:#fff;">tom da IA</strong> — como ela se porta, os emojis que envia e a forma das mensagens, principalmente com o público masculino. O objetivo é deixar a comunicação mais natural e alinhada ao perfil de cada cliente.</div>
+              </div>
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                  <div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Subtarefas <span style="color:var(--tx2);margin-left:6px;">1/3</span></div>
+                  <button style="display:inline-flex;align-items:center;gap:7px;background:rgba(139,92,246,.14);color:#c4b5fd;border:1px solid rgba(139,92,246,.3);border-radius:9px;padding:8px 12px;font:600 12px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>Dividir com IA</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+                  <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--field);border-radius:10px;font-size:14px;"><span style="width:18px;height:18px;border-radius:6px;background:var(--grn);display:flex;align-items:center;justify-content:center;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></span><span style="color:var(--tx3);text-decoration:line-through;">Revisar prompt atual da IA</span></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--field);border-radius:10px;font-size:14px;"><span style="width:18px;height:18px;border-radius:6px;border:1.5px solid var(--line2);"></span>Remover vocabulário informal do público masculino</div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--field);border-radius:10px;font-size:14px;"><span style="width:18px;height:18px;border-radius:6px;border:1.5px solid var(--line2);"></span>Ajustar frequência de emojis</div>
+                </div>
+                <div style="display:flex;gap:10px;">
+                  <div style="flex:1;padding:11px 14px;background:var(--field);border:1px solid var(--line);border-radius:10px;color:var(--tx3);font-size:14px;">Adicionar subtarefa…</div>
+                  <button style="width:44px;background:linear-gradient(135deg,var(--pur),var(--mag));border:none;border-radius:10px;color:#fff;font-size:20px;cursor:pointer;">+</button>
+                </div>
+              </div>
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                  <div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Anexos</div>
+                  <button style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.05);color:var(--tx2);border:1px solid var(--line2);border-radius:9px;padding:8px 12px;font:600 12px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12l-9 9a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a1.5 1.5 0 01-2-2l8-8"/></svg>Anexar arquivos</button>
+                </div>
+                <div style="border:1.5px dashed var(--line2);border-radius:12px;padding:22px;text-align:center;color:var(--tx3);font-size:13px;">Nenhum anexo ainda — cole um print com <span style="background:var(--field);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11px;">Ctrl+V</span> ou use Anexar arquivos.</div>
+              </div>
+            </div>
+            <!-- right column -->
+            <div style="display:flex;flex-direction:column;gap:20px;">
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;">
+                <div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:16px;">Detalhes</div>
+                <div style="display:flex;flex-direction:column;gap:14px;">
+                  <div style="display:flex;flex-direction:column;gap:6px;"><span style="font-size:12px;color:var(--tx3);">Clínica</span><div style="display:flex;align-items:center;justify-content:space-between;background:var(--field);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;">Clínica Vassoler <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div style="display:flex;flex-direction:column;gap:6px;"><span style="font-size:12px;color:var(--tx3);">Status</span><div style="display:flex;align-items:center;gap:7px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:10px 12px;font-size:14px;color:#fbbf24;"><span style="width:7px;height:7px;border-radius:50%;background:#fbbf24;"></span>Pendente</div></div>
+                    <div style="display:flex;flex-direction:column;gap:6px;"><span style="font-size:12px;color:var(--tx3);">Prioridade</span><div style="display:flex;align-items:center;gap:7px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);border-radius:10px;padding:10px 12px;font-size:14px;color:#f87171;"><span style="width:7px;height:7px;border-radius:50%;background:#f87171;"></span>Alta</div></div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px;"><span style="font-size:12px;color:var(--tx3);">Categoria</span><div style="display:flex;align-items:center;justify-content:space-between;background:var(--field);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;">Atualização IA <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div></div>
+                  <div style="display:flex;flex-direction:column;gap:6px;"><span style="font-size:12px;color:var(--tx3);">Responsável</span><div style="display:flex;align-items:center;gap:9px;background:var(--field);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px;"><span style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--pur),var(--mag));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">GR</span>Gabriel Rodrigues</div></div>
+                  <div style="display:flex;flex-direction:column;gap:6px;"><span style="font-size:12px;color:var(--tx3);">Prazo</span><div style="display:flex;align-items:center;gap:9px;background:var(--field);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--tx2)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>24 / 07 / 2026</div></div>
+                </div>
+              </div>
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;display:flex;flex-direction:column;min-height:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                  <div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Atividade</div>
+                  <div style="display:flex;background:var(--field);border-radius:9px;padding:3px;font-size:12px;">
+                    <span style="padding:5px 10px;border-radius:7px;background:rgba(255,255,255,.09);color:#fff;font-weight:600;">Todos</span>
+                    <span style="padding:5px 10px;color:var(--tx3);">Comentários</span>
+                    <span style="padding:5px 10px;color:var(--tx3);">Histórico</span>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                  <div style="display:flex;gap:10px;"><span style="width:26px;height:26px;flex:0 0 26px;border-radius:50%;background:var(--field);display:flex;align-items:center;justify-content:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></span><div><div style="font-size:13px;color:var(--tx2);line-height:1.5;">Status alterado de <em style="color:#fff;font-style:normal;">Pendente</em> para <em style="color:#fff;font-style:normal;">Em andamento</em></div><div style="font-size:11px;color:var(--tx3);">22/07, 14:28</div></div></div>
+                  <div style="display:flex;gap:10px;"><span style="width:26px;height:26px;flex:0 0 26px;border-radius:50%;background:linear-gradient(135deg,var(--pur),var(--mag));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">GR</span><div><div style="font-size:13px;"><strong>Gabriel Rodrigues</strong> <span style="font-size:11px;color:var(--tx3);">· 22/07, 14:30</span></div><div style="font-size:13px;color:#d0d0d8;line-height:1.55;margin-top:4px;background:var(--field);border-radius:10px;padding:10px 12px;">Transcrição 🎙 Oi Gabriel, tudo bem? Lembra quando conversamos de tirar aquele vocabulário de "horáriozinho"? Percebi que ainda continua…</div></div></div>
+                </div>
+                <div style="margin-top:16px;display:flex;gap:10px;align-items:flex-end;">
+                  <div style="flex:1;background:var(--field);border:1px solid var(--line);border-radius:11px;padding:11px 13px;color:var(--tx3);font-size:13px;">Comentar…  <span style="color:var(--pur);">@menciona</span></div>
+                  <button style="width:42px;height:42px;background:linear-gradient(135deg,var(--pur),var(--mag));border:none;border-radius:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ OPTION 1b ============ -->
+    <div id="1b" style="display:flex;flex-direction:column;gap:16px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:28px;padding:0 10px;background:var(--pur);color:#fff;font-weight:800;font-size:14px;border-radius:8px;">1b</span>
+        <div><div style="font-size:17px;font-weight:700;">Rail de detalhes à esquerda + fluxo central</div><div style="font-size:13px;color:var(--tx3);">Preenche o vazio esquerdo · resumo sempre visível · conteúdo em coluna larga</div></div>
+      </div>
+
+      <div style="width:1360px;height:820px;border-radius:20px;overflow:hidden;border:1px solid var(--line);display:flex;background:var(--bg);box-shadow:0 40px 90px -40px rgba(0,0,0,.8);">
+        <div style="width:60px;flex:0 0 60px;background:#08080c;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:16px;">
+          <div style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--pur),var(--mag));display:flex;align-items:center;justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg></div>
+          <div style="display:flex;flex-direction:column;gap:12px;margin-top:6px;">
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(139,92,246,.22);box-shadow:inset 0 0 0 1px rgba(139,92,246,.5);display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+          </div>
+        </div>
+        <!-- detail rail -->
+        <div style="width:340px;flex:0 0 340px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;">
+          <div style="padding:22px 22px 18px;border-bottom:1px solid var(--line);">
+            <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--tx3);margin-bottom:10px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V7l6-4 6 4v14"/></svg>Clínica Vassoler</div>
+            <div style="font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.3;">Fazer as alterações referentes ao tom da IA</div>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+              <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);border-radius:20px;padding:5px 11px;font-size:12px;color:#fbbf24;"><span style="width:6px;height:6px;border-radius:50%;background:#fbbf24;"></span>Pendente</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);border-radius:20px;padding:5px 11px;font-size:12px;color:#f87171;">Prioridade alta</span>
+            </div>
+          </div>
+          <div style="flex:1;overflow:auto;padding:20px 22px;display:flex;flex-direction:column;gap:16px;">
+            <div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Detalhes</div>
+            <div style="display:flex;flex-direction:column;gap:13px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:14px;"><span style="color:var(--tx3);">Clínica</span><span>Clínica Vassoler</span></div>
+              <div style="height:1px;background:var(--line);"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:14px;"><span style="color:var(--tx3);">Categoria</span><span style="background:rgba(139,92,246,.14);color:#c4b5fd;border-radius:7px;padding:3px 9px;font-size:12px;">Atualização IA</span></div>
+              <div style="height:1px;background:var(--line);"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:14px;"><span style="color:var(--tx3);">Responsável</span><span style="display:flex;align-items:center;gap:8px;"><span style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--pur),var(--mag));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">GR</span>Gabriel Rodrigues</span></div>
+              <div style="height:1px;background:var(--line);"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:14px;"><span style="color:var(--tx3);">Prazo</span><span style="display:flex;align-items:center;gap:7px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx2)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>24/07/2026</span></div>
+            </div>
+          </div>
+          <div style="padding:18px 22px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:10px;">
+            <button style="display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#10b981,#0d9668);color:#fff;border:none;border-radius:11px;padding:13px;font:700 14px 'Plus Jakarta Sans';cursor:pointer;box-shadow:0 8px 24px -8px rgba(16,185,129,.6);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Concluir tarefa</button>
+            <div style="display:flex;gap:8px;">
+              <button style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,.05);color:var(--tx2);border:1px solid var(--line2);border-radius:10px;padding:10px;font:600 12px 'Plus Jakarta Sans';cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>Adiar</button>
+              <button style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(248,113,113,.08);color:#fca5a5;border:1px solid rgba(248,113,113,.22);border-radius:10px;padding:10px;font:600 12px 'Plus Jakarta Sans';cursor:pointer;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Excluir</button>
+            </div>
+          </div>
+        </div>
+        <!-- main flow -->
+        <div style="flex:1;overflow:auto;padding:26px 30px;display:flex;flex-direction:column;gap:20px;min-width:0;">
+          <div>
+            <div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:10px;">Descrição — o que precisa ser feito</div>
+            <div style="font-size:15px;line-height:1.7;color:#d8d8e0;">Foi solicitado pelo cliente que algumas modificações fossem feitas em relação ao <strong style="color:#fff;">tom da IA</strong> — como ela se porta, os emojis que envia e a forma das mensagens, principalmente com o público masculino. O objetivo é deixar a comunicação mais natural e alinhada ao perfil de cada cliente.</div>
+          </div>
+          <div style="height:1px;background:var(--line);"></div>
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Subtarefas <span style="color:var(--tx2);margin-left:6px;">1/3</span></div><button style="display:inline-flex;align-items:center;gap:7px;background:rgba(139,92,246,.14);color:#c4b5fd;border:1px solid rgba(139,92,246,.3);border-radius:9px;padding:8px 12px;font:600 12px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9z"/></svg>Dividir com IA</button></div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--panel);border:1px solid var(--line);border-radius:10px;font-size:14px;"><span style="width:18px;height:18px;border-radius:6px;background:var(--grn);display:flex;align-items:center;justify-content:center;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></span><span style="color:var(--tx3);text-decoration:line-through;">Revisar prompt atual da IA</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--panel);border:1px solid var(--line);border-radius:10px;font-size:14px;"><span style="width:18px;height:18px;border-radius:6px;border:1.5px solid var(--line2);"></span>Remover vocabulário informal do público masculino</div>
+              <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--panel);border:1px solid var(--line);border-radius:10px;font-size:14px;"><span style="width:18px;height:18px;border-radius:6px;border:1.5px solid var(--line2);"></span>Ajustar frequência de emojis</div>
+              <div style="display:flex;gap:10px;margin-top:2px;"><div style="flex:1;padding:11px 14px;background:var(--field);border:1px solid var(--line);border-radius:10px;color:var(--tx3);font-size:14px;">Adicionar subtarefa…</div><button style="width:44px;background:linear-gradient(135deg,var(--pur),var(--mag));border:none;border-radius:10px;color:#fff;font-size:20px;cursor:pointer;">+</button></div>
+            </div>
+          </div>
+          <div style="height:1px;background:var(--line);"></div>
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;"><div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Anexos</div><button style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.05);color:var(--tx2);border:1px solid var(--line2);border-radius:9px;padding:8px 12px;font:600 12px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12l-9 9a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a1.5 1.5 0 01-2-2l8-8"/></svg>Anexar arquivos</button></div>
+            <div style="border:1.5px dashed var(--line2);border-radius:12px;padding:20px;text-align:center;color:var(--tx3);font-size:13px;">Nenhum anexo ainda — cole um print com <span style="background:var(--field);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11px;">Ctrl+V</span>.</div>
+          </div>
+          <div style="height:1px;background:var(--line);"></div>
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Atividade</div><div style="display:flex;background:var(--field);border-radius:9px;padding:3px;font-size:12px;"><span style="padding:5px 10px;border-radius:7px;background:rgba(255,255,255,.09);color:#fff;font-weight:600;">Todos</span><span style="padding:5px 10px;color:var(--tx3);">Comentários</span><span style="padding:5px 10px;color:var(--tx3);">Histórico</span></div></div>
+            <div style="display:flex;flex-direction:column;gap:16px;">
+              <div style="display:flex;gap:10px;"><span style="width:26px;height:26px;flex:0 0 26px;border-radius:50%;background:var(--field);display:flex;align-items:center;justify-content:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></span><div><div style="font-size:13px;color:var(--tx2);">Status alterado de <em style="color:#fff;font-style:normal;">Pendente</em> para <em style="color:#fff;font-style:normal;">Em andamento</em></div><div style="font-size:11px;color:var(--tx3);">22/07, 14:28</div></div></div>
+              <div style="display:flex;gap:10px;"><span style="width:26px;height:26px;flex:0 0 26px;border-radius:50%;background:linear-gradient(135deg,var(--pur),var(--mag));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">GR</span><div style="flex:1;"><div style="font-size:13px;"><strong>Gabriel Rodrigues</strong> <span style="font-size:11px;color:var(--tx3);">· 22/07, 14:30</span></div><div style="font-size:13px;color:#d0d0d8;line-height:1.55;margin-top:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 13px;">Transcrição 🎙 Oi Gabriel, tudo bem? Lembra quando conversamos de tirar aquele vocabulário de "horáriozinho"? Percebi que ainda continua e queria alinhar como ajustar.</div></div></div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:10px;align-items:flex-end;"><div style="flex:1;background:var(--field);border:1px solid var(--line);border-radius:11px;padding:11px 13px;color:var(--tx3);font-size:13px;">Comentar…  <span style="color:var(--pur);">@menciona alguém</span> · Ctrl+Enter envia</div><button style="width:42px;height:42px;background:linear-gradient(135deg,var(--pur),var(--mag));border:none;border-radius:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ OPTION 1c ============ -->
+    <div id="1c" style="display:flex;flex-direction:column;gap:16px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:28px;padding:0 10px;background:var(--pur);color:#fff;font-weight:800;font-size:14px;border-radius:8px;">1c</span>
+        <div><div style="font-size:17px;font-weight:700;">Coluna única focada + barra de ação fixa</div><div style="font-size:13px;color:var(--tx3);">Leitura editorial centrada · meta em pílulas · ações sempre acessíveis</div></div>
+      </div>
+
+      <div style="width:1360px;height:820px;border-radius:20px;overflow:hidden;border:1px solid var(--line);display:flex;background:var(--bg);box-shadow:0 40px 90px -40px rgba(0,0,0,.8);">
+        <div style="width:60px;flex:0 0 60px;background:#08080c;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:16px;">
+          <div style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--pur),var(--mag));display:flex;align-items:center;justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg></div>
+          <div style="display:flex;flex-direction:column;gap:12px;margin-top:6px;">
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(139,92,246,.22);box-shadow:inset 0 0 0 1px rgba(139,92,246,.5);display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+            <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.05);"></div>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative;">
+          <div style="flex:1;overflow:auto;padding:38px 0 110px;display:flex;justify-content:center;">
+            <div style="width:760px;display:flex;flex-direction:column;gap:26px;">
+              <!-- title block -->
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx3);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V7l6-4 6 4v14"/></svg>Clínica Vassoler<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin:0 2px;"><path d="M9 6l6 6-6 6"/></svg>Tarefa</div>
+                <div style="font-size:30px;font-weight:800;letter-spacing:-.025em;line-height:1.2;">Fazer as alterações referentes ao tom da IA</div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                  <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);border-radius:20px;padding:6px 12px;font-size:13px;color:#fbbf24;"><span style="width:7px;height:7px;border-radius:50%;background:#fbbf24;"></span>Pendente</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);border-radius:20px;padding:6px 12px;font-size:13px;color:#f87171;">Prioridade alta</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.28);border-radius:20px;padding:6px 12px;font-size:13px;color:#c4b5fd;">Atualização IA</span>
+                  <span style="display:inline-flex;align-items:center;gap:7px;background:var(--field);border:1px solid var(--line);border-radius:20px;padding:6px 12px 6px 6px;font-size:13px;"><span style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--pur),var(--mag));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">GR</span>Gabriel Rodrigues</span>
+                  <span style="display:inline-flex;align-items:center;gap:7px;background:var(--field);border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:13px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx2)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>24/07/2026</span>
+                </div>
+              </div>
+              <div style="height:1px;background:var(--line);"></div>
+              <!-- description -->
+              <div>
+                <div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:12px;">Descrição — o que precisa ser feito</div>
+                <div style="font-size:16px;line-height:1.75;color:#dcdce4;">Foi solicitado pelo cliente que algumas modificações fossem feitas em relação ao <strong style="color:#fff;">tom da IA</strong> — como ela se porta, os emojis que envia e a forma das mensagens, principalmente com o público masculino. O objetivo é deixar a comunicação mais natural e alinhada ao perfil de cada cliente.</div>
+              </div>
+              <!-- subtasks -->
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Subtarefas <span style="color:var(--tx2);margin-left:6px;">1/3</span></div><button style="display:inline-flex;align-items:center;gap:7px;background:rgba(139,92,246,.14);color:#c4b5fd;border:1px solid rgba(139,92,246,.3);border-radius:9px;padding:8px 12px;font:600 12px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9z"/></svg>Dividir com IA</button></div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--field);border-radius:10px;font-size:14px;"><span style="width:18px;height:18px;border-radius:6px;background:var(--grn);display:flex;align-items:center;justify-content:center;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></span><span style="color:var(--tx3);text-decoration:line-through;">Revisar prompt atual da IA</span></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--field);border-radius:10px;font-size:14px;"><span style="width:18px;height:18px;border-radius:6px;border:1.5px solid var(--line2);"></span>Remover vocabulário informal do público masculino</div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--field);border-radius:10px;font-size:14px;"><span style="width:18px;height:18px;border-radius:6px;border:1.5px solid var(--line2);"></span>Ajustar frequência de emojis</div>
+                  <div style="display:flex;gap:10px;margin-top:2px;"><div style="flex:1;padding:11px 14px;background:var(--field);border:1px solid var(--line);border-radius:10px;color:var(--tx3);font-size:14px;">Adicionar subtarefa…</div><button style="width:44px;background:linear-gradient(135deg,var(--pur),var(--mag));border:none;border-radius:10px;color:#fff;font-size:20px;cursor:pointer;">+</button></div>
+                </div>
+              </div>
+              <!-- anexos -->
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Anexos</div><button style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.05);color:var(--tx2);border:1px solid var(--line2);border-radius:9px;padding:8px 12px;font:600 12px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12l-9 9a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a1.5 1.5 0 01-2-2l8-8"/></svg>Anexar arquivos</button></div>
+                <div style="border:1.5px dashed var(--line2);border-radius:12px;padding:20px;text-align:center;color:var(--tx3);font-size:13px;">Nenhum anexo ainda — cole um print com <span style="background:var(--field);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11px;">Ctrl+V</span>.</div>
+              </div>
+              <!-- activity -->
+              <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div style="font:600 11px 'Plus Jakarta Sans';letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);">Atividade</div><div style="display:flex;background:var(--field);border-radius:9px;padding:3px;font-size:12px;"><span style="padding:5px 10px;border-radius:7px;background:rgba(255,255,255,.09);color:#fff;font-weight:600;">Todos</span><span style="padding:5px 10px;color:var(--tx3);">Comentários</span><span style="padding:5px 10px;color:var(--tx3);">Histórico</span></div></div>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                  <div style="display:flex;gap:11px;"><span style="width:28px;height:28px;flex:0 0 28px;border-radius:50%;background:var(--field);display:flex;align-items:center;justify-content:center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></span><div><div style="font-size:14px;color:var(--tx2);">Status alterado de <em style="color:#fff;font-style:normal;">Pendente</em> para <em style="color:#fff;font-style:normal;">Em andamento</em></div><div style="font-size:12px;color:var(--tx3);">22/07, 14:28</div></div></div>
+                  <div style="display:flex;gap:11px;"><span style="width:28px;height:28px;flex:0 0 28px;border-radius:50%;background:linear-gradient(135deg,var(--pur),var(--mag));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">GR</span><div style="flex:1;"><div style="font-size:14px;"><strong>Gabriel Rodrigues</strong> <span style="font-size:12px;color:var(--tx3);">· 22/07, 14:30</span></div><div style="font-size:14px;color:#d0d0d8;line-height:1.6;margin-top:5px;background:var(--field);border-radius:11px;padding:12px 14px;">Transcrição 🎙 Oi Gabriel, tudo bem? Lembra quando conversamos de tirar aquele vocabulário de "horáriozinho"? Percebi que ainda continua e queria alinhar como ajustar.</div></div></div>
+                </div>
+                <div style="margin-top:16px;display:flex;gap:10px;align-items:flex-end;"><div style="flex:1;background:var(--field);border:1px solid var(--line);border-radius:11px;padding:12px 14px;color:var(--tx3);font-size:14px;">Comentar…  <span style="color:var(--pur);">@menciona alguém</span> · Ctrl+Enter envia</div><button style="width:44px;height:44px;background:linear-gradient(135deg,var(--pur),var(--mag));border:none;border-radius:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button></div>
+              </div>
+            </div>
+          </div>
+          <!-- fixed action bar -->
+          <div style="position:absolute;left:0;right:0;bottom:0;padding:16px 30px;background:linear-gradient(180deg,transparent,rgba(5,5,8,.92) 40%);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;justify-content:center;">
+            <div style="width:760px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <button style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);color:var(--tx2);border:1px solid var(--line2);border-radius:11px;padding:12px 16px;font:600 13px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>Voltar</button>
+              <div style="display:flex;gap:10px;">
+                <button style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);color:var(--tx2);border:1px solid var(--line2);border-radius:11px;padding:12px 16px;font:600 13px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>Adiar</button>
+                <button style="display:inline-flex;align-items:center;gap:8px;background:rgba(248,113,113,.08);color:#fca5a5;border:1px solid rgba(248,113,113,.22);border-radius:11px;padding:12px 16px;font:600 13px 'Plus Jakarta Sans';cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Excluir</button>
+                <button style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#10b981,#0d9668);color:#fff;border:none;border-radius:11px;padding:12px 22px;font:700 13px 'Plus Jakarta Sans';cursor:pointer;box-shadow:0 8px 24px -8px rgba(16,185,129,.6);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Concluir tarefa</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
