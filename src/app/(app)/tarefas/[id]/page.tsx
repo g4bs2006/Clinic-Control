@@ -27,7 +27,7 @@ export default async function TarefaPage({ params }: { params: Promise<{ id: str
   const profileOptions = profiles.map((p) => ({ id: p.id, name: p.name, email: p.email }))
 
   return (
-    <main className="p-4 sm:p-6">
+    <main className="p-4 sm:p-6 lg:h-[100dvh]">
       <TaskPageClient
         taskId={id}
         clinics={clinicOptions}

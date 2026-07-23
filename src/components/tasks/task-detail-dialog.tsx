@@ -1085,7 +1085,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
         <Loader2 className="size-5 animate-spin" />
       </div>
     )
-    if (asPage) return <div className="w-full pb-6">{spinner}</div>
+    if (asPage) return <div className="flex w-full items-center justify-center lg:h-full">{spinner}</div>
     return (
       <Dialog open={taskId != null} onOpenChange={(v) => !v && handleClose()}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">{spinner}</DialogContent>
@@ -1096,11 +1096,11 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   // ── Página (direção 1b): rail de detalhes à esquerda + fluxo central ──────────
   if (asPage) {
     return (
-      <div className="w-full pb-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-          <aside className="flex flex-col overflow-hidden rounded-xl border border-border bg-card lg:sticky lg:top-6 lg:w-[21rem] lg:flex-none lg:self-start">
+      <div className="w-full pb-6 lg:h-full lg:pb-0">
+        <div className="flex flex-col gap-5 lg:h-full lg:flex-row lg:items-stretch lg:gap-6">
+          <aside className="flex flex-col overflow-hidden rounded-xl border border-border bg-card lg:h-full lg:w-[22rem] lg:flex-none">
             {/* Cabeçalho do rail: origem + título + resumo de estado */}
-            <div className="flex flex-col gap-3 border-b border-border p-5">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-border p-5">
               {task.clinic_id ? (
                 <Link
                   href={`/clinicas/${task.clinic_id}`}
@@ -1132,8 +1132,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
               </div>
             </div>
 
-            {/* Detalhes editáveis */}
-            <div className="flex flex-col gap-3 p-5">
+            {/* Detalhes editáveis (região de scroll do rail no desktop) */}
+            <div className="flex flex-col gap-3 p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Detalhes</p>
               {task.source === "ia" && (
                 <span className="w-fit rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.62rem] font-semibold text-amber-400">
@@ -1160,7 +1160,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
             </div>
 
             {/* Ações principais fixadas no rodapé do rail */}
-            <div className="mt-auto flex flex-col gap-2 border-t border-border p-4">
+            <div className="flex shrink-0 flex-col gap-2 border-t border-border p-4">
               {task.status === "concluida" ? (
                 <Button type="button" variant="outline" className="w-full" disabled={pending} onClick={() => changeStatus("pendente")}>
                   <RotateCcw className="size-4" />
@@ -1202,7 +1202,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
           </aside>
 
           {/* Fluxo central: descrição, subtarefas, anexos e atividade */}
-          <div className="flex min-w-0 flex-1 flex-col gap-5">
+          <div className="flex min-w-0 flex-1 flex-col gap-5 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             <Link
               href={backHref}
               className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
