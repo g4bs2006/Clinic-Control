@@ -125,7 +125,10 @@ export function VaultFiles({
 }) {
   const router = useRouter()
   const confirm = useConfirm()
-  const inputRef = useRef<HTMLInputElement>(null)
+  // Dois inputs separados: pasta exige webkitdirectory ESTÁTICO (alternar o
+  // atributo no mesmo input é frágil e o navegador ignora na hora do clique).
+  const filesInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
   const uploadTargetRef = useRef<string>("")
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
@@ -222,9 +225,14 @@ export function VaultFiles({
     })
   }
 
-  function uploadInto(prefix: string) {
+  function pickFiles(prefix: string) {
     uploadTargetRef.current = prefix
-    inputRef.current?.click()
+    filesInputRef.current?.click()
+  }
+
+  function pickFolder(prefix: string) {
+    uploadTargetRef.current = prefix
+    folderInputRef.current?.click()
   }
 
   // Botão de compartilhar (só gestor). Cheio = compartilhado explicitamente;
@@ -317,7 +325,7 @@ export function VaultFiles({
                 {isGestor && (
                   <button
                     type="button"
-                    onClick={() => uploadInto(folderPath)}
+                    onClick={() => pickFiles(folderPath)}
                     disabled={busy}
                     title="Subir arquivos aqui dentro"
                     aria-label={`Subir dentro de ${name}`}
@@ -477,6 +485,7 @@ export function VaultFiles({
   }
 
   async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const inputEl = e.target
     const list = e.target.files
     const target = uploadTargetRef.current
     uploadTargetRef.current = ""
@@ -495,7 +504,7 @@ export function VaultFiles({
       toast.error(signed.error)
       setBusy(false)
       setProgress(null)
-      if (inputRef.current) inputRef.current.value = ""
+      inputEl.value = ""
       return
     }
     const tokenByPath = new Map(signed.uploads.map((u) => [u.path, u]))
@@ -530,7 +539,7 @@ export function VaultFiles({
     }
     setBusy(false)
     setProgress(null)
-    if (inputRef.current) inputRef.current.value = ""
+    inputEl.value = ""
   }
 
   return (
@@ -538,29 +547,22 @@ export function VaultFiles({
       {/* Ações (só gestor sobe/exclui; dev só navega e baixa o que foi compartilhado) */}
       {isGestor && (
         <div className="flex flex-wrap items-center gap-2">
+          <input ref={filesInputRef} type="file" multiple hidden onChange={handlePick} />
           <input
-            ref={inputRef}
+            ref={folderInputRef}
             type="file"
             multiple
             hidden
             onChange={handlePick}
+            {...{ webkitdirectory: "", directory: "" }}
           />
-          <Button type="button" size="sm" disabled={busy} onClick={() => uploadInto("")}>
+          <Button type="button" size="sm" disabled={busy} onClick={() => pickFiles("")}>
             <Upload className="size-4" />
             {busy ? (progress ? `Enviando ${progress.done}/${progress.total}…` : "Enviando…") : "Subir arquivos"}
           </Button>
           <button
             type="button"
-            onClick={() => {
-              inputRef.current?.setAttribute("webkitdirectory", "")
-              inputRef.current?.setAttribute("directory", "")
-              uploadInto("")
-              // Remove os atributos após o clique para o próximo upload voltar a ser de arquivos.
-              setTimeout(() => {
-                inputRef.current?.removeAttribute("webkitdirectory")
-                inputRef.current?.removeAttribute("directory")
-              }, 300)
-            }}
+            onClick={() => pickFolder("")}
             disabled={busy}
             className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2.5 text-[0.8rem] font-medium text-foreground hover:bg-accent disabled:opacity-50"
           >
