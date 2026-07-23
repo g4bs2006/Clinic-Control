@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/actions";
 import { CarteiraSwitcher } from "@/components/carteira-switcher";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { navItems } from "@/lib/nav-items";
 
 const STORAGE_KEY = "cc-sidebar-pinned";
@@ -178,6 +179,11 @@ export function AppNav({
                 </>
               )}
             </button>
+          </div>
+
+          {/* Sino de notificações */}
+          <div className="mb-1 px-2 shrink-0">
+            <NotificationBell placement="sidebar" expanded={open} />
           </div>
 
           {/* Items */}

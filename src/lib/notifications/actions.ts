@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSessionUser } from "@/lib/auth/session";
+import { getSessionUser, getSessionUserId } from "@/lib/auth/session";
+import { mintRealtimeToken } from "./realtime-token";
 import type { NotificationRow, NotificationType } from "./types";
 
 type SingleOrArray<T> = T | T[] | null;
@@ -73,6 +74,19 @@ export async function markNotificationRead(
     .is("read_at", null);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * Token para o browser assinar o canal Realtime das próprias notificações.
+ * Null quando não há SUPABASE_JWT_SECRET (o sino cai no polling). Devolve o
+ * userId junto para o filtro do canal (recipient_id).
+ */
+export async function getRealtimeToken(): Promise<{ token: string; userId: string } | null> {
+  const userId = await getSessionUserId();
+  if (!userId) return null;
+  const token = await mintRealtimeToken(userId);
+  if (!token) return null;
+  return { token, userId };
 }
 
 /** Marca todas as não-lidas do usuário como lidas. */
