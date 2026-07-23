@@ -1,18 +1,13 @@
 "use client"
 
 import { useEffect, useRef, useState, useTransition } from "react"
+import Link from "next/link"
 import { toast } from "sonner"
-import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw, Pencil, Check, Plus } from "lucide-react"
+import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw, Pencil, Check, Plus, ArrowLeft, Building2, ExternalLink } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useConfirm } from "@/components/ui/confirm-dialog"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
@@ -89,9 +84,13 @@ interface TaskDetailDialogProps {
   onSnoozed?: (id: string, until: string | null) => void
   onChanged: () => void
   currentUserId?: string | null
+  /** Renderiza como PÁGINA (2 colunas, sem o wrapper de diálogo) em vez de modal. */
+  asPage?: boolean
+  /** Só no modo página: destino do botão "Voltar" (padrão /tarefas). */
+  backHref?: string
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onSnoozed, onChanged, currentUserId = null }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onSnoozed, onChanged, currentUserId = null, asPage = false, backHref = "/tarefas" }: TaskDetailDialogProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
@@ -532,25 +531,45 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     })
   }
 
-  return (
-    <Dialog open={taskId != null} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        {loading || !task ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground">
-            <Loader2 className="size-5 animate-spin" />
-          </div>
-        ) : (
-          <>
-            <DialogHeader>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onBlur={() => title.trim().length >= 3 && title !== task.title && saveField({ title })}
-                className="border-none px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
-              />
-            </DialogHeader>
+  const inner =
+    loading || !task ? (
+      <div className="flex items-center justify-center py-16 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" />
+      </div>
+    ) : (
+      <>
+            <div className="flex flex-col gap-1">
+              {asPage && task.clinic_id && (
+                <Link
+                  href={`/clinicas/${task.clinic_id}`}
+                  className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Building2 className="size-3.5" />
+                  {task.clinic_name}
+                </Link>
+              )}
+              <div className="flex items-center gap-2">
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onBlur={() => title.trim().length >= 3 && title !== task.title && saveField({ title })}
+                  className={`flex-1 border-none px-0 font-semibold shadow-none focus-visible:ring-0 ${asPage ? "text-2xl" : "text-lg"}`}
+                />
+                {!asPage && taskId && (
+                  <Link
+                    href={`/tarefas/${taskId}`}
+                    title="Abrir em página"
+                    aria-label="Abrir em página"
+                    className="mr-6 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <ExternalLink className="size-4" />
+                  </Link>
+                )}
+              </div>
+            </div>
 
-            <div className="flex flex-col gap-5">
+            <div className={asPage ? "grid gap-5 lg:grid-cols-[19rem_minmax(0,1fr)] lg:items-start" : "flex flex-col gap-5"}>
+              <div className="flex flex-col gap-5">
               {/* ── Metadados ─────────────────────────────────────── */}
               {task.source === "ia" && (
                 <div className="flex flex-wrap items-center gap-2">
@@ -577,7 +596,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 status={task.status}
                 onStatusChange={changeStatus}
               />
+              </div>
 
+              <div className="flex flex-col gap-5">
               {/* ── Descrição ─────────────────────────────────────── */}
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                 Descrição — o que precisa ser feito
@@ -914,9 +935,10 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   </Button>
                 </div>
               </div>
+              </div>
             </div>
 
-            <DialogFooter className="sm:justify-between">
+            <div className="flex flex-col gap-2 border-t border-border/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
               {task.status === "concluida" ? (
                 <Button
                   type="button"
@@ -957,12 +979,25 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   <Trash2 className="size-4 mr-1" />
                   Excluir
                 </Button>
-                <DialogClose className={buttonVariants({ variant: "outline" })}>Fechar</DialogClose>
+                {asPage ? (
+                  <Link href={backHref} className={buttonVariants({ variant: "outline" })}>
+                    <ArrowLeft className="size-4" />
+                    Voltar
+                  </Link>
+                ) : (
+                  <Button type="button" variant="outline" onClick={handleClose}>
+                    Fechar
+                  </Button>
+                )}
               </div>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
+            </div>
+      </>
+    )
+
+  if (asPage) return <div className="mx-auto w-full max-w-3xl px-1 pb-6">{inner}</div>
+  return (
+    <Dialog open={taskId != null} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">{inner}</DialogContent>
     </Dialog>
   )
 }
