@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { RefreshCw } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -9,8 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 import {
   updateClinicOpenAiKey,
+  syncOpenAiKeys,
   type OpenAiKeyOption,
 } from "@/lib/openai-usage/actions"
 
@@ -29,8 +33,26 @@ export function ClinicOpenAiKeySelect({
   current,
   keys,
 }: ClinicOpenAiKeySelectProps) {
+  const router = useRouter()
   const [apiKeyId, setApiKeyId] = useState<string>(current ?? "")
   const [pending, startTransition] = useTransition()
+  const [syncing, setSyncing] = useState(false)
+
+  // Sincroniza o cache de chaves da organização na hora (chave de clínica nova
+  // aparece sem esperar o cron); o refresh recarrega a lista do servidor.
+  function onSync() {
+    setSyncing(true)
+    startTransition(async () => {
+      const res = await syncOpenAiKeys()
+      setSyncing(false)
+      if (res.ok) {
+        toast.success(`${res.keys} chave(s) sincronizada(s) da organização`)
+        router.refresh()
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
 
   // Sinaliza key já usada por OUTRA clínica (vínculo duplo quase sempre é engano).
   function label(k: OpenAiKeyOption): string {
@@ -56,36 +78,56 @@ export function ClinicOpenAiKeySelect({
     })
   }
 
+  const syncButton = (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={syncing || pending}
+      onClick={onSync}
+      title="Busca na organização OpenAI as chaves novas (ex.: clínica que acabou de entrar)"
+    >
+      <RefreshCw className={`size-3.5 ${syncing ? "animate-spin" : ""}`} />
+      {syncing ? "Sincronizando…" : "Sincronizar chaves"}
+    </Button>
+  )
+
   if (keys.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        Nenhuma API key sincronizada ainda — rode a Edge Function{" "}
-        <code>collect-openai-usage</code> (ou aguarde o cron diário).
-      </p>
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-muted-foreground">
+          Nenhuma API key sincronizada ainda. Se a clínica acabou de entrar, sincronize as chaves
+          da organização — ou aguarde o cron diário.
+        </p>
+        <div>{syncButton}</div>
+      </div>
     )
   }
 
   return (
-    <Select
-      value={apiKeyId || NONE}
-      items={{
-        [NONE]: "— Sem vínculo —",
-        ...Object.fromEntries(keys.map((k) => [k.apiKeyId, label(k)])),
-      }}
-      onValueChange={onChange}
-      disabled={pending}
-    >
-      <SelectTrigger id="clinic-openai-key" className="w-full sm:w-72">
-        <SelectValue placeholder="Selecione a API key OpenAI" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NONE}>— Sem vínculo —</SelectItem>
-        {keys.map((k) => (
-          <SelectItem key={k.apiKeyId} value={k.apiKeyId}>
-            {label(k)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <Select
+        value={apiKeyId || NONE}
+        items={{
+          [NONE]: "— Sem vínculo —",
+          ...Object.fromEntries(keys.map((k) => [k.apiKeyId, label(k)])),
+        }}
+        onValueChange={onChange}
+        disabled={pending}
+      >
+        <SelectTrigger id="clinic-openai-key" className="w-full sm:w-72">
+          <SelectValue placeholder="Selecione a API key OpenAI" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NONE}>— Sem vínculo —</SelectItem>
+          {keys.map((k) => (
+            <SelectItem key={k.apiKeyId} value={k.apiKeyId}>
+              {label(k)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {syncButton}
+    </div>
   )
 }
