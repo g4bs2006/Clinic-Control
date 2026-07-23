@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3 } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -21,6 +21,7 @@ import { RecurrencesDialog } from "./recurrences-dialog"
 import { TaskSuggestions } from "./task-suggestions"
 import { TaskDetailDialog } from "./task-detail-dialog"
 import { KanbanBoard } from "./kanban-board"
+import { TaskDashboard } from "./task-dashboard"
 import { SnoozeButton, fmtSnoozeDate } from "./snooze-button"
 import type { ClinicOption, ProfileOption } from "./task-fields"
 import {
@@ -276,7 +277,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
-  const [view, setView] = useState<"list" | "board" | "week">("list")
+  const [view, setView] = useState<"list" | "board" | "week" | "panorama">("list")
   const [showDone, setShowDone] = useState(false)
   const [showSnoozed, setShowSnoozed] = useState(false)
   // Mobile: filtros recolhidos num botão "Filtros" (no desktop ficam sempre visíveis).
@@ -493,7 +494,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-2">
         {/* Toggle de filtros — só mobile (no desktop os filtros ficam inline) */}
-        {view !== "week" && (
+        {view !== "week" && view !== "panorama" && (
           <Button
             type="button"
             size="sm"
@@ -510,7 +511,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
 
         {/* sm:contents: no desktop o wrapper some e os filtros fluem como antes */}
         <div className={filtersOpen ? "flex w-full flex-col gap-2 sm:contents" : "hidden sm:contents"}>
-        {view !== "week" && (
+        {view !== "week" && view !== "panorama" && (
           <>
             <Select
               value={statusFilter}
@@ -639,6 +640,16 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           >
             <CalendarDays className="size-3.5" />
           </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={view === "panorama" ? "secondary" : "ghost"}
+            title="Ver panorama"
+            className="size-9 sm:size-7"
+            onClick={() => setView("panorama")}
+          >
+            <BarChart3 className="size-3.5" />
+          </Button>
         </div>
 
         <div className="flex-1" />
@@ -660,7 +671,17 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         />
       </div>
 
-      {view === "week" ? (
+      {view === "panorama" ? (
+        <TaskDashboard
+          tasks={tasks}
+          categoryLabel={categoryLabel}
+          profiles={profiles}
+          clinics={clinics}
+          isGestor={isGestor}
+          currentUserId={currentUserId}
+          onOpenTask={setOpenTaskId}
+        />
+      ) : view === "week" ? (
         myOpenTasks.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             Você não tem tarefas em aberto atribuídas a você.
@@ -799,7 +820,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         </div>
       )}
 
-      {suggestions.length > 0 && (
+      {suggestions.length > 0 && view !== "panorama" && (
         <TaskSuggestions
           suggestions={suggestions}
           clinics={clinics}
