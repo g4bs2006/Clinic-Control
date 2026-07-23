@@ -591,13 +591,23 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     if (!taskId || !comment.trim()) return
     const id = taskId
     const body = comment.trim()
+    // Resolve os @mencionados: perfis cujo "@Nome" aparece no corpo (sem colar em
+    // outra palavra). É a mesma leitura do renderMentions, só que devolvendo ids
+    // para o servidor notificar.
+    const mentionedIds = profiles
+      .filter((p) => {
+        if (!p.name) return false
+        const esc = p.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        return new RegExp(`@${esc}(?![\\p{L}\\p{N}])`, "u").test(body)
+      })
+      .map((p) => p.id)
     const tempId = `pend-cmt-${Date.now()}`
     setMention(null)
     // Aparece na hora como comentário pendente; o refetch troca pelo real.
     setPendingComments((prev) => [...prev, { id: tempId, body }])
     setComment("")
     startTransition(async () => {
-      const res = await addTaskComment(id, body)
+      const res = await addTaskComment(id, body, mentionedIds)
       if (res.ok) {
         await reload(id)
         setPendingComments((prev) => prev.filter((p) => p.id !== tempId))

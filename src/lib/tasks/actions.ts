@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getCurrentProfile, getCarteiraScope } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
 import { TASK_STATUS_LABEL, TASK_ATTACHMENTS_BUCKET, type TaskCategory, type TaskPriority, type TaskStatus } from "./categories";
+import { notifyTaskAssigned, notifyTaskComment } from "@/lib/notifications/task-events";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -281,6 +282,13 @@ export async function createTask(
     .single();
   if (error) return { ok: false, error: error.message };
 
+  await notifyTaskAssigned({
+    taskId: data.id as string,
+    taskTitle: title,
+    assigneeId: input.assignedTo,
+    actor: { id: user!.id, name: user!.name },
+  });
+
   revalidatePath("/tarefas");
   revalidatePath("/");
   if (input.clinicId) revalidatePath(`/clinicas/${input.clinicId}`);
@@ -317,8 +325,19 @@ export async function createTasksForClinics(
     created_by: user!.id,
   }));
 
-  const { error } = await supabase.from("tasks").insert(rows);
+  const { data: created, error } = await supabase.from("tasks").insert(rows).select("id");
   if (error) return { ok: false, error: error.message };
+
+  if (base.assignedTo) {
+    for (const row of created ?? []) {
+      await notifyTaskAssigned({
+        taskId: row.id as string,
+        taskTitle: title,
+        assigneeId: base.assignedTo,
+        actor: { id: user!.id, name: user!.name },
+      });
+    }
+  }
 
   revalidatePath("/tarefas");
   revalidatePath("/");
@@ -341,8 +360,25 @@ export async function updateTask(
   if (input.dueDate !== undefined) payload.due_date = input.dueDate || null;
   if (input.clinicId !== undefined) payload.clinic_id = input.clinicId;
 
+  // Estado anterior para detectar troca de responsável (só se for editar isso).
+  let prev: { assigned_to: string | null; title: string } | null = null;
+  if (input.assignedTo !== undefined) {
+    const { data } = await supabase.from("tasks").select("assigned_to, title").eq("id", id).maybeSingle();
+    prev = (data as { assigned_to: string | null; title: string } | null) ?? null;
+  }
+
   const { error } = await supabase.from("tasks").update(payload).eq("id", id);
   if (error) return { ok: false, error: error.message };
+
+  if (input.assignedTo && input.assignedTo !== prev?.assigned_to) {
+    const user = await getSessionUser();
+    await notifyTaskAssigned({
+      taskId: id,
+      taskTitle: (payload.title as string | undefined) ?? prev?.title,
+      assigneeId: input.assignedTo,
+      actor: { id: user!.id, name: user!.name },
+    });
+  }
 
   revalidatePath("/tarefas");
   revalidatePath("/");
@@ -496,6 +532,13 @@ export async function acceptTaskSuggestion(
     })
     .eq("id", suggestionId);
   if (updateError) return { ok: false, error: updateError.message };
+
+  await notifyTaskAssigned({
+    taskId: task.id as string,
+    taskTitle: title,
+    assigneeId: input.assignedTo,
+    actor: { id: user!.id, name: user!.name },
+  });
 
   revalidatePath("/tarefas");
   revalidatePath("/");
@@ -794,6 +837,7 @@ export async function listTaskActivity(taskId: string): Promise<TaskActivityRow[
 export async function addTaskComment(
   taskId: string,
   body: string,
+  mentionedIds: string[] = [],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
@@ -809,6 +853,13 @@ export async function addTaskComment(
     kind: "comment",
   });
   if (error) return { ok: false, error: error.message };
+
+  await notifyTaskComment({
+    taskId,
+    commentBody: text,
+    mentionedIds,
+    actor: { id: user!.id, name: user!.name },
+  });
 
   revalidatePath("/tarefas");
   return { ok: true };

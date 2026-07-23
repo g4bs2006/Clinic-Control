@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getCarteiraScope } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
 import { TASK_ATTACHMENTS_BUCKET } from "@/lib/tasks/categories";
+import { notifyAcompanhamentoAssigned } from "@/lib/notifications/task-events";
 
 export type AcompanhamentoStatus = "aberto" | "resolvido" | "dispensado";
 
@@ -135,6 +136,14 @@ export async function createAcompanhamento(input: {
     .select("id")
     .single();
   if (error) return { ok: false as const, error: error.message };
+
+  await notifyAcompanhamentoAssigned({
+    acompanhamentoId: data.id as string,
+    title,
+    assigneeId: input.assignedTo ?? null,
+    actor: { id: user!.id, name: user!.name },
+  });
+
   revalidatePath("/acompanhamentos");
   return { ok: true as const, id: data.id as string };
 }
@@ -189,6 +198,13 @@ export async function acceptSuggestionAsAcompanhamento(
     .update({ status: "accepted", reviewed_at: new Date().toISOString(), reviewed_by: user!.id })
     .eq("id", suggestionId);
   if (ue) return { ok: false, error: ue.message };
+
+  await notifyAcompanhamentoAssigned({
+    acompanhamentoId: created.id as string,
+    title: (s.text as string).slice(0, 200),
+    assigneeId: assignee,
+    actor: { id: user!.id, name: user!.name },
+  });
 
   revalidatePath("/acompanhamentos");
   revalidatePath("/tarefas");
