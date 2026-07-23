@@ -1085,7 +1085,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
         <Loader2 className="size-5 animate-spin" />
       </div>
     )
-    if (asPage) return <div className="mx-auto w-full max-w-3xl px-1 pb-6">{spinner}</div>
+    if (asPage) return <div className="w-full pb-6">{spinner}</div>
     return (
       <Dialog open={taskId != null} onOpenChange={(v) => !v && handleClose()}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">{spinner}</DialogContent>
@@ -1096,7 +1096,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   // ── Página (direção 1b): rail de detalhes à esquerda + fluxo central ──────────
   if (asPage) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-1 pb-6">
+      <div className="w-full pb-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
           <aside className="flex flex-col overflow-hidden rounded-xl border border-border bg-card lg:sticky lg:top-6 lg:w-[21rem] lg:flex-none lg:self-start">
             {/* Cabeçalho do rail: origem + título + resumo de estado */}
