@@ -65,6 +65,10 @@ function fmtBytes(n: number | null): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
+function fmtShortDate(d: string): string {
+  return new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+}
+
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", {
     day: "2-digit",
@@ -131,6 +135,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   // em vez de um refetch de página inteira a cada micro-edição.
   const changedRef = useRef(false)
   const today = spDateParts(new Date()).today
+  const doneSubtasks = subtasks.filter((s) => s.status === "concluida").length
 
   async function reload(id: string) {
     const [t, subs, atts, acts] = await Promise.all([
@@ -651,6 +656,20 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   </Button>
                 </div>
 
+                {subtasks.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted/50">
+                      <div
+                        className="h-full rounded-full bg-emerald-500 transition-all"
+                        style={{ width: `${Math.round((doneSubtasks / subtasks.length) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="shrink-0 text-[0.68rem] tabular-nums text-muted-foreground">
+                      {doneSubtasks}/{subtasks.length}
+                    </span>
+                  </div>
+                )}
+
                 {suggested && (
                   <div className="flex flex-col gap-1.5 rounded-md bg-amber-500/5 border border-amber-500/30 p-2.5">
                     <p className="text-[0.68rem] text-muted-foreground">
@@ -691,9 +710,23 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                     ))}
                     {subtasks.map((s) => (
                       <li key={s.id} className="flex items-center gap-2 py-1.5 text-sm">
-                        <span className={`flex-1 ${s.status === "concluida" ? "text-muted-foreground line-through" : ""}`}>
+                        <Link
+                          href={`/tarefas/${s.id}`}
+                          title="Abrir subtarefa (responsável, prazo, anexos…)"
+                          className={`min-w-0 flex-1 truncate hover:underline ${s.status === "concluida" ? "text-muted-foreground line-through" : "text-foreground"}`}
+                        >
                           {s.title}
-                        </span>
+                        </Link>
+                        {s.assigned_to_name && (
+                          <span className="hidden shrink-0 text-[0.62rem] text-muted-foreground sm:inline">
+                            {s.assigned_to_name}
+                          </span>
+                        )}
+                        {s.due_date && (
+                          <span className="shrink-0 text-[0.62rem] tabular-nums text-muted-foreground">
+                            {fmtShortDate(s.due_date)}
+                          </span>
+                        )}
                         <Select
                           value={s.status}
                           items={Object.fromEntries(TASK_STATUSES.map((st) => [st, TASK_STATUS_LABEL[st]]))}
