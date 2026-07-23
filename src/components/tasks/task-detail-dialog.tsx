@@ -69,6 +69,31 @@ function fmtShortDate(d: string): string {
   return new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
 }
 
+// Destaca "@Nome" no corpo do comentário quando bate com um nome conhecido da
+// equipe (nomes mais longos primeiro, para "@Maria Silva" ganhar de "@Maria").
+function renderMentions(body: string, names: string[]): React.ReactNode {
+  if (names.length === 0) return body
+  const escaped = [...names]
+    .sort((a, b) => b.length - a.length)
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  const re = new RegExp(`@(?:${escaped.join("|")})`, "g")
+  const out: React.ReactNode[] = []
+  let last = 0
+  let key = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(body)) !== null) {
+    if (m.index > last) out.push(body.slice(last, m.index))
+    out.push(
+      <span key={key++} className="font-semibold text-brand-gradient">
+        {m[0]}
+      </span>,
+    )
+    last = m.index + m[0].length
+  }
+  if (last < body.length) out.push(body.slice(last))
+  return out
+}
+
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", {
     day: "2-digit",
@@ -127,6 +152,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   // URLs assinadas dos anexos de imagem (para thumbnail/lightbox) e a imagem aberta.
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({})
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
+  // Comentário: textarea + autocomplete de @menção (query = texto após o "@").
+  const commentRef = useRef<HTMLTextAreaElement>(null)
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
   const [activityFilter, setActivityFilter] = useState<"all" | "comment" | "system">("all")
   // Instante da última carga da atividade — base estável para a janela de edição
   // de 30 min sem chamar Date.now() durante o render (o servidor revalida o limite).
@@ -136,6 +164,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const changedRef = useRef(false)
   const today = spDateParts(new Date()).today
   const doneSubtasks = subtasks.filter((s) => s.status === "concluida").length
+  const profileNames = profiles.map((p) => p.name).filter((n): n is string => !!n)
 
   async function reload(id: string) {
     const [t, subs, atts, acts] = await Promise.all([
@@ -499,11 +528,55 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     })
   }
 
+  const mentionCandidates =
+    mention
+      ? profiles
+          .filter((p) => p.name && p.name.toLowerCase().includes(mention.query.toLowerCase()))
+          .slice(0, 6)
+      : []
+
+  function onCommentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const v = e.target.value
+    setComment(v)
+    const caret = e.target.selectionStart ?? v.length
+    const m = v.slice(0, caret).match(/@([\p{L}\p{N}._-]*)$/u)
+    setMention(m ? { query: m[1], start: caret - m[0].length } : null)
+  }
+
+  function insertMention(p: ProfileOption) {
+    if (!mention) return
+    const name = p.name ?? ""
+    const el = commentRef.current
+    const caret = el?.selectionStart ?? comment.length
+    const next = `${comment.slice(0, mention.start)}@${name} ${comment.slice(caret)}`
+    setComment(next)
+    setMention(null)
+    requestAnimationFrame(() => {
+      el?.focus()
+      const pos = mention.start + name.length + 2
+      el?.setSelectionRange(pos, pos)
+    })
+  }
+
+  function onCommentKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (mention && mentionCandidates.length > 0 && (e.key === "Enter" || e.key === "Tab")) {
+      e.preventDefault()
+      insertMention(mentionCandidates[0])
+      return
+    }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      submitComment()
+    }
+    if (e.key === "Escape" && mention) setMention(null)
+  }
+
   function submitComment() {
     if (!taskId || !comment.trim()) return
     const id = taskId
     const body = comment.trim()
     const tempId = `pend-cmt-${Date.now()}`
+    setMention(null)
     // Aparece na hora como comentário pendente; o refetch troca pelo real.
     setPendingComments((prev) => [...prev, { id: tempId, body }])
     setComment("")
@@ -947,7 +1020,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
                                 {a.kind === "comment" && <span className="font-semibold text-xs text-muted-foreground mr-1">{a.author_name ?? "Alguém"}: </span>}
-                                <span className="break-words">{a.body}</span>
+                                <span className="break-words">{a.kind === "comment" ? renderMentions(a.body, profileNames) : a.body}</span>
                               </div>
                               
                               {canEditOrDelete && (
@@ -993,17 +1066,37 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                       </li>
                     ))}
                 </ul>
-                <div className="flex items-center gap-2 border-t border-border/40 pt-2">
-                  <Input
+                <div className="relative border-t border-border/40 pt-2">
+                  <textarea
+                    ref={commentRef}
                     value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && submitComment()}
-                    placeholder="Adicionar comentário…"
-                    className="h-8 flex-1"
+                    onChange={onCommentChange}
+                    onKeyDown={onCommentKeyDown}
+                    rows={2}
+                    placeholder="Comentar…  @ menciona alguém · Ctrl+Enter envia"
+                    className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
                   />
-                  <Button type="button" size="icon-sm" disabled={pending || !comment.trim()} onClick={submitComment}>
-                    <Send className="size-3.5" />
-                  </Button>
+                  {mention && mentionCandidates.length > 0 && (
+                    <ul className="absolute bottom-full left-2 z-50 mb-1 max-h-44 w-56 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+                      {mentionCandidates.map((p) => (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => insertMention(p)}
+                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm hover:bg-accent"
+                          >
+                            <span className="truncate">{p.name}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="mt-1.5 flex justify-end">
+                    <Button type="button" size="sm" disabled={pending || !comment.trim()} onClick={submitComment}>
+                      <Send className="size-3.5" />
+                      Comentar
+                    </Button>
+                  </div>
                 </div>
               </div>
               </div>
