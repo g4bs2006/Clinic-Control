@@ -653,8 +653,12 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   }
 
   // ── Seções de conteúdo (compartilhadas entre o modal e a página 1b) ──────────
+  // Um TaskDetailDialog é sempre página OU modal — então `asPage` pode ditar uma
+  // escala maior no modo página sem afetar o modal (que segue compacto).
+  const secCard = `flex flex-col rounded-lg border border-border/60 ${asPage ? "gap-3 p-5" : "gap-2 p-3"}`
+  const rowText = asPage ? "text-[0.95rem]" : "text-sm"
   const descriptionField = (
-    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+    <label className={`flex flex-col gap-1.5 text-muted-foreground ${asPage ? "text-[0.8rem]" : "text-xs"}`}>
       Descrição — o que precisa ser feito
       <textarea
         value={description}
@@ -662,15 +666,15 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
         onBlur={() => {
           if (task && description !== (task.description ?? "")) saveField({ description })
         }}
-        rows={3}
+        rows={asPage ? 4 : 3}
         placeholder="Descreva a tarefa com detalhe suficiente para a IA conseguir quebrar em passos, se precisar."
-        className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
+        className={`w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-foreground outline-none focus:ring-1 focus:ring-ring ${asPage ? "text-[0.95rem] leading-relaxed" : "text-sm"}`}
       />
     </label>
   )
 
   const subtasksBlock = (
-              <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
+              <div className={secCard}>
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Subtarefas {subtasks.length > 0 && `(${subtasks.length})`}
@@ -734,7 +738,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                       </li>
                     ))}
                     {subtasks.map((s) => (
-                      <li key={s.id} className="flex items-center gap-2 py-1.5 text-sm">
+                      <li key={s.id} className={`flex items-center gap-2 ${asPage ? "py-2.5" : "py-1.5"} ${rowText}`}>
                         <Link
                           href={`/tarefas/${s.id}`}
                           title="Abrir subtarefa (responsável, prazo, anexos…)"
@@ -789,7 +793,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   )
 
   const anexosBlock = (
-              <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
+              <div className={secCard}>
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Anexos {attachments.length > 0 && `(${attachments.length})`}
@@ -817,7 +821,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                       </li>
                     ))}
                     {attachments.map((a) => (
-                      <li key={a.id} className="group flex items-center gap-2 py-2 text-sm transition-colors hover:bg-accent/10 rounded px-1.5">
+                      <li key={a.id} className={`group flex items-center gap-2 rounded px-1.5 transition-colors hover:bg-accent/10 ${asPage ? "py-2.5" : "py-2"} ${rowText}`}>
                         {editingAttachmentId === a.id ? (
                           <div className="flex flex-1 items-center gap-1.5">
                             <Input
@@ -904,7 +908,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   )
 
   const atividadeBlock = (
-              <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
+              <div className={secCard}>
                 <div className="flex flex-wrap items-center justify-between gap-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Atividade</p>
                   <div className="flex items-center gap-1 rounded-md border border-border p-0.5 text-[0.7rem] bg-accent/10">
@@ -931,7 +935,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                     </button>
                   </div>
                 </div>
-                <ul className="flex max-h-52 flex-col gap-2 overflow-y-auto pr-1">
+                <ul className={`flex flex-col gap-2 overflow-y-auto pr-1 ${asPage ? "max-h-none" : "max-h-52"}`}>
                   {activity
                     .filter((a) => activityFilter === "all" || a.kind === activityFilter)
                     .map((a) => {
@@ -1119,7 +1123,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 onBlur={() => title.trim().length >= 3 && title !== task.title && saveField({ title })}
-                className="border-none px-0 text-xl font-bold leading-tight shadow-none focus-visible:ring-0"
+                className="h-auto border-none px-0 text-2xl font-bold leading-tight shadow-none focus-visible:ring-0"
               />
               <div className="flex flex-wrap gap-2">
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${STATUS_PILL[task.status]}`}>
