@@ -59,10 +59,13 @@ export function AppNav({
     return () => window.removeEventListener("cc-toggle-nav", toggle);
   }, []);
 
-  // Fecha o drawer ao navegar (troca de rota).
-  useEffect(() => {
+  // Fecha o drawer ao navegar (troca de rota) — padrão render-time (sem setState
+  // dentro de useEffect): compara o pathname atual com o último renderizado.
+  const [navPath, setNavPath] = useState(pathname);
+  if (pathname !== navPath) {
+    setNavPath(pathname);
     setMobileOpen(false);
-  }, [pathname]);
+  }
 
   // Click outside collapses the transient peek (when not pinned) — desktop.
   useEffect(() => {
