@@ -1,6 +1,7 @@
 // Aba "WhatsApp" — mapeamento grupo → clínica e equipe/bot nos grupos.
 import { listClinics } from "@/lib/clinics/actions"
 import { listWhatsappGroups, listTeamMembers } from "@/lib/whatsapp/actions"
+import { getCurrentProfile } from "@/lib/users/actions"
 import { Panel } from "@/components/dashboard/panel"
 import { WhatsappGroupsEditor } from "@/components/settings/whatsapp-groups-editor"
 import { WhatsappTeamEditor } from "@/components/settings/whatsapp-team-editor"
@@ -8,11 +9,13 @@ import { WhatsappTeamEditor } from "@/components/settings/whatsapp-team-editor"
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesWhatsappPage() {
-  const [groups, teamMembers, clinics] = await Promise.all([
+  const [groups, teamMembers, clinics, currentProfile] = await Promise.all([
     listWhatsappGroups(),
     listTeamMembers(),
     listClinics(),
+    getCurrentProfile(),
   ])
+  const readOnly = currentProfile?.role !== "gestor"
 
   return (
     <>
@@ -23,6 +26,7 @@ export default async function ConfiguracoesWhatsappPage() {
         <WhatsappGroupsEditor
           groups={groups}
           clinics={clinics.map((c) => ({ id: c.id, name: c.name }))}
+          readOnly={readOnly}
         />
       </Panel>
 
@@ -30,7 +34,7 @@ export default async function ConfiguracoesWhatsappPage() {
         title="Equipe no WhatsApp"
         subtitle="quem conta como resposta humana nos grupos (e quais IDs são bot)"
       >
-        <WhatsappTeamEditor initialMembers={teamMembers} />
+        <WhatsappTeamEditor initialMembers={teamMembers} readOnly={readOnly} />
       </Panel>
     </>
   )

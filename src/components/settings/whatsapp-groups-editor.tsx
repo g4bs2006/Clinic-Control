@@ -19,9 +19,11 @@ const NONE = "__none__"
 interface WhatsappGroupsEditorProps {
   groups: WhatsappGroupRow[]
   clinics: { id: string; name: string }[]
+  /** Desenvolvedor: só visualiza (sem sincronizar nem remapear). */
+  readOnly?: boolean
 }
 
-export function WhatsappGroupsEditor({ groups, clinics }: WhatsappGroupsEditorProps) {
+export function WhatsappGroupsEditor({ groups, clinics, readOnly = false }: WhatsappGroupsEditorProps) {
   const router = useRouter()
   const [byJid, setByJid] = useState<Record<string, string | null>>(() =>
     Object.fromEntries(groups.map((g) => [g.group_jid, g.clinic_id])),
@@ -62,6 +64,8 @@ export function WhatsappGroupsEditor({ groups, clinics }: WhatsappGroupsEditorPr
   }
 
   const mapped = Object.values(byJid).filter(Boolean).length
+  const clinicName = (id: string | null) =>
+    id ? (clinics.find((c) => c.id === id)?.name ?? "(clínica removida)") : "— Sem clínica —"
 
   return (
     <div className="flex flex-col gap-2">
@@ -70,17 +74,19 @@ export function WhatsappGroupsEditor({ groups, clinics }: WhatsappGroupsEditorPr
           {mapped} de {groups.length} grupos mapeados. Grupos sem clínica (internos ou
           de outras carteiras) ficam fora do cálculo do tempo de resposta.
         </p>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={syncing}
-          onClick={sync}
-          title="Busca na Evolution os grupos novos (ex.: clínica que acabou de entrar)"
-        >
-          <RefreshCw className={`size-3.5 ${syncing ? "animate-spin" : ""}`} />
-          Buscar grupos novos
-        </Button>
+        {!readOnly && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={syncing}
+            onClick={sync}
+            title="Busca na Evolution os grupos novos (ex.: clínica que acabou de entrar)"
+          >
+            <RefreshCw className={`size-3.5 ${syncing ? "animate-spin" : ""}`} />
+            Buscar grupos novos
+          </Button>
+        )}
       </div>
 
       <ul className="flex flex-col gap-1.5 max-h-[420px] overflow-y-auto pr-1">
@@ -92,27 +98,35 @@ export function WhatsappGroupsEditor({ groups, clinics }: WhatsappGroupsEditorPr
             <span className="truncate text-sm text-foreground" title={g.group_jid}>
               {g.name ?? g.group_jid}
             </span>
-            <Select
-              value={byJid[g.group_jid] ?? NONE}
-              items={{
-                [NONE]: "— Sem clínica —",
-                ...Object.fromEntries(clinics.map((c) => [c.id, c.name])),
-              }}
-              onValueChange={(v) => onChange(g.group_jid, v)}
-              disabled={pending}
-            >
-              <SelectTrigger className="h-8 w-full">
-                <SelectValue placeholder="Sem clínica" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>— Sem clínica —</SelectItem>
-                {clinics.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {readOnly ? (
+              <span
+                className={`truncate text-sm ${byJid[g.group_jid] ? "text-foreground" : "text-muted-foreground"}`}
+              >
+                {clinicName(byJid[g.group_jid] ?? null)}
+              </span>
+            ) : (
+              <Select
+                value={byJid[g.group_jid] ?? NONE}
+                items={{
+                  [NONE]: "— Sem clínica —",
+                  ...Object.fromEntries(clinics.map((c) => [c.id, c.name])),
+                }}
+                onValueChange={(v) => onChange(g.group_jid, v)}
+                disabled={pending}
+              >
+                <SelectTrigger className="h-8 w-full">
+                  <SelectValue placeholder="Sem clínica" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Sem clínica —</SelectItem>
+                  {clinics.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </li>
         ))}
       </ul>

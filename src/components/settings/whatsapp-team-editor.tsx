@@ -21,9 +21,11 @@ import {
 
 interface WhatsappTeamEditorProps {
   initialMembers: TeamMemberRow[]
+  /** Desenvolvedor: só visualiza (sem adicionar/remover). */
+  readOnly?: boolean
 }
 
-export function WhatsappTeamEditor({ initialMembers }: WhatsappTeamEditorProps) {
+export function WhatsappTeamEditor({ initialMembers, readOnly = false }: WhatsappTeamEditorProps) {
   const router = useRouter()
   const confirm = useConfirm()
   const [members, setMembers] = useState(initialMembers)
@@ -89,19 +91,22 @@ export function WhatsappTeamEditor({ initialMembers }: WhatsappTeamEditorProps) 
             >
               {m.kind === "bot" ? "Bot" : "Equipe"}
             </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              disabled={pending}
-              onClick={() => remove(m.id)}
-            >
-              Remover
-            </Button>
+            {!readOnly && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={pending}
+                onClick={() => remove(m.id)}
+              >
+                Remover
+              </Button>
+            )}
           </li>
         ))}
       </ul>
 
+      {!readOnly && (
       <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[1fr_12rem_8rem_auto]">
         <Input
           value={name}
@@ -133,6 +138,7 @@ export function WhatsappTeamEditor({ initialMembers }: WhatsappTeamEditorProps) 
           Adicionar
         </Button>
       </div>
+      )}
 
       <p className="text-xs text-muted-foreground">
         Mensagens de <strong>Equipe</strong> param o relógio do tempo de resposta;

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSessionUser } from "@/lib/auth/session";
+import { requireGestor } from "@/lib/auth/require-gestor";
 import { findOverlappingRule } from "@/lib/snapshots/status";
 
 export type StatusRuleRow = {
@@ -16,9 +16,12 @@ export type StatusRuleRow = {
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
-async function requireUser() {
-  if (!(await getSessionUser())) return null;
-  return createClient();
+// Configurar as faixas de status afeta a carteira inteira — ação de gestor.
+// O desenvolvedor só visualiza (leitura via listStatusRules).
+async function requireGestorClient() {
+  const gate = await requireGestor();
+  if (!gate.ok) return { ok: false as const, error: gate.error };
+  return { ok: true as const, supabase: await createClient() };
 }
 
 export async function listStatusRules(): Promise<StatusRuleRow[]> {
@@ -39,8 +42,9 @@ export async function upsertStatusRule(rule: {
   color: string;
   position: number;
 }): Promise<{ ok: true; data?: StatusRuleRow } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
+  const supabase = gate.supabase;
 
   const label = rule.label.trim();
   if (label.length < 2) return { ok: false, error: "Rótulo muito curto" };
@@ -87,8 +91,9 @@ export async function upsertStatusRule(rule: {
 export async function deleteStatusRule(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
+  const supabase = gate.supabase;
 
   const { error } = await supabase.from("status_rules").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -100,8 +105,9 @@ export async function deleteStatusRule(
 export async function reorderStatusRules(
   orderedIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
+  const supabase = gate.supabase;
   const results = await Promise.all(
     orderedIds.map((id, i) => supabase.from("status_rules").update({ position: i }).eq("id", id)),
   );
