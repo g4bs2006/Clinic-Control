@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { notificationVisual, dayBucket, type DayBucket } from "@/lib/notifications/display";
 import { useNotifications } from "./notification-context";
 
 function timeAgo(iso: string): string {
@@ -47,6 +48,20 @@ export function NotificationBell({
     setOpen(false);
     if (url) router.push(url);
   }
+
+  const BUCKET_LABEL: Record<DayBucket, string> = {
+    hoje: "Hoje",
+    ontem: "Ontem",
+    semana: "Esta semana",
+    antes: "Antes",
+  };
+  const ORDER: DayBucket[] = ["hoje", "ontem", "semana", "antes"];
+  const now = new Date();
+  const grouped = ORDER.map((bucket) => ({
+    bucket,
+    label: BUCKET_LABEL[bucket],
+    rows: items.filter((n) => dayBucket(n.created_at, now) === bucket),
+  })).filter((g) => g.rows.length > 0);
 
   const badge =
     count > 0 ? (
@@ -129,40 +144,52 @@ export function NotificationBell({
                 Nenhuma notificação por aqui.
               </p>
             ) : (
-              <ul className="divide-y divide-border/50">
-                {items.map((n) => (
-                  <li key={n.id}>
-                    <button
-                      type="button"
-                      onClick={() => onItemClick(n.id, n.url)}
-                      className={cn(
-                        "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40",
-                        !n.read_at && "bg-accent/20",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "mt-1.5 size-2 shrink-0 rounded-full",
-                          n.read_at ? "bg-transparent" : "bg-brand",
-                        )}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium leading-snug text-foreground">
-                          {n.title}
-                        </span>
-                        {n.body && (
-                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                            {n.body}
-                          </span>
-                        )}
-                        <span className="mt-1 block text-[0.65rem] text-muted-foreground/70">
-                          {timeAgo(n.created_at)}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
+              <div>
+                {grouped.map((g) => (
+                  <div key={g.bucket}>
+                    <p className="sticky top-0 z-10 bg-popover px-4 py-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      {g.label}
+                    </p>
+                    <ul className="divide-y divide-border/50">
+                      {g.rows.map((n) => {
+                        const { Icon, colorClass } = notificationVisual(n.type);
+                        return (
+                          <li key={n.id}>
+                            <button
+                              type="button"
+                              onClick={() => onItemClick(n.id, n.url)}
+                              className={cn(
+                                "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40",
+                                !n.read_at && "bg-accent/20",
+                              )}
+                            >
+                              <span className="relative mt-0.5 shrink-0">
+                                <Icon className={cn("size-4", colorClass)} />
+                                {!n.read_at && (
+                                  <span className="absolute -right-1 -top-1 size-2 rounded-full bg-brand" />
+                                )}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-medium leading-snug text-foreground">
+                                  {n.title}
+                                </span>
+                                {n.body && (
+                                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                    {n.body}
+                                  </span>
+                                )}
+                                <span className="mt-1 block text-[0.65rem] text-muted-foreground/70">
+                                  {timeAgo(n.created_at)}
+                                </span>
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
         </div>
