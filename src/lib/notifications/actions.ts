@@ -31,7 +31,7 @@ function mapRow(row: Record<string, unknown>): NotificationRow {
 }
 
 /** Notificações do usuário logado (mais recentes primeiro). */
-export async function listNotifications(limit = 20): Promise<NotificationRow[]> {
+export async function listNotifications(limit = 30): Promise<NotificationRow[]> {
   const user = await getSessionUser();
   if (!user) return [];
   const supabase = await createClient();
@@ -39,6 +39,7 @@ export async function listNotifications(limit = 20): Promise<NotificationRow[]> 
     .from("notifications")
     .select(NOTIFICATION_SELECT)
     .eq("recipient_id", user.id)
+    .is("dismissed_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -54,7 +55,8 @@ export async function getUnreadNotificationCount(): Promise<number> {
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("recipient_id", user.id)
-    .is("read_at", null);
+    .is("read_at", null)
+    .is("dismissed_at", null);
   if (error) return 0;
   return count ?? 0;
 }
@@ -99,6 +101,23 @@ export async function markAllNotificationsRead(): Promise<{ ok: true } | { ok: f
     .update({ read_at: new Date().toISOString() })
     .eq("recipient_id", user.id)
     .is("read_at", null);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Descarta (soft-delete) uma notificação do próprio usuário. Idempotente. */
+export async function dismissNotification(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("notifications")
+    .update({ dismissed_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("recipient_id", user.id)
+    .is("dismissed_at", null);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
