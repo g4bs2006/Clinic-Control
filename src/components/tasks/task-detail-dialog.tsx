@@ -580,9 +580,10 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       insertMention(mentionCandidates[0])
       return
     }
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       submitComment()
+      return
     }
     if (e.key === "Escape" && mention) setMention(null)
   }
@@ -1041,7 +1042,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                     onChange={onCommentChange}
                     onKeyDown={onCommentKeyDown}
                     rows={2}
-                    placeholder="Comentar…  @ menciona alguém · Ctrl+Enter envia"
+                    placeholder="Comentar…  @ menciona alguém · Enter envia · Shift+Enter quebra linha"
                     className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
                   />
                   {mention && mentionCandidates.length > 0 && (
