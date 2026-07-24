@@ -9,6 +9,7 @@ import {
   getRealtimeToken,
   markNotificationRead,
   markAllNotificationsRead,
+  dismissNotification,
 } from "@/lib/notifications/actions";
 import type { NotificationRow, NotificationType } from "@/lib/notifications/types";
 
@@ -19,6 +20,7 @@ type Ctx = {
   loadItems: () => Promise<void>;
   markRead: (id: string) => void;
   markAll: () => void;
+  dismiss: (id: string) => void;
 };
 
 const NotificationContext = createContext<Ctx | null>(null);
@@ -91,6 +93,27 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
   }, [refreshCount]);
 
+  const dismiss = useCallback((id: string) => {
+    // Otimista: remove da lista já; se era não-lida, baixa o contador. Reverte no erro.
+    let wasUnread = false;
+    setItems((prev) =>
+      prev.filter((n) => {
+        if (n.id === id) {
+          wasUnread = !n.read_at;
+          return false;
+        }
+        return true;
+      }),
+    );
+    if (wasUnread) setCount((c) => Math.max(0, c - 1));
+    void dismissNotification(id).then((res) => {
+      if (!res.ok) {
+        void refreshCount();
+        void loadItems();
+      }
+    });
+  }, [refreshCount, loadItems]);
+
   // Realtime (push) + carga inicial do contador.
   useEffect(() => {
     let cancelled = false;
@@ -152,6 +175,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
   }, [refreshCount]);
 
-  const value: Ctx = { count, items, loading, loadItems, markRead, markAll };
+  const value: Ctx = { count, items, loading, loadItems, markRead, markAll, dismiss };
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 }

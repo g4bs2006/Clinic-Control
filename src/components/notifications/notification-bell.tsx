@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Loader2 } from "lucide-react";
+import { Bell, Check, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { notificationVisual, dayBucket, type DayBucket } from "@/lib/notifications/display";
 import { useNotifications } from "./notification-context";
@@ -28,8 +28,9 @@ export function NotificationBell({
   expanded?: boolean;
   compact?: boolean;
 }) {
-  const { count, items, loading, loadItems, markRead, markAll } = useNotifications();
+  const { count, items, loading, loadItems, markRead, markAll, dismiss } = useNotifications();
   const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState<"all" | "unread">("all");
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -57,10 +58,11 @@ export function NotificationBell({
   };
   const ORDER: DayBucket[] = ["hoje", "ontem", "semana", "antes"];
   const now = new Date();
+  const visible = filter === "unread" ? items.filter((n) => !n.read_at) : items;
   const grouped = ORDER.map((bucket) => ({
     bucket,
     label: BUCKET_LABEL[bucket],
-    rows: items.filter((n) => dayBucket(n.created_at, now) === bucket),
+    rows: visible.filter((n) => dayBucket(n.created_at, now) === bucket),
   })).filter((g) => g.rows.length > 0);
 
   const badge =
@@ -134,6 +136,29 @@ export function NotificationBell({
             )}
           </div>
 
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
+            <button
+              type="button"
+              onClick={() => setFilter("all")}
+              className={cn(
+                "rounded-full px-2.5 py-0.5 text-xs transition-colors",
+                filter === "all" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Todas
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter("unread")}
+              className={cn(
+                "rounded-full px-2.5 py-0.5 text-xs transition-colors",
+                filter === "unread" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Não-lidas
+            </button>
+          </div>
+
           <div className="flex-1 overflow-y-auto">
             {loading && items.length === 0 ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground">
@@ -154,12 +179,12 @@ export function NotificationBell({
                       {g.rows.map((n) => {
                         const { Icon, colorClass } = notificationVisual(n.type);
                         return (
-                          <li key={n.id}>
+                          <li key={n.id} className="group/item relative">
                             <button
                               type="button"
                               onClick={() => onItemClick(n.id, n.url)}
                               className={cn(
-                                "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40",
+                                "flex w-full items-start gap-3 py-3 pl-4 pr-9 text-left transition-colors hover:bg-accent/40",
                                 !n.read_at && "bg-accent/20",
                               )}
                             >
@@ -182,6 +207,17 @@ export function NotificationBell({
                                   {timeAgo(n.created_at)}
                                 </span>
                               </span>
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Descartar notificação"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dismiss(n.id);
+                              }}
+                              className="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/item:opacity-100"
+                            >
+                              <X className="size-3.5" />
                             </button>
                           </li>
                         );
