@@ -21,9 +21,11 @@ function timeAgo(iso: string): string {
 export function NotificationBell({
   placement,
   expanded = false,
+  compact = false,
 }: {
   placement: "sidebar" | "topbar";
   expanded?: boolean;
+  compact?: boolean;
 }) {
   const { count, items, loading, loadItems, markRead, markAll } = useNotifications();
   const [open, setOpen] = useState(false);
@@ -51,7 +53,7 @@ export function NotificationBell({
       <span
         className={cn(
           "flex items-center justify-center rounded-full bg-red-500 font-semibold text-white tabular-nums",
-          placement === "topbar" || !expanded
+          placement === "topbar" || !expanded || compact
             ? "absolute -right-0.5 -top-0.5 min-w-4 px-1 py-px text-[0.6rem] leading-none"
             : "min-w-5 px-1.5 py-0.5 text-[0.65rem] leading-none",
         )}
@@ -80,11 +82,11 @@ export function NotificationBell({
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "relative flex h-11 items-center gap-2.5 rounded-md text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground md:h-9",
-          expanded ? "w-full px-2.5" : "size-11 justify-center md:size-9",
+          expanded && !compact ? "w-full px-2.5" : "size-11 justify-center md:size-9",
         )}
       >
         <Bell className="size-4 shrink-0" />
-        {expanded && <span className="flex-1 truncate text-left">Notificações</span>}
+        {expanded && !compact && <span className="flex-1 truncate text-left">Notificações</span>}
         {badge}
       </button>
     );
@@ -98,7 +100,9 @@ export function NotificationBell({
             "absolute z-[1300] flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-2xl shadow-black/40",
             placement === "topbar"
               ? "right-0 top-full mt-2"
-              : "bottom-0 left-full ml-2 md:bottom-auto md:top-0",
+              : compact
+                ? "bottom-0 left-full ml-2"
+                : "bottom-0 left-full ml-2 md:bottom-auto md:top-0",
           )}
         >
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">

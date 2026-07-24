@@ -184,11 +184,6 @@ export function AppNav({
             </button>
           </div>
 
-          {/* Sino de notificações */}
-          <div className="mb-1 px-2 shrink-0">
-            <NotificationBell placement="sidebar" expanded={open} />
-          </div>
-
           {/* Items */}
           <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
             {navItems
@@ -237,6 +232,7 @@ export function AppNav({
           {/* Footer: usuário logado + sair */}
           <div className="border-t border-sidebar-border px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             <div className={cn("flex items-center gap-2", !open && "justify-center")}>
+              {open && <NotificationBell placement="sidebar" compact />}
               {open && user && (
                 <div className="min-w-0 flex-1 px-1">
                   <p className="truncate text-xs font-medium text-sidebar-foreground">{user.name}</p>
