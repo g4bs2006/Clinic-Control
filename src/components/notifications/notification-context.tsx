@@ -61,7 +61,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const loadItems = useCallback(async () => {
     setLoading(true);
     try {
-      setItems(await listNotifications(20));
+      setItems(await listNotifications(30));
     } finally {
       setLoading(false);
     }
