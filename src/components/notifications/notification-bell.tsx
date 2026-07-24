@@ -164,9 +164,9 @@ export function NotificationBell({
               <div className="flex items-center justify-center py-10 text-muted-foreground">
                 <Loader2 className="size-5 animate-spin" />
               </div>
-            ) : items.length === 0 ? (
+            ) : visible.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-                Nenhuma notificação por aqui.
+                {filter === "unread" ? "Nenhuma notificação não lida." : "Nenhuma notificação por aqui."}
               </p>
             ) : (
               <div>
