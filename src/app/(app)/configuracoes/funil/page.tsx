@@ -24,7 +24,7 @@ export default async function ConfiguracoesFunilPage() {
         title="Faixas de status"
         subtitle="rótulo, intervalo de taxa e cor — usados em toda a carteira"
       >
-        <StatusRulesEditor initialRules={rules} />
+        <StatusRulesEditor initialRules={rules} readOnly={currentProfile?.role !== "gestor"} />
       </Panel>
 
       <Panel

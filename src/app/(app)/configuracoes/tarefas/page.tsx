@@ -28,7 +28,7 @@ export default async function ConfiguracoesTarefasPage() {
         title="Categorias de tarefa"
         subtitle="usadas em /tarefas e no painel de tarefas de cada clínica"
       >
-        <TaskCategoriesEditor initialCategories={taskCategories} />
+        <TaskCategoriesEditor initialCategories={taskCategories} readOnly={!isGestor} />
       </Panel>
 
       <Panel

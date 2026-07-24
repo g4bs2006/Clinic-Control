@@ -1,11 +1,12 @@
 "use client";
 
 import { Menu } from "lucide-react";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 /**
  * Barra superior só do mobile: hambúrguer que abre o drawer de navegação
- * (via evento cc-toggle-nav, escutado pelo AppNav) + marca. Some no desktop,
- * onde a sidebar já é permanente.
+ * (via evento cc-toggle-nav, escutado pelo AppNav) + marca + sino. Some no
+ * desktop, onde a sidebar já é permanente.
  */
 export function MobileTopBar() {
   return (
@@ -19,6 +20,9 @@ export function MobileTopBar() {
         <Menu className="size-5" />
       </button>
       <span className="text-sm font-semibold tracking-tight text-foreground">Clinic Control</span>
+      <div className="ml-auto">
+        <NotificationBell placement="topbar" />
+      </div>
     </header>
   );
 }

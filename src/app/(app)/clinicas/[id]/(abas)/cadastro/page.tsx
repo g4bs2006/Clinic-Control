@@ -3,7 +3,7 @@
 import type { ReactNode } from "react"
 import { notFound } from "next/navigation"
 import { getClinic } from "@/lib/clinics/actions"
-import { listClinicFiles } from "@/lib/clinics/files-actions"
+import { listClinicFiles, listClinicFileNotes } from "@/lib/clinics/files-actions"
 import { listFormCredentials } from "@/lib/clinics/form-credentials-actions"
 import { getClinicHelenaIntegration } from "@/lib/helena/accounts-actions"
 import { ClinicHelenaIntegration } from "@/components/clinics/clinic-helena-integration"
@@ -40,13 +40,14 @@ export default async function ClinicCadastroPage({
   const clinic = await getClinic(id)
   if (!clinic) notFound()
 
-  const [profiles, provisioning, formCredentials, helenaIntegration, files] =
+  const [profiles, provisioning, formCredentials, helenaIntegration, files, fileNotes] =
     await Promise.all([
       listUserProfiles(),
       listProvisioning(id),
       listFormCredentials(id),
       getClinicHelenaIntegration(id),
       listClinicFiles(id),
+      listClinicFileNotes(id),
     ])
 
   return (
@@ -118,7 +119,7 @@ export default async function ClinicCadastroPage({
         title="Arquivos da clínica"
         subtitle="suba a pasta · qualquer pessoa da equipe pode baixar"
       >
-        <ClinicFiles clinicId={id} files={files} />
+        <ClinicFiles clinicId={id} files={files} notes={fileNotes} />
       </Panel>
     </>
   )

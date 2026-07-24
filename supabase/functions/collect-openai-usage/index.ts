@@ -18,6 +18,8 @@
 // Chamada: POST com header x-cron-secret: <CRON_SECRET> e ?lookbackDays=3
 //   (use lookbackDays=30 no primeiro backfill; a Usage API guarda o histórico).
 //   ?probe=1 = modo diagnóstico, não grava nada.
+//   ?keysOnly=1 = só sincroniza o cache de projetos+API keys (para o select de
+//   vínculo na UI) e retorna, sem coletar uso/custo.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -205,6 +207,14 @@ async function run(req: Request): Promise<Response> {
       .upsert(apiKeys.map((k) => ({ ...k, synced_at: new Date().toISOString() })), {
         onConflict: "api_key_id",
       });
+  }
+
+  // Modo "só chaves": ?keysOnly=1 sincroniza apenas o cache de projetos+API keys
+  // (para o select de vínculo na UI) e retorna, sem coletar uso/custo. Usado pelo
+  // botão "Sincronizar chaves agora" — uma clínica/chave nova aparece no select
+  // na hora, sem esperar o cron diário.
+  if (new URL(req.url).searchParams.get("keysOnly") === "1") {
+    return Response.json({ ok: true, keysOnly: true, projects: projects.length, apiKeys: apiKeys.length });
   }
 
   // 2) Uso por API key × modelo (tokens) com custo estimado pela tabela de preços.

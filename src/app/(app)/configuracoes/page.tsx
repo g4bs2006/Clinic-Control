@@ -25,12 +25,17 @@ export default async function ConfiguracoesEquipePage() {
     <>
       <Panel
         title="Usuários"
-        subtitle="criar, editar e redefinir a senha de outras pessoas da equipe"
+        subtitle={
+          currentProfile?.role === "gestor"
+            ? "criar, editar e redefinir a senha de outras pessoas da equipe"
+            : "a equipe da plataforma (só o gestor pode gerenciar)"
+        }
       >
         <UsersEditor
           initialProfiles={profiles}
           clinicCountByDeveloper={clinicCountByDeveloper}
           currentUserId={currentProfile?.id}
+          readOnly={currentProfile?.role !== "gestor"}
         />
       </Panel>
 

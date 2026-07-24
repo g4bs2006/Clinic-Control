@@ -92,7 +92,7 @@ Pontos centrais dessa arquitetura:
 | Autenticação | Própria — tabela `app_users` + cookie de sessão assinado (HMAC-SHA256) |
 | Geração de planilhas | ExcelJS |
 | Compactação de arquivos | JSZip |
-| IA / LLM | DeepSeek (API compatível com OpenAI) |
+| IA / LLM | DeepSeek (LLM da plataforma — resumos, subtarefas); OpenAI Admin API para monitorar o custo das chaves das clínicas |
 | Testes | Vitest + Testing Library |
 | Deploy | Vercel (auto-deploy a partir do branch `main`) |
 
@@ -102,7 +102,7 @@ Pontos centrais dessa arquitetura:
 |---|---|---|
 | `/` | Dashboard | KPIs da carteira, distribuição por faixa de status, ranking de clínicas, alertas de atenção vindos dos resumos de IA, progresso de onboarding, exportação CSV. |
 | `/clinicas` | Clínicas | Cadastro, edição e busca. Provisionamento automático de conta na Helena ao criar uma clínica nova. |
-| `/clinicas/[id]` | Perfil da clínica | Funil de conversão (com mapeamento de colunas configurável por clínica), taxa de agendamento dia a dia, agentes de IA (personas e estágios), repositório de arquivos, credenciais de formulário, relatório de conversas, tarefas e checklist da clínica. |
+| `/clinicas/[id]` | Perfil da clínica | Organizado em abas (Visão geral / Atendimento / IA & Custos / Cadastro): funil de conversão (com mapeamento de colunas configurável por clínica), taxa de agendamento dia a dia, repositório de arquivos, monitor de custo da chave OpenAI da clínica, credenciais de formulário, relatório de conversas, tarefas e checklist da clínica. |
 | `/mensal` | Grade mensal | Edição manual de leads/agendados por clínica (clínicas manuais) ou leitura ao vivo (clínicas automáticas). |
 | `/comparativo` | Comparativo | Taxa de conversão mês a mês, multi-clínica, gráfico e tabela. |
 | `/mapa` | Mapa | Geolocalização das clínicas coloridas por faixa de status. |
@@ -111,7 +111,8 @@ Pontos centrais dessa arquitetura:
 | `/acompanhamentos` | Acompanhamentos | Itens de "ficar de olho" (follow-ups passivos: aguardar/monitorar) extraídos pela IA, com ciclo próprio (aberto → resolvido/dispensado) — entidade separada das tarefas de ação. |
 | `/churns` | Churns | Registro de desligamento de clínicas, motivos, receita perdida. |
 | `/helena` | Contas Helena | Visão consolidada de todas as contas do parceiro na Helena, vinculadas ou não a uma clínica. |
-| `/configuracoes` | Configurações | Faixas de status, keywords do relatório de conversas (painel recolhível), categorias de tarefa, checklist (itens pessoais + fixos globais), usuários e papéis (carteira), custo e instruções de IA, grupos/equipe de WhatsApp. |
+| `/cofre` | Cofre | Senhas e arquivos sensíveis da operação, em duas abas. Senhas/tokens cifrados no banco; arquivos e pastas num bucket privado (upload de arquivo ou pasta, download por URL assinada). Recorte por papel: o gestor gerencia, o desenvolvedor vê só o que foi compartilhado com a equipe. Cada revelação de segredo e download de arquivo é auditado. |
+| `/configuracoes` | Configurações | Em 5 abas (Equipe & Conta / IA / Tarefas & Checklist / Funil & Status / WhatsApp): faixas de status, keywords do relatório de conversas, categorias de tarefa, checklist (itens pessoais + fixos globais), usuários e papéis, custo e instruções de IA, grupos/equipe de WhatsApp. O desenvolvedor tem acesso **somente-leitura** aos pontos sensíveis (usuários, categorias de tarefa, faixas de status, WhatsApp) e a aba de IA é exclusiva do gestor. |
 
 ### Relatório de conversas
 
@@ -127,11 +128,25 @@ Sistema completo de gestão de pendências da carteira, com escopo por carteira 
 - Subtarefas reais (não um checklist): a descrição de uma tarefa pode ser enviada ao DeepSeek, que propõe uma quebra em passos menores; a lista é revisada antes de virar tarefas de fato.
 - Anexos de arquivo por tarefa.
 - Linha do tempo de atividade unificando comentários manuais e o histórico automático de mudança de status.
-- Visualização em lista, board Kanban (arrastar e soltar entre colunas de status) ou **agenda "Minha semana"** — só as tarefas atribuídas a você, em aberto, agrupadas por prazo (Atrasadas, Hoje, Esta semana, Mais tarde, Sem prazo).
+- **Recorrências** (diária/semanal/mensal) que materializam a próxima ocorrência sob demanda (idempotente, sem empilhar atraso), e **adiar (snooze)** uma tarefa até uma data — ela some da lista e reaparece sozinha no dia.
+- Quatro visualizações: **lista**, **board Kanban** (arrastar e soltar entre colunas de status), **agenda "Minha semana"** (só as tarefas atribuídas a você, em aberto, agrupadas por prazo — Atrasadas, Hoje, Esta semana, Mais tarde, Sem prazo) e **Panorama** — o dashboard da carteira: KPIs (atrasadas/hoje/semana/abertas/concluídas), atrasadas em foco, recorrentes com alerta de "rotina furando", carga por responsável e por clínica, distribuição por prioridade/categoria, envelhecimento das abertas, ritmo de criadas × concluídas (14 dias) e **concluídas em foco** (recentes, com contagem de anexos e comentários, abrindo o detalhe completo).
 
 ### Checklist de clínicas
 
 Checkboxes que aparecem no perfil de cada clínica e como resumo de progresso na listagem. Dois tipos de item: **pessoais** (cada usuário cria e vê só os seus) e **fixos/globais** (definidos apenas pelo gestor, via um switch "Fixo" no editor de Configurações; aparecem em todas as clínicas, para todos, independentemente de carteira). O estado marcado é **individual por usuário** — inclusive nos itens fixos, cada um acompanha o próprio progresso.
+
+### Cofre
+
+Vault global da operação (`/cofre`), em duas abas:
+
+- **Senhas** — logins, tokens, chaves e acessos. O conteúdo sensível é cifrado no banco (AES-256-GCM); login/URL/notas ficam em texto. Revelar um segredo é auditado como gate duro (se o registro de auditoria falhar, o segredo não é retornado) e o conteúdo revelado se auto-oculta após 30 s.
+- **Arquivos** — arquivos e pastas importantes num bucket privado (`vault-files`), com árvore de pastas, upload de arquivo ou de pasta inteira, notas por item e download por URL assinada de curta duração (auditado).
+
+Recorte por papel espelhando o resto do sistema: o gestor gerencia; o desenvolvedor só vê os itens marcados como compartilhados com a equipe (`visible_to_devs`), aplicável por senha, por arquivo ou por pasta (com herança por prefixo de caminho).
+
+### Monitor de custo OpenAI
+
+Cada clínica tem a própria API key OpenAI (o agente de IA da clínica). Uma Edge Function (`collect-openai-usage`, `pg_cron` diário) usa uma **Admin Key** da organização para coletar o consumo por chave e por modelo e estimar o custo — calibrado dia a dia para bater com a fatura real da organização. O gestor vincula cada clínica à sua chave por um select; um botão **"Sincronizar chaves"** atualiza o cache de chaves da organização sob demanda (a Admin Key só enxerga chaves da própria organização). Alertas de gasto acima do limite/anomalia viram acompanhamentos, e um botão "Investigar contatos" ranqueia quem está consumindo tokens (possível loop de IA).
 
 ## Fluxos de dados principais
 
@@ -181,7 +196,7 @@ flowchart LR
 
 ## Modelo de dados
 
-Todas as tabelas vivem no schema `clinic_control` de um projeto Supabase compartilhado com outro sistema (o schema `public` não pertence a este projeto). O diagrama abaixo cobre as entidades centrais; o schema completo tem mais de 30 migrations incrementais em `supabase/migrations/`.
+Todas as tabelas vivem no schema `clinic_control` de um projeto Supabase compartilhado com outro sistema (o schema `public` não pertence a este projeto). O diagrama abaixo cobre as entidades centrais; o schema completo tem mais de 60 migrations incrementais em `supabase/migrations/`.
 
 ```mermaid
 erDiagram
@@ -258,8 +273,10 @@ Domínios de tabelas por área:
 | Agentes de IA e arquivos | `clinic_agents`, `agent_stages`, arquivos no Storage |
 | WhatsApp | `whatsapp_groups`, `whatsapp_group_messages`, `whatsapp_team_members`, `whatsapp_daily_summaries`, `evolution_health_checks` |
 | Relatório de conversas | `report_jobs`, `report_raw_sessions`, `report_keywords` |
-| Tarefas e acompanhamentos | `tasks`, `task_suggestions`, `task_attachments`, `task_comments`, `acompanhamentos` |
-| IA e segurança | `ai_usage_log` (consumo de tokens/custo), `login_attempts` (rate limit de login) |
+| Tarefas e acompanhamentos | `tasks`, `task_suggestions`, `task_attachments`, `task_comments`, `task_recurrences`, `task_categories`, `suggestion_jobs`, `acompanhamentos` |
+| Cofre | `credential_vault`, `credential_vault_access_log`, `vault_file_meta`, `vault_file_access_log` + bucket `vault-files` |
+| Custo OpenAI (chaves das clínicas) | `openai_projects`, `openai_api_keys`, `openai_key_usage`, `openai_alert_settings`, `openai_usage_alerts` |
+| IA e segurança | `ai_usage_log` (consumo de tokens/custo do LLM da plataforma), `login_attempts` (rate limit de login) |
 | Checklist | `check_items` (pessoal ou fixo/global, via `is_global`), `clinic_checks` (estado por clínica **e** por usuário) |
 | Outros | `clinic_churns`, `form_credentials` |
 
@@ -283,7 +300,7 @@ As Server Actions acessam o banco por um client de service role que **ignora o R
 - **gestor** — acesso irrestrito.
 - **desenvolvedor** — por padrão enxerga apenas as clínicas em que consta como responsável (`clinics.developer_id`), além de tarefas atribuídas a ele. Esse recorte ("escopo de carteira") é um **filtro de visão** aplicado nas páginas com dado por clínica (dashboard, mensal, comparativo, churns, gerenciador de grupos e tarefas), não uma fronteira de isolamento entre staff.
 
-Operações administrativas são restritas a gestor via `requireGestor()` (`src/lib/users/actions.ts`): trocar papéis, ativar/desativar usuários, redefinir senha e definir o responsável (carteira) de uma clínica — com proteções contra o gestor rebaixar/desativar a si mesmo.
+Operações administrativas são restritas a gestor via `requireGestor()`: trocar papéis, ativar/desativar usuários, redefinir senha e definir o responsável (carteira) de uma clínica — com proteções contra o gestor rebaixar/desativar a si mesmo — além de configurar categorias de tarefa, faixas de status e o WhatsApp (grupos/equipe). Nas Configurações, o desenvolvedor tem acesso **somente-leitura** a esses pontos sensíveis (e à lista de usuários), com a proibição valendo nas duas camadas: gate no servidor e modo read-only na UI. A aba de IA das Configurações é oculta para o desenvolvedor. O cofre e o vínculo de arquivos/senhas seguem o mesmo modelo de compartilhamento explícito (`visible_to_devs`).
 
 ## Estrutura do repositório
 
@@ -293,23 +310,26 @@ src/
     (app)/                  rotas autenticadas (layout com sidebar)
       clinicas/
       mensal/, comparativo/, mapa/
-      whatsapp/, tarefas/, churns/, helena/, configuracoes/
+      whatsapp/, tarefas/, churns/, helena/, cofre/, configuracoes/
     api/                    rotas de API (processamento de relatório, credenciais de formulário)
     login/, ativar-conta/   rotas públicas
-  components/               componentes de UI, organizados por domínio (tasks/, clinics/, reports/, ...)
+  components/               componentes de UI, organizados por domínio (tasks/, clinics/, vault/, reports/, ...)
   lib/                      lógica de negócio e Server Actions, por domínio
-    auth/                   sessão, senha, token assinado
+    auth/                   sessão, senha, token assinado, requireGestor
     clinics/, helena/       cadastro de clínicas e integração com a API da Helena
     snapshots/, portfolio/  motor de funil, faixas de status, agregações
     reports/                job de relatório de conversas
-    tasks/                  tarefas, sugestões, categorias
+    tasks/                  tarefas, sugestões, categorias, recorrências, panorama
     acompanhamentos/        follow-ups passivos (entidade separada das tarefas)
     whatsapp/               tempo de resposta, resumos
+    vault/                  cofre — senhas cifradas e arquivos
+    openai-usage/           monitor de custo das chaves OpenAI das clínicas
+    storage/                helpers de Storage (arquivos de clínica e do cofre)
     crypto/                 criptografia de tokens (AES-256-GCM)
     supabase/               clients Supabase (browser, server, service role)
 supabase/
-  migrations/               histórico incremental do schema (SQL puro, numerado)
-  functions/                Edge Functions (Deno): collect-groups, summarize-groups, health-evolution, notify (digest ao grupo interno)
+  migrations/               histórico incremental do schema (SQL puro, numerado, 60+ arquivos)
+  functions/                Edge Functions (Deno): collect-groups, summarize-groups, health-evolution, collect-openai-usage, notify (digest ao grupo interno)
 tests/                      testes Vitest, um arquivo por módulo de lógica pura
 docs/                       documentação de apoio (API da Helena, planos de fase)
 ```
@@ -381,6 +401,12 @@ O norte é transformar o Clinic Control de "painel que a equipe consulta" em **c
 
 ### Concluído recentemente (julho/2026)
 
+- **Panorama de tarefas** — 4ª visão em /tarefas com o dashboard da carteira (KPIs, atrasadas, recorrentes, carga por responsável/clínica, distribuição, envelhecimento, ritmo e concluídas em foco com anexos/comentários).
+- **Cofre com arquivos** — além das senhas cifradas, guarda arquivos e pastas num bucket privado (upload de arquivo ou pasta, download auditado), com recorte por papel.
+- **Cargos nas Configurações** — o desenvolvedor passou a ter acesso somente-leitura aos pontos sensíveis (usuários, categorias de tarefa, faixas de status, WhatsApp); proibição no servidor e na UI.
+- **Sincronização on-demand de chaves OpenAI** — botão que atualiza o cache de chaves da organização sem esperar o cron, para vincular uma clínica nova na hora.
+- **Navegação por Ctrl+K** — a paleta global (busca) passou a navegar direto para as páginas principais ("Ir para"), além de clínicas e tarefas.
+- **Tarefas recorrentes + adiar (snooze)** — regras diária/semanal/mensal com materialização da próxima ocorrência (anti-empilhamento) e adiamento de tarefa até uma data.
 - **Overhaul mobile + PWA** — auditoria completa e correção em tiers: navegação vira drawer (hambúrguer), diálogos viram bottom-sheet, tabelas (clínicas, ranking, grade mensal) viram cards no mobile, alvos de toque maiores nos fluxos de tarefa; app instalável na tela inicial (PWA).
 - **Checklist por etapa** — categorias editáveis (Painéis, n8n, Agente de IA, Chatbot…) que agrupam os checkboxes na página da clínica; itens fixos gerenciáveis por qualquer gestor; "Salvar todos".
 - **Resumos de IA menos ruidosos** — "regra de fechamento" no prompt (não gera tarefa para o que já foi resolvido na conversa) + temperatura reduzida; busca global (Ctrl+K) passou a respeitar o escopo de carteira.
@@ -399,7 +425,6 @@ O norte é transformar o Clinic Control de "painel que a equipe consulta" em **c
 
 | Prioridade | Item | Observação |
 |---|---|---|
-| Alta | Tarefas recorrentes | Frente "matar o ClickUp": recorrência (diária/semanal/mensal) com materialização da próxima ocorrência. |
 | Alta | Dependências entre tarefas | Frente "matar o ClickUp": "bloqueada por" entre tarefas. |
 | Alta | Notificações + lembretes de prazo | Fundação de entrega; habilita os lembretes externos de prazo (a "Minha semana" cobre o in-app). |
 | Média | Detecção de padrões entre clínicas | Agrupar reclamações/temas recorrentes via *embeddings* (`pgvector`); desenhado, aguarda chave de embeddings (DeepSeek não oferece endpoint). |

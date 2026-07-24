@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSessionUser } from "@/lib/auth/session";
+import { requireGestor } from "@/lib/auth/require-gestor";
 
 export type TaskCategoryRow = {
   id: string;
@@ -14,9 +14,12 @@ export type TaskCategoryRow = {
 
 const SLUG = /^[a-z0-9_]+$/;
 
-async function requireUser() {
-  if (!(await getSessionUser())) return null;
-  return createClient();
+// Configurar categorias de tarefa é ação de gestor — o desenvolvedor só
+// visualiza (leitura via listTaskCategories, que não passa por aqui).
+async function requireGestorClient() {
+  const gate = await requireGestor();
+  if (!gate.ok) return { ok: false as const, error: gate.error };
+  return { ok: true as const, supabase: await createClient() };
 }
 
 /** Todas as categorias, incluindo inativas — para a tela de configuração. */
@@ -43,8 +46,9 @@ export async function upsertTaskCategory(input: {
   position: number;
   active: boolean;
 }): Promise<{ ok: true; data: TaskCategoryRow } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
+  const supabase = gate.supabase;
 
   const slug = input.slug.trim().toLowerCase();
   const label = input.label.trim();
@@ -70,8 +74,9 @@ export async function upsertTaskCategory(input: {
 export async function reorderTaskCategories(
   orderedIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
+  const supabase = gate.supabase;
   const results = await Promise.all(
     orderedIds.map((id, i) => supabase.from("task_categories").update({ position: i }).eq("id", id)),
   );
@@ -84,8 +89,9 @@ export async function reorderTaskCategories(
 export async function deleteTaskCategory(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
+  const supabase = gate.supabase;
 
   const { error } = await supabase.from("task_categories").delete().eq("id", id);
   if (error) {

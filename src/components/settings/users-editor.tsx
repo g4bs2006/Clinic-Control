@@ -41,11 +41,14 @@ export function UsersEditor({
   initialProfiles,
   clinicCountByDeveloper,
   currentUserId,
+  readOnly = false,
 }: {
   initialProfiles: UserProfile[]
   clinicCountByDeveloper: Record<string, number>
   /** Id do usuário logado — a própria linha não mostra "Redefinir senha" (use Minha conta). */
   currentUserId?: string
+  /** Desenvolvedor: só visualiza a lista da equipe (sem criar/editar/resetar/desativar/excluir). */
+  readOnly?: boolean
 }) {
   const confirm = useConfirm()
   const [profiles, setProfiles] = useState(initialProfiles)
@@ -188,7 +191,8 @@ export function UsersEditor({
 
   return (
     <div className="space-y-3">
-      {/* ── Criar usuário ─────────────────────────────────────── */}
+      {/* ── Criar usuário (só gestor) ─────────────────────────── */}
+      {!readOnly && (
       <form onSubmit={onCreate} className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Input
           value={newName}
@@ -226,6 +230,7 @@ export function UsersEditor({
           Criar
         </Button>
       </form>
+      )}
 
       {createdTemp && (
         <div className="flex flex-wrap items-center gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
@@ -283,66 +288,74 @@ export function UsersEditor({
                 {clinicCountByDeveloper[p.id] ?? 0} clínica
                 {(clinicCountByDeveloper[p.id] ?? 0) !== 1 ? "s" : ""} na carteira
               </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={pending}
-                onClick={() => openEdit(p)}
-                title="Editar nome e e-mail"
-              >
-                <Pencil className="size-3.5" />
-                Editar
-              </Button>
-              {p.id !== currentUserId && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pending}
-                  onClick={() => onResetPassword(p)}
-                  title="Gera uma senha temporária para repassar a este usuário"
-                >
-                  <KeyRound className="size-3.5" />
-                  Redefinir senha
-                </Button>
+              {readOnly ? (
+                <span className="shrink-0 rounded-full border border-border/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  {ROLE_LABEL[p.role]}
+                </span>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={pending}
+                    onClick={() => openEdit(p)}
+                    title="Editar nome e e-mail"
+                  >
+                    <Pencil className="size-3.5" />
+                    Editar
+                  </Button>
+                  {p.id !== currentUserId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => onResetPassword(p)}
+                      title="Gera uma senha temporária para repassar a este usuário"
+                    >
+                      <KeyRound className="size-3.5" />
+                      Redefinir senha
+                    </Button>
+                  )}
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+                    <Switch
+                      checked={p.active !== false}
+                      onCheckedChange={(checked) => onActiveChange(p.id, checked)}
+                      disabled={pending}
+                    />
+                    Ativo
+                  </label>
+                  <Select
+                    value={p.role}
+                    items={ROLE_LABEL}
+                    onValueChange={(v) => v && onRoleChange(p.id, v as UserProfile["role"])}
+                    disabled={pending}
+                  >
+                    <SelectTrigger className="w-44 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(ROLE_LABEL) as UserProfile["role"][]).map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {ROLE_LABEL[r]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={pending}
+                    onClick={() => onDelete(p)}
+                    title="Excluir usuário"
+                    className="shrink-0 text-muted-foreground hover:text-red-400"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </>
               )}
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-                <Switch
-                  checked={p.active !== false}
-                  onCheckedChange={(checked) => onActiveChange(p.id, checked)}
-                  disabled={pending}
-                />
-                Ativo
-              </label>
-              <Select
-                value={p.role}
-                items={ROLE_LABEL}
-                onValueChange={(v) => v && onRoleChange(p.id, v as UserProfile["role"])}
-                disabled={pending}
-              >
-                <SelectTrigger className="w-44 shrink-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(ROLE_LABEL) as UserProfile["role"][]).map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {ROLE_LABEL[r]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled={pending}
-                onClick={() => onDelete(p)}
-                title="Excluir usuário"
-                className="shrink-0 text-muted-foreground hover:text-red-400"
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
             </li>
           ))}
         </ul>

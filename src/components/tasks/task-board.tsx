@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3 } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -21,11 +21,14 @@ import { RecurrencesDialog } from "./recurrences-dialog"
 import { TaskSuggestions } from "./task-suggestions"
 import { TaskDetailDialog } from "./task-detail-dialog"
 import { KanbanBoard } from "./kanban-board"
+import { TaskDashboard } from "./task-dashboard"
+import { SnoozeButton, fmtSnoozeDate } from "./snooze-button"
 import type { ClinicOption, ProfileOption } from "./task-fields"
 import {
   updateTaskStatus,
   bulkUpdateTaskStatus,
   deleteTask,
+  snoozeTask,
   listArchivedTasks,
   unarchiveTask,
   type TaskRow,
@@ -55,6 +58,14 @@ const PRIORITY_DOT: Record<TaskPriority, string> = {
 
 const DONE_STATUSES = new Set<TaskStatus>(["concluida", "cancelada"])
 
+// Frase curta pro toast de feedback ao mudar status (o "o que acabei de fazer").
+const STATUS_TOAST: Record<TaskStatus, string> = {
+  pendente: "Marcada como pendente",
+  em_andamento: "Marcada como em andamento",
+  concluida: "Tarefa concluída",
+  cancelada: "Tarefa descartada",
+}
+
 function dateLabel(d: string): string {
   const [y, m, day] = d.split("-").map(Number)
   return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("pt-BR", {
@@ -74,9 +85,11 @@ function TaskListItem({
   t,
   categoryLabel,
   pending,
+  today,
   onOpen,
   onChangeStatus,
   onRemove,
+  onSnooze,
   selectable = false,
   selected = false,
   onToggleSelect,
@@ -84,16 +97,21 @@ function TaskListItem({
   t: TaskRow
   categoryLabel: Record<string, string>
   pending: boolean
+  today: string
   onOpen: (id: string) => void
   onChangeStatus: (id: string, status: TaskStatus) => void
   onRemove: (id: string) => void
+  onSnooze: (id: string, until: string | null) => void
   selectable?: boolean
   selected?: boolean
   onToggleSelect?: (id: string) => void
 }) {
   const isDone = t.status === "concluida"
+  const isSnoozed = t.snoozed_until != null && t.snoozed_until > today
+  const isInProgress = t.status === "em_andamento"
   return (
     // Mobile: card com borda (edição de status via detalhe/sheet); desktop: linha densa.
+    // Em andamento é sinalizado só pelo selo "em andamento" (sem faixa lateral).
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5">
       {selectable && (
         <Checkbox
@@ -141,6 +159,12 @@ function TaskListItem({
               · prazo {dateLabel(t.due_date)}
             </span>
           )}
+          {isInProgress && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-amber-500">
+              <span className="size-1.5 rounded-full bg-amber-500" />
+              em andamento
+            </span>
+          )}
           {t.source === "ia" && (
             <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-amber-400">
               IA
@@ -150,6 +174,12 @@ function TaskListItem({
             <span className="inline-flex items-center gap-1 rounded-full bg-brand/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-brand">
               <Repeat className="size-2.5" />
               recorrente
+            </span>
+          )}
+          {isSnoozed && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[0.62rem] font-semibold text-muted-foreground">
+              <Clock className="size-2.5" />
+              adiada
             </span>
           )}
         </p>
@@ -172,6 +202,27 @@ function TaskListItem({
           ))}
         </SelectContent>
       </Select>
+
+      {(t.status === "pendente" || t.status === "em_andamento") && (
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          disabled={pending}
+          title={isInProgress ? "Pausar (voltar para pendente)" : "Iniciar (marcar em andamento)"}
+          aria-label={isInProgress ? "Pausar tarefa" : "Iniciar tarefa"}
+          className={`size-9 sm:size-8 ${isInProgress ? "text-amber-500 hover:text-amber-600" : "text-muted-foreground/60 hover:text-amber-500"}`}
+          onClick={() => onChangeStatus(t.id, isInProgress ? "pendente" : "em_andamento")}
+        >
+          {isInProgress ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+        </Button>
+      )}
+
+      <SnoozeButton
+        today={today}
+        snoozedUntil={t.snoozed_until}
+        onSnooze={(until) => onSnooze(t.id, until)}
+      />
 
       <Button
         type="button"
@@ -226,8 +277,9 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
   const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
-  const [view, setView] = useState<"list" | "board" | "week">("list")
+  const [view, setView] = useState<"list" | "board" | "week" | "panorama">("list")
   const [showDone, setShowDone] = useState(false)
+  const [showSnoozed, setShowSnoozed] = useState(false)
   // Mobile: filtros recolhidos num botão "Filtros" (no desktop ficam sempre visíveis).
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
@@ -277,6 +329,9 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
 
   function changeStatus(id: string, status: TaskStatus) {
     // Move na hora (otimista); só re-busca se o servidor recusar.
+    const current = tasks.find((t) => t.id === id)
+    const prev = current?.status
+    const title = current?.title
     const snapshot = tasks
     setTasks((ts) =>
       ts.map((t) =>
@@ -290,8 +345,46 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       if (!res.ok) {
         setTasks(snapshot)
         toast.error(res.error)
+        return
+      }
+      // Feedback claro: o que aconteceu + desfazer (a ação some da vista quando
+      // conclui/descarta com o filtro ligado, então o toast é a confirmação).
+      toast.success(STATUS_TOAST[status], {
+        description: title,
+        action:
+          prev && prev !== status
+            ? { label: "Desfazer", onClick: () => changeStatus(id, prev) }
+            : undefined,
+      })
+    })
+  }
+
+  // Aplica o adiamento sem toast (usado tanto pela ação quanto pelo "Desfazer").
+  function applySnooze(id: string, until: string | null) {
+    const snapshot = tasks
+    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, snoozed_until: until } : t)))
+    startTransition(async () => {
+      const res = await snoozeTask(id, until)
+      if (!res.ok) {
+        setTasks(snapshot)
+        toast.error(res.error)
       }
     })
+  }
+
+  function snooze(id: string, until: string | null) {
+    const current = tasks.find((t) => t.id === id)
+    const prev = current?.snoozed_until ?? null
+    applySnooze(id, until)
+    // A tarefa some da vista — o toast narra pra onde foi e deixa desfazer.
+    if (until) {
+      toast.success(`Adiada para ${fmtSnoozeDate(until, today)}`, {
+        description: current?.title,
+        action: { label: "Desfazer", onClick: () => applySnooze(id, prev) },
+      })
+    } else {
+      toast.success("Adiamento removido", { description: current?.title })
+    }
   }
 
   async function remove(id: string) {
@@ -302,12 +395,16 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       destructive: true,
     })
     if (!ok) return
+    // Otimista: some da lista/board na hora; só re-insere se o servidor recusar.
+    const title = tasks.find((t) => t.id === id)?.title
+    const snapshot = tasks
+    setTasks((ts) => ts.filter((t) => t.id !== id))
     startTransition(async () => {
       const res = await deleteTask(id)
       if (res.ok) {
-        toast.success("Tarefa excluída.")
-        refresh()
+        toast.success("Tarefa excluída", { description: title })
       } else {
+        setTasks(snapshot)
         toast.error(res.error)
       }
     })
@@ -355,8 +452,13 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   // Na Lista, esconde concluídas/canceladas por padrão (a menos que o usuário
   // ligue "Mostrar concluídas" ou filtre explicitamente por um status). No Board
   // as colunas Concluída/Cancelada continuam visíveis.
+  const { today, endOfWeek } = spDateParts(new Date())
+  const isSnoozedActive = (t: TaskRow) => t.snoozed_until != null && t.snoozed_until > today
+  const snoozedCount = tasks.filter(isSnoozedActive).length
+
   const hideDone = (view === "list" || view === "board") && !showDone && statusFilter === ALL
   const filtered = tasks
+    .filter((t) => showSnoozed || !isSnoozedActive(t))
     .filter((t) => statusFilter === ALL || t.status === statusFilter)
     .filter((t) => !(hideDone && DONE_STATUSES.has(t.status)))
     .filter((t) => categoryFilter === ALL || t.category === categoryFilter)
@@ -374,9 +476,8 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     })
 
   // ── Agenda "Minha semana": só as minhas tarefas abertas, agrupadas por prazo ──
-  const { today, endOfWeek } = spDateParts(new Date())
   const myOpenTasks = tasks.filter(
-    (t) => t.assigned_to === currentUserId && !DONE_STATUSES.has(t.status),
+    (t) => t.assigned_to === currentUserId && !DONE_STATUSES.has(t.status) && (showSnoozed || !isSnoozedActive(t)),
   )
   const weekGroups = new Map<AgendaBucket, TaskRow[]>(AGENDA_ORDER.map((b) => [b, []]))
   for (const t of myOpenTasks) {
@@ -393,7 +494,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-2">
         {/* Toggle de filtros — só mobile (no desktop os filtros ficam inline) */}
-        {view !== "week" && (
+        {view !== "week" && view !== "panorama" && (
           <Button
             type="button"
             size="sm"
@@ -410,7 +511,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
 
         {/* sm:contents: no desktop o wrapper some e os filtros fluem como antes */}
         <div className={filtersOpen ? "flex w-full flex-col gap-2 sm:contents" : "hidden sm:contents"}>
-        {view !== "week" && (
+        {view !== "week" && view !== "panorama" && (
           <>
             <Select
               value={statusFilter}
@@ -480,6 +581,19 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           </Button>
         )}
 
+        {snoozedCount > 0 && (
+          <Button
+            type="button"
+            size="sm"
+            variant={showSnoozed ? "secondary" : "outline"}
+            onClick={() => setShowSnoozed((v) => !v)}
+            title={showSnoozed ? "Ocultar tarefas adiadas" : "Mostrar tarefas adiadas"}
+          >
+            <Clock className="size-3.5" />
+            {showSnoozed ? "Ocultar adiadas" : `Adiadas (${snoozedCount})`}
+          </Button>
+        )}
+
         {view === "list" && (
           <Button
             type="button"
@@ -526,6 +640,16 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           >
             <CalendarDays className="size-3.5" />
           </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={view === "panorama" ? "secondary" : "ghost"}
+            title="Ver panorama"
+            className="size-9 sm:size-7"
+            onClick={() => setView("panorama")}
+          >
+            <BarChart3 className="size-3.5" />
+          </Button>
         </div>
 
         <div className="flex-1" />
@@ -547,7 +671,17 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         />
       </div>
 
-      {view === "week" ? (
+      {view === "panorama" ? (
+        <TaskDashboard
+          tasks={tasks}
+          categoryLabel={categoryLabel}
+          profiles={profiles}
+          clinics={clinics}
+          isGestor={isGestor}
+          currentUserId={currentUserId}
+          onOpenTask={setOpenTaskId}
+        />
+      ) : view === "week" ? (
         myOpenTasks.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             Você não tem tarefas em aberto atribuídas a você.
@@ -572,9 +706,11 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                         t={t}
                         categoryLabel={categoryLabel}
                         pending={pending}
+                        today={today}
                         onOpen={setOpenTaskId}
                         onChangeStatus={changeStatus}
                         onRemove={remove}
+                        onSnooze={snooze}
                       />
                     ))}
                   </ul>
@@ -626,9 +762,11 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                 t={t}
                 categoryLabel={categoryLabel}
                 pending={pending}
+                today={today}
                 onOpen={setOpenTaskId}
                 onChangeStatus={changeStatus}
                 onRemove={remove}
+                onSnooze={snooze}
                 selectable
                 selected={selected.has(t.id)}
                 onToggleSelect={toggleSelect}
@@ -682,7 +820,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         </div>
       )}
 
-      {suggestions.length > 0 && (
+      {suggestions.length > 0 && view !== "panorama" && (
         <TaskSuggestions
           suggestions={suggestions}
           clinics={clinics}
@@ -700,6 +838,8 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         categories={categories}
         onClose={() => setOpenTaskId(null)}
         onStatusChange={changeStatus}
+        onDeleted={(id) => setTasks((ts) => ts.filter((t) => t.id !== id))}
+        onSnoozed={(id, until) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, snoozed_until: until } : t)))}
         onChanged={refresh}
         currentUserId={currentUserId}
       />

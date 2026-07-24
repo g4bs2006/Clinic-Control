@@ -4,8 +4,6 @@ import { notFound } from "next/navigation"
 import { getClinic } from "@/lib/clinics/actions"
 import { monthKey, prevMonth } from "@/lib/snapshots/month"
 import { Panel } from "@/components/dashboard/panel"
-import { listClinicAgents } from "@/lib/agents/actions"
-import { ClinicAgents } from "@/components/clinics/clinic-agents"
 import { getClinicOpenAiUsage, listOpenAiKeys } from "@/lib/openai-usage/actions"
 import { ClinicOpenAiUsagePanel } from "@/components/clinics/clinic-openai-usage"
 import { ClinicOpenAiKeySelect } from "@/components/clinics/clinic-openai-key-select"
@@ -28,10 +26,9 @@ export default async function ClinicIaPage({
   if (!clinic) notFound()
 
   const currentMonth = monthKey(new Date())
-  const [openAiUsage, openAiKeys, agents] = await Promise.all([
+  const [openAiUsage, openAiKeys] = await Promise.all([
     getClinicOpenAiUsage(id),
     listOpenAiKeys(),
-    listClinicAgents(id),
   ])
 
   return (
@@ -69,14 +66,6 @@ export default async function ClinicIaPage({
           />
         </div>
         <InvestigateContacts clinicId={id} />
-      </Panel>
-
-      {/* ── Agentes de IA ──────────────────────────────────────── */}
-      <Panel
-        title="Agentes de IA"
-        subtitle="persona e estágios · editáveis (importados da pasta da clínica)"
-      >
-        <ClinicAgents agents={agents} />
       </Panel>
     </>
   )

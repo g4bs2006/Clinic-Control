@@ -29,9 +29,11 @@ function toDraft(row: TaskCategoryRow): DraftCategory {
 
 interface TaskCategoriesEditorProps {
   initialCategories: TaskCategoryRow[]
+  /** Desenvolvedor: só visualiza (sem criar/editar/reordenar/remover). */
+  readOnly?: boolean
 }
 
-export function TaskCategoriesEditor({ initialCategories }: TaskCategoriesEditorProps) {
+export function TaskCategoriesEditor({ initialCategories, readOnly = false }: TaskCategoriesEditorProps) {
   const router = useRouter()
   const confirm = useConfirm()
   const [drafts, setDrafts] = useState<DraftCategory[]>(initialCategories.map(toDraft))
@@ -125,6 +127,27 @@ export function TaskCategoriesEditor({ initialCategories }: TaskCategoriesEditor
         toast.error(res.error)
       }
     })
+  }
+
+  if (readOnly) {
+    return (
+      <ul className="flex flex-col gap-1.5">
+        {drafts.map((d, i) => (
+          <li
+            key={d.id ?? `ro-${i}`}
+            className={`flex items-center gap-3 rounded-md border border-border/60 bg-accent/20 px-3 py-2 ${d.active ? "" : "opacity-60"}`}
+          >
+            <span className="flex-1 truncate text-sm text-foreground">{d.label}</span>
+            <span className="font-mono text-xs text-muted-foreground">{d.slug}</span>
+            {!d.active && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[0.62rem] font-semibold text-muted-foreground">
+                inativa
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    )
   }
 
   return (

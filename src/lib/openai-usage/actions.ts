@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCarteiraScope } from "@/lib/users/actions";
+import { getSessionUser } from "@/lib/auth/session";
 import { requireGestor } from "@/lib/auth/require-gestor";
 
 // Dias em UTC (bucket da OpenAI — ver 0053/0055). O "mês" aqui é o mês UTC,
@@ -238,6 +239,43 @@ export async function listOpenAiKeys(): Promise<OpenAiKeyOption[]> {
     redacted: (k.redacted_value as string | null) ?? null,
     linkedToClinic: linkedBy.get(k.api_key_id as string) ?? null,
   }));
+}
+
+/**
+ * Sincroniza AGORA o cache de API keys da organização (projetos + keys) via a
+ * Edge Function em modo `keysOnly` — sem coletar uso/custo. Serve para uma
+ * clínica/chave nova aparecer no select de vínculo sem esperar o cron diário.
+ * A Admin Key só enxerga chaves da PRÓPRIA organização; chaves de contas OpenAI
+ * de terceiros não são descobríveis por aqui.
+ */
+export async function syncOpenAiKeys(): Promise<
+  { ok: true; keys: number } | { ok: false; error: string }
+> {
+  if (!(await getSessionUser())) return { ok: false, error: "Não autenticado" };
+
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secret = process.env.COLLECT_GROUPS_CRON_SECRET;
+  if (!baseUrl || !secret) {
+    return {
+      ok: false,
+      error: "Sincronização não configurada — falta COLLECT_GROUPS_CRON_SECRET no ambiente.",
+    };
+  }
+
+  try {
+    const res = await fetch(`${baseUrl}/functions/v1/collect-openai-usage?keysOnly=1`, {
+      method: "POST",
+      headers: { "x-cron-secret": secret },
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      return { ok: false, error: data?.error ?? `Falha na sincronização (HTTP ${res.status})` };
+    }
+    revalidatePath("/", "layout");
+    return { ok: true, keys: Number(data.apiKeys ?? 0) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Falha ao contatar a função de coleta" };
+  }
 }
 
 /** Vincula/desvincula a API key OpenAI da clínica ("" limpa o vínculo). */

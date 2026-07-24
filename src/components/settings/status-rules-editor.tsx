@@ -35,9 +35,11 @@ function toDraft(rule: StatusRuleRow): DraftRule {
 
 interface StatusRulesEditorProps {
   initialRules: StatusRuleRow[]
+  /** Desenvolvedor: só visualiza (sem criar/editar/reordenar/remover). */
+  readOnly?: boolean
 }
 
-export function StatusRulesEditor({ initialRules }: StatusRulesEditorProps) {
+export function StatusRulesEditor({ initialRules, readOnly = false }: StatusRulesEditorProps) {
   const router = useRouter()
   const [drafts, setDrafts] = useState<DraftRule[]>(initialRules.map(toDraft))
   const [pending, startTransition] = useTransition()
@@ -131,6 +133,29 @@ export function StatusRulesEditor({ initialRules }: StatusRulesEditorProps) {
         toast.error(res.error)
       }
     })
+  }
+
+  if (readOnly) {
+    return (
+      <ul className="flex flex-col gap-1.5">
+        {drafts.map((d, i) => (
+          <li
+            key={d.id ?? `ro-${i}`}
+            className="flex items-center gap-3 rounded-md border border-border/60 bg-accent/20 px-3 py-2"
+          >
+            <span
+              className="size-4 shrink-0 rounded-full border border-border/60"
+              style={{ backgroundColor: d.color }}
+              title={d.color}
+            />
+            <span className="flex-1 truncate text-sm text-foreground">{d.label}</span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {d.minPct}% – {d.maxPct}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    )
   }
 
   return (

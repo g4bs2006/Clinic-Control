@@ -22,6 +22,7 @@ import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import type { ProfileOption } from "@/components/tasks/task-fields";
 import type { Clinic } from "@/lib/clinics/schema";
 import type { TaskPriority, TaskStatus } from "@/lib/tasks/categories";
+import { navItems } from "@/lib/nav-items";
 import { cn } from "@/lib/utils";
 
 const PRIORITY_DOT: Record<TaskPriority, string> = {
@@ -180,10 +181,10 @@ export function GlobalSearch() {
   const loading = isOpen && (taskClinic ? tasks === null : clinics === null);
 
   // ── Itens do estágio atual ─────────────────────────────────────────────────
+  const term = query.trim().toLowerCase();
   const loaded = clinics ?? [];
-  const filteredClinics = query.trim()
+  const filteredClinics = term
     ? loaded.filter((c) => {
-        const term = query.toLowerCase();
         return (
           c.name.toLowerCase().includes(term) ||
           c.city?.toLowerCase().includes(term) ||
@@ -193,6 +194,9 @@ export function GlobalSearch() {
         );
       })
     : loaded.slice(0, 5); // show top 5 when empty
+  // Páginas principais (seção "Ir para"): todas quando a busca está vazia,
+  // filtradas pelo rótulo ao digitar. Vêm ANTES das clínicas no índice de teclado.
+  const navPages = term ? navItems.filter((p) => p.label.toLowerCase().includes(term)) : navItems;
 
   // Modo tarefas: abertas + as concluídas nesta sessão (para desfazer), filtradas pela busca.
   const visibleTasks = (tasks ?? [])
@@ -201,13 +205,21 @@ export function GlobalSearch() {
   const canCreate = taskClinic !== null && query.trim().length >= 3;
   // Índice virtual: tarefas + (opcional) o item "criar tarefa" no fim.
   const taskItemCount = visibleTasks.length + (canCreate ? 1 : 0);
-  const itemCount = taskClinic ? taskItemCount : filteredClinics.length;
+  const itemCount = taskClinic ? taskItemCount : navPages.length + filteredClinics.length;
 
   // ── Ações ──────────────────────────────────────────────────────────────────
   const handleSelect = useCallback(
     (clinicId: string) => {
       close();
       router.push(`/clinicas/${clinicId}`);
+    },
+    [router, close],
+  );
+
+  const handleNavigate = useCallback(
+    (href: string) => {
+      close();
+      router.push(href);
     },
     [router, close],
   );
@@ -305,6 +317,7 @@ export function GlobalSearch() {
             source: "manual",
             parent_task_id: null,
             recurrence_id: null,
+            snoozed_until: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             completed_at: null,
@@ -331,16 +344,21 @@ export function GlobalSearch() {
         e.preventDefault();
         setActiveIndex((prev) => (itemCount ? (prev - 1 + itemCount) % itemCount : 0));
       } else if (e.key === "Tab" && !taskClinic) {
-        // Tab na lista de clínicas = entrar nas tarefas da clínica ativa.
+        // Tab só faz sentido sobre uma CLÍNICA (entrar nas tarefas dela); sobre
+        // uma página da seção "Ir para" não há o que fazer.
         e.preventDefault();
-        if (filteredClinics[activeIndex]) enterTasks(filteredClinics[activeIndex]);
+        const clinic = filteredClinics[activeIndex - navPages.length];
+        if (clinic) enterTasks(clinic);
       } else if (e.key === "Enter") {
         e.preventDefault();
         if (taskClinic) {
           if (activeIndex < visibleTasks.length) toggleTask(visibleTasks[activeIndex]);
           else if (canCreate) createQuickTask();
-        } else if (filteredClinics[activeIndex]) {
-          handleSelect(filteredClinics[activeIndex].id);
+        } else if (activeIndex < navPages.length) {
+          handleNavigate(navPages[activeIndex].href);
+        } else {
+          const clinic = filteredClinics[activeIndex - navPages.length];
+          if (clinic) handleSelect(clinic.id);
         }
       } else if (e.key === "ArrowRight" && taskClinic && query === "") {
         // → abre o detalhe da tarefa ativa (só com a busca vazia, para não
@@ -364,11 +382,13 @@ export function GlobalSearch() {
     itemCount,
     taskClinic,
     filteredClinics,
+    navPages,
     visibleTasks,
     activeIndex,
     canCreate,
     query,
     handleSelect,
+    handleNavigate,
     enterTasks,
     exitTasks,
     toggleTask,
@@ -433,7 +453,7 @@ export function GlobalSearch() {
             placeholder={
               taskClinic
                 ? "Filtrar tarefas ou digitar uma nova..."
-                : "Buscar clínica por nome, cidade ou sistema..."
+                : "Ir para uma página ou buscar clínica..."
             }
             className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground placeholder:text-muted-foreground/60"
           />
@@ -558,17 +578,49 @@ export function GlobalSearch() {
                 </button>
               )}
             </div>
-          ) : filteredClinics.length === 0 ? (
+          ) : navPages.length === 0 && filteredClinics.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center text-xs text-muted-foreground">
-              <span>Nenhuma clínica encontrada</span>
+              <span>Nada encontrado</span>
             </div>
           ) : (
-            /* ── Modo clínicas ────────────────────────────────────── */
+            /* ── Modo navegação: páginas ("Ir para") + clínicas ─────── */
             <div className="space-y-0.5">
-              <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2 py-1.5">
-                {query.trim() ? "Resultados" : "Sugestões de Clínicas"}
-              </div>
-              {filteredClinics.map((clinic, index) => {
+              {navPages.length > 0 && (
+                <>
+                  <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2 py-1.5">
+                    Ir para
+                  </div>
+                  {navPages.map((page, index) => {
+                    const isActive = index === activeIndex;
+                    const Icon = page.icon;
+                    return (
+                      <button
+                        key={page.href}
+                        onClick={() => handleNavigate(page.href)}
+                        onMouseEnter={() => setActiveIndex(index)}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs transition-all cursor-pointer",
+                          isActive
+                            ? "bg-primary/10 text-primary border border-primary/20"
+                            : "text-foreground border border-transparent hover:bg-zinc-900/60",
+                        )}
+                      >
+                        <Icon
+                          className={cn("size-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")}
+                        />
+                        <span className="min-w-0 flex-1 truncate font-medium">{page.label}</span>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+              {filteredClinics.length > 0 && (
+                <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70 px-2 py-1.5">
+                  {query.trim() ? "Clínicas" : "Sugestões de Clínicas"}
+                </div>
+              )}
+              {filteredClinics.map((clinic, i) => {
+                const index = navPages.length + i;
                 const isActive = index === activeIndex;
                 const cityUf = [clinic.city, clinic.state].filter(Boolean).join("/");
 

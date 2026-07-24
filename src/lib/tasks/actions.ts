@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getCurrentProfile, getCarteiraScope } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
 import { TASK_STATUS_LABEL, TASK_ATTACHMENTS_BUCKET, type TaskCategory, type TaskPriority, type TaskStatus } from "./categories";
+import { notifyTaskAssigned, notifyTaskComment } from "@/lib/notifications/task-events";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,13 +25,14 @@ export type TaskRow = {
   source: "manual" | "ia";
   parent_task_id: string | null;
   recurrence_id: string | null;
+  snoozed_until: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
 };
 
 const TASK_SELECT =
-  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, recurrence_id, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
+  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, recurrence_id, snoozed_until, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
 
 export type TaskSuggestionRow = {
   id: string;
@@ -93,6 +95,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     source: row.source as "manual" | "ia",
     parent_task_id: row.parent_task_id as string | null,
     recurrence_id: (row.recurrence_id as string | null) ?? null,
+    snoozed_until: (row.snoozed_until as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     completed_at: row.completed_at as string | null,
@@ -279,6 +282,13 @@ export async function createTask(
     .single();
   if (error) return { ok: false, error: error.message };
 
+  await notifyTaskAssigned({
+    taskId: data.id as string,
+    taskTitle: title,
+    assigneeId: input.assignedTo,
+    actor: { id: user!.id, name: user!.name },
+  });
+
   revalidatePath("/tarefas");
   revalidatePath("/");
   if (input.clinicId) revalidatePath(`/clinicas/${input.clinicId}`);
@@ -315,8 +325,19 @@ export async function createTasksForClinics(
     created_by: user!.id,
   }));
 
-  const { error } = await supabase.from("tasks").insert(rows);
+  const { data: created, error } = await supabase.from("tasks").insert(rows).select("id");
   if (error) return { ok: false, error: error.message };
+
+  if (base.assignedTo) {
+    for (const row of created ?? []) {
+      await notifyTaskAssigned({
+        taskId: row.id as string,
+        taskTitle: title,
+        assigneeId: base.assignedTo,
+        actor: { id: user!.id, name: user!.name },
+      });
+    }
+  }
 
   revalidatePath("/tarefas");
   revalidatePath("/");
@@ -339,8 +360,25 @@ export async function updateTask(
   if (input.dueDate !== undefined) payload.due_date = input.dueDate || null;
   if (input.clinicId !== undefined) payload.clinic_id = input.clinicId;
 
+  // Estado anterior para detectar troca de responsável (só se for editar isso).
+  let prev: { assigned_to: string | null; title: string } | null = null;
+  if (input.assignedTo !== undefined) {
+    const { data } = await supabase.from("tasks").select("assigned_to, title").eq("id", id).maybeSingle();
+    prev = (data as { assigned_to: string | null; title: string } | null) ?? null;
+  }
+
   const { error } = await supabase.from("tasks").update(payload).eq("id", id);
   if (error) return { ok: false, error: error.message };
+
+  if (input.assignedTo && input.assignedTo !== prev?.assigned_to) {
+    const user = await getSessionUser();
+    await notifyTaskAssigned({
+      taskId: id,
+      taskTitle: (payload.title as string | undefined) ?? prev?.title,
+      assigneeId: input.assignedTo,
+      actor: { id: user!.id, name: user!.name },
+    });
+  }
 
   revalidatePath("/tarefas");
   revalidatePath("/");
@@ -416,6 +454,24 @@ export async function bulkUpdateTaskStatus(
   return { ok: true, count: ids.length };
 }
 
+/**
+ * Adia ("snooze") uma tarefa até `until` (YYYY-MM-DD) ou remove o adiamento
+ * (`until = null`). A tarefa some das listagens enquanto snoozed_until estiver
+ * no futuro e reaparece sozinha na data. Sem revalidatePath: a lista atualiza
+ * de forma otimista no cliente (mesmo motivo de updateTaskStatus).
+ */
+export async function snoozeTask(
+  id: string,
+  until: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const { error } = await supabase.from("tasks").update({ snoozed_until: until }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function deleteTask(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
@@ -477,6 +533,13 @@ export async function acceptTaskSuggestion(
     .eq("id", suggestionId);
   if (updateError) return { ok: false, error: updateError.message };
 
+  await notifyTaskAssigned({
+    taskId: task.id as string,
+    taskTitle: title,
+    assigneeId: input.assignedTo,
+    actor: { id: user!.id, name: user!.name },
+  });
+
   revalidatePath("/tarefas");
   revalidatePath("/");
   return { ok: true, taskId: task.id as string };
@@ -525,6 +588,7 @@ export async function listSubtasks(parentTaskId: string): Promise<TaskRow[]> {
 export async function createSubtasks(
   parentTaskId: string,
   titles: string[],
+  source: "manual" | "ia" = "ia",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
@@ -548,7 +612,7 @@ export async function createSubtasks(
       category: parent.category,
       title,
       priority: "media",
-      source: "ia" as const,
+      source,
       created_by: user!.id,
     })),
   );
@@ -773,6 +837,7 @@ export async function listTaskActivity(taskId: string): Promise<TaskActivityRow[
 export async function addTaskComment(
   taskId: string,
   body: string,
+  mentionedIds: string[] = [],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await requireUser();
   if (!supabase) return { ok: false, error: "Não autenticado" };
@@ -788,6 +853,13 @@ export async function addTaskComment(
     kind: "comment",
   });
   if (error) return { ok: false, error: error.message };
+
+  await notifyTaskComment({
+    taskId,
+    commentBody: text,
+    mentionedIds,
+    actor: { id: user!.id, name: user!.name },
+  });
 
   revalidatePath("/tarefas");
   return { ok: true };

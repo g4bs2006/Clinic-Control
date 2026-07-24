@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSessionUser } from "@/lib/auth/session";
+import { requireGestor } from "@/lib/auth/require-gestor";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,9 +32,12 @@ export type TeamMemberRow = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function requireUser() {
-  if (!(await getSessionUser())) return null;
-  return createClient();
+// Configurar o WhatsApp (mapear grupos, editar equipe/bot, sincronizar) é ação
+// de gestor. O desenvolvedor só visualiza (leitura via list* sem este gate).
+async function requireGestorClient() {
+  const gate = await requireGestor();
+  if (!gate.ok) return { ok: false as const, error: gate.error };
+  return { ok: true as const, supabase: await createClient() };
 }
 
 // ── Métrica de tempo de resposta ─────────────────────────────────────────────
@@ -225,8 +228,8 @@ export async function syncWhatsappGroups(): Promise<
   | { ok: true; groupsFetched: number; messagesInserted: number }
   | { ok: false; error: string }
 > {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
 
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const secret = process.env.COLLECT_GROUPS_CRON_SECRET;
@@ -261,8 +264,9 @@ export async function updateGroupClinic(
   groupJid: string,
   clinicId: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
+  const supabase = gate.supabase;
 
   const { error } = await supabase
     .from("whatsapp_groups")
@@ -293,8 +297,9 @@ export async function addTeamMember(member: {
   name: string;
   kind: "human" | "bot";
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
+  const supabase = gate.supabase;
 
   const lid = member.lid.replace(/\D/g, "");
   if (lid.length < 8) return { ok: false, error: "ID (@lid) inválido — só dígitos, mínimo 8" };
@@ -313,8 +318,9 @@ export async function addTeamMember(member: {
 export async function deleteTeamMember(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const supabase = await requireUser();
-  if (!supabase) return { ok: false, error: "Não autenticado" };
+  const gate = await requireGestorClient();
+  if (!gate.ok) return gate;
+  const supabase = gate.supabase;
 
   const { error } = await supabase.from("whatsapp_team_members").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
