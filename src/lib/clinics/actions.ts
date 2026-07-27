@@ -137,27 +137,31 @@ export async function updateClinicSystem(id: string, system: string) {
   return { ok: true as const };
 }
 
-// Atualiza apenas o estrategista responsável (externo ao sistema, sem login).
-// Valor vazio limpa o campo. Valida contra a lista conhecida.
-export async function updateClinicStrategist(id: string, strategist: string) {
+// Atualiza os estrategistas responsáveis (externos ao sistema, sem login). Uma
+// clínica pode ter mais de um. Lista vazia limpa o campo. Valida cada nome
+// contra os contatos cadastrados.
+export async function updateClinicStrategists(id: string, strategists: string[]) {
   const user = await getSessionUser();
   if (!user) return { ok: false as const, error: "Não autenticado" };
   const supabase = await createClient();
 
-  const value = strategist.trim();
-  if (value) {
-    const { data: exists } = await supabase
+  const values = Array.from(new Set(strategists.map((s) => s.trim()).filter(Boolean)));
+  if (values.length > 0) {
+    const { data: valid } = await supabase
       .from("partner_contacts")
-      .select("id")
+      .select("name")
       .eq("role", "strategist")
-      .eq("name", value)
-      .maybeSingle();
-    if (!exists) return { ok: false as const, error: "Estrategista inválido" };
+      .in("name", values);
+    const known = new Set((valid ?? []).map((r) => r.name as string));
+    const unknown = values.filter((v) => !known.has(v));
+    if (unknown.length > 0) {
+      return { ok: false as const, error: `Estrategista inválido: ${unknown.join(", ")}` };
+    }
   }
 
   const { error } = await supabase
     .from("clinics")
-    .update({ strategist: value || null })
+    .update({ strategists: values })
     .eq("id", id);
   if (error) return { ok: false as const, error: error.message };
   revalidatePath(`/clinicas/${id}`);

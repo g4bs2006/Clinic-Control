@@ -78,8 +78,9 @@ export async function updatePartnerContact(
   if (patch.active !== undefined) update.active = patch.active;
 
   // Renomear propaga para as clínicas que referenciam o nome antigo (a clínica
-  // guarda o NOME, não um id) — senão o vínculo se perde.
-  let rename: { col: "strategist" | "traffic_manager"; from: string; to: string } | null = null;
+  // guarda o NOME, não um id) — senão o vínculo se perde. Estrategista vive num
+  // array (clinics.strategists); gestor de tráfego numa coluna única.
+  let rename: { role: PartnerRole; from: string; to: string } | null = null;
   if (patch.name !== undefined) {
     const to = patch.name.trim();
     if (to.length < 2) return { ok: false, error: "Nome muito curto" };
@@ -89,11 +90,7 @@ export async function updatePartnerContact(
       .eq("id", id)
       .maybeSingle();
     if (current && (current.name as string) !== to) {
-      rename = {
-        col: (current.role as PartnerRole) === "strategist" ? "strategist" : "traffic_manager",
-        from: current.name as string,
-        to,
-      };
+      rename = { role: current.role as PartnerRole, from: current.name as string, to };
     }
     update.name = to;
   }
@@ -107,7 +104,22 @@ export async function updatePartnerContact(
   }
 
   if (rename) {
-    await supabase.from("clinics").update({ [rename.col]: rename.to }).eq(rename.col, rename.from);
+    if (rename.role === "strategist") {
+      // Troca o nome dentro do array de estrategistas de cada clínica afetada.
+      const { data: affected } = await supabase
+        .from("clinics")
+        .select("id, strategists")
+        .contains("strategists", [rename.from]);
+      for (const c of affected ?? []) {
+        const next = ((c.strategists as string[]) ?? []).map((s) => (s === rename!.from ? rename!.to : s));
+        await supabase.from("clinics").update({ strategists: next }).eq("id", c.id);
+      }
+    } else {
+      await supabase
+        .from("clinics")
+        .update({ traffic_manager: rename.to })
+        .eq("traffic_manager", rename.from);
+    }
   }
 
   revalidatePath("/configuracoes");

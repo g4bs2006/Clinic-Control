@@ -19,7 +19,7 @@ export const clinicInputSchema = z.object({
   owner_phone: z.string().optional(),
   legal_name: z.string().optional(),
   document_id: z.string().optional(),
-  strategist: z.string().optional(),
+  strategists: z.array(z.string()).optional(),
   plan: z.enum(["black", "elite"]).optional(),
   odontoimpact: z.boolean().optional(),
   traffic_manager: z.string().optional(),

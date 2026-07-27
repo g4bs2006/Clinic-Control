@@ -72,7 +72,7 @@ export default async function ClinicCadastroPage({
           <FichaRow label="Estrategista">
             <ClinicStrategistSelect
               clinicId={id}
-              current={clinic.strategist ?? null}
+              current={clinic.strategists ?? []}
               contacts={strategistContacts}
             />
           </FichaRow>

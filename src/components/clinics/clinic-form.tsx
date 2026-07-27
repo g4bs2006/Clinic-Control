@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +28,7 @@ import {
 } from "@/lib/helena/provision-options";
 
 const SYSTEM_NONE = "__none__";
-const STRATEGIST_NONE = "__none__";
+const STRATEGIST_ADD = "__add__";
 const PLAN_NONE = "__none__";
 const TRAFFIC_MANAGER_NONE = "__none__";
 
@@ -46,11 +47,8 @@ interface ClinicFormProps {
 }
 
 export function ClinicForm({ defaultValues, strategists, trafficManagers, onSubmit }: ClinicFormProps) {
-  // Garante que o valor salvo apareça na lista mesmo se a pessoa tiver sido
-  // desativada depois (senão o Select mostraria valor cru).
-  const strategistOptions = defaultValues?.strategist && !strategists.includes(defaultValues.strategist)
-    ? [defaultValues.strategist, ...strategists]
-    : strategists;
+  // Gestor de tráfego é único: garante que o valor salvo apareça mesmo se a
+  // pessoa tiver sido desativada depois (senão o Select mostraria valor cru).
   const trafficManagerOptions = defaultValues?.traffic_manager && !trafficManagers.includes(defaultValues.traffic_manager)
     ? [defaultValues.traffic_manager, ...trafficManagers]
     : trafficManagers;
@@ -64,7 +62,7 @@ export function ClinicForm({ defaultValues, strategists, trafficManagers, onSubm
     defaultValues?.contract_status ?? "active"
   );
   const [system, setSystem] = useState<string>(defaultValues?.system ?? "");
-  const [strategist, setStrategist] = useState<string>(defaultValues?.strategist ?? "");
+  const [strategists_, setStrategists_] = useState<string[]>(defaultValues?.strategists ?? []);
   const [plan, setPlan] = useState<string>(defaultValues?.plan ?? "");
   const [odontoimpact, setOdontoimpact] = useState(defaultValues?.odontoimpact ?? false);
   const [trafficManager, setTrafficManager] = useState<string>(defaultValues?.traffic_manager ?? "");
@@ -91,6 +89,7 @@ export function ClinicForm({ defaultValues, strategists, trafficManagers, onSubm
   }
 
   const isCreate = !defaultValues;
+  const availableStrategists = strategists.filter((s) => !strategists_.includes(s));
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -114,7 +113,7 @@ export function ClinicForm({ defaultValues, strategists, trafficManagers, onSubm
       owner_phone: ownerPhone || undefined,
       legal_name: legalName || undefined,
       document_id: documentId ? documentId.replace(/\D/g, "") : undefined,
-      strategist: strategist || undefined,
+      strategists: strategists_,
       plan: plan ? (plan as "black" | "elite") : undefined,
       odontoimpact,
       traffic_manager: odontoimpact ? trafficManager || undefined : undefined,
@@ -248,29 +247,53 @@ export function ClinicForm({ defaultValues, strategists, trafficManagers, onSubm
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="strategist">Estrategista</Label>
-            <Select
-              value={strategist || STRATEGIST_NONE}
-              items={{
-                [STRATEGIST_NONE]: "— Não definido —",
-                ...Object.fromEntries(strategistOptions.map((s) => [s, s])),
-              }}
-              onValueChange={(val) => {
-                if (val) setStrategist(val === STRATEGIST_NONE ? "" : val);
-              }}
-            >
-              <SelectTrigger id="strategist" className="w-full">
-                <SelectValue placeholder="Selecione o estrategista" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={STRATEGIST_NONE}>— Não definido —</SelectItem>
-                {strategistOptions.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
+            <Label htmlFor="strategist">Estrategista(s)</Label>
+            {strategists_.length > 0 && (
+              <ul className="flex flex-wrap gap-1.5">
+                {strategists_.map((n) => (
+                  <li
+                    key={n}
+                    className="inline-flex items-center gap-1 rounded-full bg-accent/40 px-2.5 py-1 text-sm"
+                  >
+                    {n}
+                    <button
+                      type="button"
+                      onClick={() => setStrategists_((prev) => prev.filter((s) => s !== n))}
+                      title="Remover estrategista"
+                      className="text-muted-foreground transition-colors hover:text-red-400"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </li>
                 ))}
-              </SelectContent>
-            </Select>
+              </ul>
+            )}
+            {availableStrategists.length > 0 && (
+              <Select
+                value={STRATEGIST_ADD}
+                items={{
+                  [STRATEGIST_ADD]: strategists_.length ? "+ Adicionar estrategista" : "Selecione o estrategista",
+                  ...Object.fromEntries(availableStrategists.map((s) => [s, s])),
+                }}
+                onValueChange={(val) => {
+                  if (val && val !== STRATEGIST_ADD) setStrategists_((prev) => [...prev, val]);
+                }}
+              >
+                <SelectTrigger id="strategist" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={STRATEGIST_ADD}>
+                    {strategists_.length ? "+ Adicionar estrategista" : "Selecione o estrategista"}
+                  </SelectItem>
+                  {availableStrategists.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="space-y-1.5">
