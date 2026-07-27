@@ -138,3 +138,42 @@ export async function linkHelenaAccountToClinic(companyId: string, clinicId: str
     return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao vincular conta" };
   }
 }
+
+/**
+ * Desfaz o vínculo entre uma clínica e sua conta Helena: apaga a linha de
+ * clinic_integrations (token + painel + mapeamentos de funil/etiquetas) e limpa
+ * o clinic_id no espelho helena_accounts. A conta volta a aparecer como "não
+ * vinculada" e pode ser revinculada depois.
+ *
+ * O token de integração gerado na Helena NÃO é revogado (a Helena não expõe
+ * endpoint de exclusão de token); ele fica órfão do lado da Helena. Uma
+ * revinculação gera um token novo. Operação destrutiva do lado do app: o
+ * mapeamento de colunas/etiquetas do funil é perdido e precisa ser refeito.
+ */
+export async function unlinkHelenaAccountFromClinic(clinicId: string) {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+
+    const { error: delError } = await supabase
+      .from("clinic_integrations")
+      .delete()
+      .eq("clinic_id", clinicId);
+    if (delError) return { ok: false as const, error: delError.message };
+
+    const { error: accError } = await supabase
+      .from("helena_accounts")
+      .update({ clinic_id: null })
+      .eq("clinic_id", clinicId);
+    if (accError) return { ok: false as const, error: accError.message };
+
+    revalidatePath("/helena");
+    revalidatePath(`/clinicas/${clinicId}`);
+    revalidatePath("/clinicas");
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao desvincular conta" };
+  }
+}

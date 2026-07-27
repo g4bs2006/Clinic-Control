@@ -1,10 +1,14 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { HelenaLinkDialog } from "@/components/helena/helena-link-dialog"
+import { unlinkHelenaAccountFromClinic } from "@/lib/helena/link-actions"
 import type { HelenaAccountRow } from "@/lib/helena/accounts-actions"
 import type { UserProfile } from "@/lib/users/actions"
 
@@ -53,6 +57,63 @@ function stripAccents(s: string): string {
 
 function normalize(s: string): string {
   return stripAccents(s.toLowerCase())
+}
+
+/** Célula "clínica vinculada": link para a clínica + ação de desvincular. */
+function LinkedClinicCell({
+  clinicId,
+  clinicName,
+  accountName,
+}: {
+  clinicId: string
+  clinicName: string
+  accountName: string
+}) {
+  const [pending, startTransition] = useTransition()
+  const confirm = useConfirm()
+  const router = useRouter()
+
+  async function handleUnlink() {
+    const ok = await confirm({
+      title: "Desvincular conta Helena?",
+      description:
+        `A conta "${accountName}" deixará de ficar vinculada a "${clinicName}". ` +
+        "O token de integração, o painel e o mapeamento do funil serão apagados — " +
+        "revincular depois exige refazer o mapeamento. Os dados já sincronizados são mantidos.",
+      confirmLabel: "Desvincular",
+      cancelLabel: "Cancelar",
+      destructive: true,
+    })
+    if (!ok) return
+    startTransition(async () => {
+      const res = await unlinkHelenaAccountFromClinic(clinicId)
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      toast.success("Conta desvinculada da clínica")
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Link
+        href={`/clinicas/${clinicId}`}
+        className="text-brand-gradient font-medium hover:opacity-85 transition-opacity"
+      >
+        {clinicName}
+      </Link>
+      <button
+        type="button"
+        onClick={handleUnlink}
+        disabled={pending}
+        className="rounded-full bg-red-500/10 px-2 py-0.5 text-[0.62rem] font-semibold text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+      >
+        {pending ? "…" : "Desvincular"}
+      </button>
+    </div>
+  )
 }
 
 interface HelenaAccountsTableProps {
@@ -126,12 +187,11 @@ export function HelenaAccountsTable({
                 </td>
                 <td className="py-2 pr-3">
                   {a.clinic_id ? (
-                    <Link
-                      href={`/clinicas/${a.clinic_id}`}
-                      className="text-brand-gradient font-medium hover:opacity-85 transition-opacity"
-                    >
-                      {clinicNameById.get(a.clinic_id) ?? "Clínica"}
-                    </Link>
+                    <LinkedClinicCell
+                      clinicId={a.clinic_id}
+                      clinicName={clinicNameById.get(a.clinic_id) ?? "Clínica"}
+                      accountName={a.name ?? "Conta sem nome"}
+                    />
                   ) : (
                     <HelenaLinkDialog
                       account={a}
