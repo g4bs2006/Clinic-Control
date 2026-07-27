@@ -401,6 +401,8 @@ O norte é transformar o Clinic Control de "painel que a equipe consulta" em **c
 
 ### Concluído recentemente (julho/2026)
 
+- **Desvincular conta Helena** — a página de Contas Helena passou a permitir desfazer o vínculo de uma clínica (par simétrico do "Vincular"), devolvendo a conta ao estado não vinculado para revínculo posterior.
+- **Refinos de usabilidade em tarefas** — concluir e abrir a tarefa em página direto da linha da lista, seleção em intervalo com Shift na ação em lote, e o "Adiar" virou um popover ancorado no botão (antes um modal centralizado).
 - **Panorama de tarefas** — 4ª visão em /tarefas com o dashboard da carteira (KPIs, atrasadas, recorrentes, carga por responsável/clínica, distribuição, envelhecimento, ritmo e concluídas em foco com anexos/comentários).
 - **Cofre com arquivos** — além das senhas cifradas, guarda arquivos e pastas num bucket privado (upload de arquivo ou pasta, download auditado), com recorte por papel.
 - **Cargos nas Configurações** — o desenvolvedor passou a ter acesso somente-leitura aos pontos sensíveis (usuários, categorias de tarefa, faixas de status, WhatsApp); proibição no servidor e na UI.
@@ -420,42 +422,3 @@ O norte é transformar o Clinic Control de "painel que a equipe consulta" em **c
 - **Custo de IA** — registro de consumo de tokens (`ai_usage_log`) e card de custo estimado em Configurações.
 - **Sincronização on-demand de grupos** — botão em Configurações para coletar grupos novos sem esperar o cron.
 - **Endurecimento de segurança** — rate limit de login (`login_attempts`), proteção contra enumeração de usuários por timing, senhas temporárias com RNG criptográfico, gates de autenticação nas ações de clínica.
-
-### Próximos passos
-
-| Prioridade | Item | Observação |
-|---|---|---|
-| Alta | Dependências entre tarefas | Frente "matar o ClickUp": "bloqueada por" entre tarefas. |
-| Alta | Notificações + lembretes de prazo | Fundação de entrega; habilita os lembretes externos de prazo (a "Minha semana" cobre o in-app). |
-| Média | Detecção de padrões entre clínicas | Agrupar reclamações/temas recorrentes via *embeddings* (`pgvector`); desenhado, aguarda chave de embeddings (DeepSeek não oferece endpoint). |
-| Média | Timeline de sentimento (30 dias) | Faixa de sentimento no perfil da clínica. |
-| Média | Rollup semanal por IA | Consolidado semanal; aguarda mais dados acumulados. |
-| Média | Relatório de conversas — Fase 2/3 | Abas IA×Humano/Habilidades/Mensagens, keywords por clínica e funil na tela. |
-| Média | Integração Google Workspace (reuniões) | Trazer gravação/transcrição/resumo do Meet para a clínica. Em planejamento — ver seção abaixo. |
-| Baixa | Categorização automática de pendência | Sugerir categoria da tarefa por palavra-chave da pendência. |
-| Baixa | Segurança — itens adiados | Base URL fixa no re-disparo do relatório; mensagem de erro genérica da Helena ao cliente. |
-
-### Em estudo — Integração Google Workspace (reuniões)
-
-> **Status: planejamento, ainda não iniciado.** Registrado aqui para não se perder; o esforço estimado é de ~1 a 2 semanas para um primeiro fluxo fim-a-fim, incremental a partir daí.
-
-**Objetivo.** Quando alguém realiza uma reunião (Google Meet), trazer automaticamente a gravação, a transcrição e o resumo para o Clinic Control, vinculados à clínica correspondente — alimentando, opcionalmente, os acompanhamentos/tarefas. Pré-requisitos já confirmados: a organização está em Google Workspace no tier pago, com gravação e resumo automático (Gemini) habilitados.
-
-**Fundação de acesso.** *Service account* com delegação de domínio (uma credencial que impersona os organizadores) — dispensa consentimento por usuário e a verificação pública do Google, por ser uso interno. Scopes read-only de Calendar, Drive e Meet. O JSON da service account fica no Cofre.
-
-**Modelo de dados (schema `clinic_control`).**
-- `google_meetings` — `google_event_id` (único), título, início/fim, organizador, link do Meet, `clinic_id` (FK nullable — o vínculo com a clínica), status do sync.
-- `meeting_recordings` — FK da reunião, `drive_file_id` + link. A gravação em vídeo permanece como **link do Drive**, não é copiada para o banco.
-- `meeting_summaries` — FK da reunião, transcrição e resumo em texto, `source` (`google` = resumo do Gemini / `ai` = motor próprio).
-
-**Fluxo de sincronização.** Cron (Edge Function/Vercel cron, mesmo padrão dos jobs atuais) a cada ~15 min: puxa eventos do Calendar com link do Meet; para reuniões encerradas, consulta a Meet API (`conferenceRecords → recordings/transcripts`, que ficam prontos alguns minutos após o fim) e grava transcrição + resumo.
-
-**Decisão pendente — vínculo reunião → clínica.** Abordagem recomendada: **manual com sugestão** — as reuniões caem numa fila de "não atribuídas" e o dev vincula à clínica em um clique, com um palpite pré-marcado por heurística (e-mail do participante / convenção no título). É o mesmo padrão "sistema sugere, humano confirma" já usado nas tarefas e nas sugestões de IA.
-
-**Onde aparece.** Seção "Reuniões" no perfil da clínica (resumo, transcrição, link da gravação); opcionalmente, o resumo alimenta o motor que já gera acompanhamentos/tarefas.
-
-### Pendências de configuração (operacionais)
-
-- Definir `CRON_SECRET` na Edge Function `collect-groups` e `COLLECT_GROUPS_CRON_SECRET` no Vercel (mesmo valor) para a sincronização on-demand.
-- Adicionar `DEEPSEEK_API_KEY` no Vercel/`.env.local` para a quebra de subtarefas por IA.
-- Migrar o modelo `deepseek-chat` antes da descontinuação anunciada (2026-07-24).
