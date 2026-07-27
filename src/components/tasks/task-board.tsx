@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Circle, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3 } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3, ExternalLink } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -104,7 +104,7 @@ function TaskListItem({
   onSnooze: (id: string, until: string | null) => void
   selectable?: boolean
   selected?: boolean
-  onToggleSelect?: (id: string) => void
+  onToggleSelect?: (id: string, shiftKey: boolean) => void
 }) {
   const isDone = t.status === "concluida"
   const isSnoozed = t.snoozed_until != null && t.snoozed_until > today
@@ -112,25 +112,20 @@ function TaskListItem({
   return (
     // Mobile: card com borda (edição de status via detalhe/sheet); desktop: linha densa.
     // Em andamento é sinalizado só pelo selo "em andamento" (sem faixa lateral).
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5">
+    // `group` habilita o botão "Concluir" que só aparece no hover da linha (desktop).
+    <li className="group flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5">
       {selectable && (
+        // onClick (não onCheckedChange) para capturar Shift e fazer seleção em
+        // intervalo; o estado `checked` é controlado pelo pai, então a caixa
+        // reflete a seleção mesmo sem handler de mudança próprio.
         <Checkbox
           checked={selected}
-          onCheckedChange={() => onToggleSelect?.(t.id)}
+          onCheckedChange={() => {}}
+          onClick={(e) => onToggleSelect?.(t.id, e.shiftKey)}
           aria-label={`Selecionar tarefa ${t.title}`}
           className="hidden sm:inline-flex"
         />
       )}
-      {/* Concluir/reabrir num clique (otimista) */}
-      <button
-        type="button"
-        onClick={() => onChangeStatus(t.id, isDone ? "pendente" : "concluida")}
-        title={isDone ? "Reabrir tarefa" : "Concluir tarefa"}
-        aria-label={isDone ? "Reabrir tarefa" : "Concluir tarefa"}
-        className={`flex size-9 shrink-0 items-center justify-center transition-colors sm:size-6 ${isDone ? "text-emerald-500 hover:text-muted-foreground" : "text-muted-foreground/50 hover:text-emerald-500"}`}
-      >
-        {isDone ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}
-      </button>
       <span
         className={`size-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`}
         title={TASK_PRIORITY_LABEL[t.priority]}
@@ -184,6 +179,34 @@ function TaskListItem({
           )}
         </p>
       </div>
+
+      {/* Abrir a tarefa em página cheia (deep-link) — atalho direto sem passar
+          pelo modal. Sempre visível (discreto), já que é o pedido de "achar
+          fácil"; realça no hover. */}
+      <Link
+        href={`/tarefas/${t.id}`}
+        title="Abrir em página"
+        aria-label={`Abrir tarefa ${t.title} em página`}
+        className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground sm:size-8"
+      >
+        <ExternalLink className="size-3.5" />
+      </Link>
+
+      {/* Concluir/Reabrir — no desktop só aparece no hover/foco da linha; no
+          mobile fica sempre visível (não há hover). Ocupa o espaço mesmo
+          invisível para não haver salto de layout ao passar o mouse. */}
+      <Button
+        type="button"
+        size="sm"
+        variant={isDone ? "ghost" : "outline"}
+        disabled={pending}
+        onClick={() => onChangeStatus(t.id, isDone ? "pendente" : "concluida")}
+        title={isDone ? "Reabrir tarefa" : "Concluir tarefa"}
+        className={`gap-1 transition-opacity focus-visible:opacity-100 focus-visible:pointer-events-auto sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto sm:group-focus-within:opacity-100 sm:group-focus-within:pointer-events-auto ${isDone ? "text-muted-foreground hover:text-foreground" : "border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-500"}`}
+      >
+        {isDone ? <RotateCcw className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
+        {isDone ? "Reabrir" : "Concluir"}
+      </Button>
 
       <Select
         value={t.status}
@@ -265,6 +288,12 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   const [tasks, setTasks] = useState(initialTasks)
   // Seleção múltipla da lista (ação em lote). Limpa ao chegar nova lista do servidor.
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Âncora da seleção: última tarefa clicada sem Shift. Shift+clique seleciona o
+  // intervalo daqui até a clicada, na ordem exibida.
+  const [anchorId, setAnchorId] = useState<string | null>(null)
+  // Ordem atual dos ids na lista renderizada — alimentado após calcular
+  // `filtered`; lido no clique com Shift para resolver o intervalo.
+  const orderedIdsRef = useRef<string[]>([])
   // Re-sincroniza com o servidor (criação, exclusão, aceite de sugestão, edição
   // no detalhe) ajustando o estado durante o render — padrão recomendado do React
   // em vez de setState num efeito (evita render em cascata e flash de dado velho).
@@ -273,6 +302,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     setPrevInitial(initialTasks)
     setTasks(initialTasks)
     setSelected(new Set())
+    setAnchorId(null)
   }
   const [statusFilter, setStatusFilter] = useState<string>(ALL)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
@@ -410,13 +440,33 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     })
   }
 
-  function toggleSelect(id: string) {
+  // Alterna a seleção de uma tarefa. Com Shift, seleciona o intervalo da âncora
+  // (última clicada sem Shift) até esta, na ordem exibida — como em
+  // gerenciadores de arquivos/e-mail. Sem Shift, alterna só a clicada e vira a
+  // nova âncora. Lê a ordem de `orderedIdsRef` (mesma da lista renderizada).
+  function toggleSelect(id: string, shiftKey = false) {
+    if (shiftKey && anchorId && anchorId !== id) {
+      const ids = orderedIdsRef.current
+      const a = ids.indexOf(anchorId)
+      const b = ids.indexOf(id)
+      if (a !== -1 && b !== -1) {
+        const [lo, hi] = a < b ? [a, b] : [b, a]
+        setSelected((prev) => {
+          const next = new Set(prev)
+          for (const rid of ids.slice(lo, hi + 1)) next.add(rid)
+          return next
+        })
+        setAnchorId(id)
+        return
+      }
+    }
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
+    setAnchorId(id)
   }
 
   function bulkStatus(status: TaskStatus) {
@@ -474,6 +524,8 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       if (!b.due_date) return -1
       return a.due_date < b.due_date ? -1 : 1
     })
+  // Mantém a ordem visível disponível para o Shift+clique (seleção em intervalo).
+  orderedIdsRef.current = filtered.map((t) => t.id)
 
   // ── Agenda "Minha semana": só as minhas tarefas abertas, agrupadas por prazo ──
   const myOpenTasks = tasks.filter(
@@ -732,9 +784,10 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           <div className="hidden flex-wrap items-center gap-3 border-b border-border/40 pb-2 sm:flex">
             <Checkbox
               checked={filtered.length > 0 && filtered.every((t) => selected.has(t.id))}
-              onCheckedChange={(checked) =>
+              onCheckedChange={(checked) => {
                 setSelected(checked ? new Set(filtered.map((t) => t.id)) : new Set())
-              }
+                setAnchorId(null)
+              }}
               aria-label="Selecionar todas"
             />
             {selected.size > 0 ? (
@@ -751,7 +804,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                 </Button>
               </>
             ) : (
-              <span className="text-xs text-muted-foreground">Selecione tarefas para concluir ou descartar em lote</span>
+              <span className="text-xs text-muted-foreground">Selecione tarefas para concluir ou descartar em lote · Shift+clique seleciona um intervalo</span>
             )}
           </div>
 
