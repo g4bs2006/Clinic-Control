@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { GripVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
   upsertStatusRule,
   deleteStatusRule,
@@ -41,6 +42,7 @@ interface StatusRulesEditorProps {
 
 export function StatusRulesEditor({ initialRules, readOnly = false }: StatusRulesEditorProps) {
   const router = useRouter()
+  const confirm = useConfirm()
   const [drafts, setDrafts] = useState<DraftRule[]>(initialRules.map(toDraft))
   const [pending, startTransition] = useTransition()
   const [dragIndex, setDragIndex] = useState<number | null>(null)
@@ -116,13 +118,20 @@ export function StatusRulesEditor({ initialRules, readOnly = false }: StatusRule
     })
   }
 
-  function remove(index: number) {
+  async function remove(index: number) {
     const d = drafts[index]
     if (!d.id) {
       // unsaved row — drop locally
       setDrafts((prev) => prev.filter((_, i) => i !== index))
       return
     }
+    const ok = await confirm({
+      title: "Remover faixa de status?",
+      description: `A faixa "${d.label || "(sem rótulo)"}" será excluída. As clínicas nessa taxa passam a cair na faixa vizinha.`,
+      confirmLabel: "Remover",
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await deleteStatusRule(d.id!)
       if (res.ok) {

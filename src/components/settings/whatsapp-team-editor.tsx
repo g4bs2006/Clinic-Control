@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,7 +25,6 @@ interface WhatsappTeamEditorProps {
 }
 
 export function WhatsappTeamEditor({ initialMembers, readOnly = false }: WhatsappTeamEditorProps) {
-  const router = useRouter()
   const confirm = useConfirm()
   const [members, setMembers] = useState(initialMembers)
   const [name, setName] = useState("")
@@ -38,11 +36,12 @@ export function WhatsappTeamEditor({ initialMembers, readOnly = false }: Whatsap
     startTransition(async () => {
       const res = await addTeamMember({ lid, name, kind })
       if (res.ok) {
+        // Insere a linha retornada na hora — sem refetch de página inteira.
+        setMembers((prev) => [...prev, res.member])
         toast.success("Membro adicionado.")
         setName("")
         setLid("")
         setKind("human")
-        router.refresh()
       } else {
         toast.error(res.error)
       }
@@ -58,13 +57,15 @@ export function WhatsappTeamEditor({ initialMembers, readOnly = false }: Whatsap
       destructive: true,
     })
     if (!ok) return
+    // Otimista: some da lista na hora; re-insere se o servidor recusar.
+    const snapshot = members
+    setMembers((prev) => prev.filter((m) => m.id !== id))
     startTransition(async () => {
       const res = await deleteTeamMember(id)
       if (res.ok) {
-        setMembers((prev) => prev.filter((m) => m.id !== id))
         toast.success("Membro removido.")
-        router.refresh()
       } else {
+        setMembers(snapshot)
         toast.error(res.error)
       }
     })
@@ -72,6 +73,11 @@ export function WhatsappTeamEditor({ initialMembers, readOnly = false }: Whatsap
 
   return (
     <div className="flex flex-col gap-3">
+      {members.length === 0 ? (
+        <p className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-sm text-muted-foreground">
+          Nenhum membro cadastrado ainda. Adicione a equipe abaixo para o cálculo de tempo de resposta.
+        </p>
+      ) : (
       <ul className="flex flex-col gap-1.5">
         {members.map((m) => (
           <li
@@ -105,6 +111,7 @@ export function WhatsappTeamEditor({ initialMembers, readOnly = false }: Whatsap
           </li>
         ))}
       </ul>
+      )}
 
       {!readOnly && (
       <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[1fr_12rem_8rem_auto]">

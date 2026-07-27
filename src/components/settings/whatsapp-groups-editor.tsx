@@ -89,6 +89,12 @@ export function WhatsappGroupsEditor({ groups, clinics, readOnly = false }: What
         )}
       </div>
 
+      {groups.length === 0 ? (
+        <p className="rounded-md border border-dashed border-border/60 px-3 py-6 text-center text-sm text-muted-foreground">
+          Nenhum grupo sincronizado ainda.
+          {!readOnly && " Clique em “Buscar grupos novos” para importar os grupos da Evolution."}
+        </p>
+      ) : (
       <ul className="flex flex-col gap-1.5 max-h-[420px] overflow-y-auto pr-1">
         {groups.map((g) => (
           <li
@@ -130,6 +136,7 @@ export function WhatsappGroupsEditor({ groups, clinics, readOnly = false }: What
           </li>
         ))}
       </ul>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ const BUCKET_LABEL = Object.fromEntries(BUCKETS.map((b) => [b.key, b.label])) as
 >;
 
 export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
+  const router = useRouter();
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -137,8 +139,9 @@ export function ClinicFunnelMapping({ clinicId }: ClinicFunnelMappingProps) {
         toast.error(res.error);
         return;
       }
-      toast.success("Mapeamento de colunas salvo. Atualizando o funil…");
-      setTimeout(() => window.location.reload(), 900);
+      toast.success("Mapeamento de colunas salvo.");
+      // Recalcula o funil (server components) sem o flash de um reload completo.
+      router.refresh();
     });
   }
 

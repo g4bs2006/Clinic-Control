@@ -83,6 +83,11 @@ export function TaskSuggestions({ suggestions: initialSuggestions, clinics, prof
   const acoes = suggestions.filter((s) => s.kind !== "acompanhamento")
   const acomps = suggestions.filter((s) => s.kind === "acompanhamento")
 
+  // Sem sugestões locais, some na hora — não espera o router.refresh() (que
+  // rebusca a página) para o pai deixar de montar a barra. Evita a "barra âmbar
+  // vazia grudada" depois de confirmar/descartar a última sugestão.
+  const hasSuggestions = suggestions.length > 0
+
   function toggleSelect(id: string) {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -265,6 +270,8 @@ export function TaskSuggestions({ suggestions: initialSuggestions, clinics, prof
       </li>
     )
   }
+
+  if (!hasSuggestions) return null
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">

@@ -296,7 +296,7 @@ export async function addTeamMember(member: {
   lid: string;
   name: string;
   kind: "human" | "bot";
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<{ ok: true; member: TeamMemberRow } | { ok: false; error: string }> {
   const gate = await requireGestorClient();
   if (!gate.ok) return gate;
   const supabase = gate.supabase;
@@ -306,13 +306,15 @@ export async function addTeamMember(member: {
   const name = member.name.trim();
   if (name.length < 2) return { ok: false, error: "Nome muito curto" };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("whatsapp_team_members")
-    .insert({ lid, name, kind: member.kind });
+    .insert({ lid, name, kind: member.kind })
+    .select("id, lid, name, kind")
+    .single();
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/configuracoes/whatsapp");
-  return { ok: true };
+  return { ok: true, member: data as TeamMemberRow };
 }
 
 export async function deleteTeamMember(

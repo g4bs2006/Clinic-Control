@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { archiveClinic } from "@/lib/clinics/actions"
 import type { Clinic } from "@/lib/clinics/schema"
@@ -52,12 +51,20 @@ interface ClinicTableProps {
   developers?: { id: string; name: string }[]
 }
 
-export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }: ClinicTableProps) {
-  const router = useRouter()
+export function ClinicTable({ clinics: initialClinics, checkItems, allChecks, developers = [] }: ClinicTableProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [filter, setFilter] = useState<"all" | "completed" | "pending">("all")
   const [query, setQuery] = useState("")
+
+  // Cópia local para arquivar otimista (a linha some na hora). Re-sincroniza
+  // quando o servidor manda nova lista (padrão render-time, sem efeito).
+  const [clinics, setClinics] = useState(initialClinics)
+  const [prevClinics, setPrevClinics] = useState(initialClinics)
+  if (prevClinics !== initialClinics) {
+    setPrevClinics(initialClinics)
+    setClinics(initialClinics)
+  }
 
   const devNameById = new Map(developers.map((d) => [d.id, d.name]))
   const showCarteira = developers.length > 0
@@ -124,12 +131,15 @@ export function ClinicTable({ clinics, checkItems, allChecks, developers = [] }:
       confirmLabel: "Arquivar",
     })
     if (!ok) return
+    // Otimista: some da tabela na hora; só re-insere se o servidor recusar.
+    const snapshot = clinics
+    setClinics((prev) => prev.filter((c) => c.id !== id))
     startTransition(async () => {
       const res = await archiveClinic(id)
       if (res.ok) {
         toast.success(`Clínica "${name}" arquivada com sucesso.`)
-        router.refresh()
       } else {
+        setClinics(snapshot)
         toast.error(res.error)
       }
     })

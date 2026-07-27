@@ -18,6 +18,7 @@ import {
   Plus,
   Users,
   Lock,
+  Loader2,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useConfirm } from "@/components/ui/confirm-dialog"
@@ -38,16 +39,8 @@ import {
   type VaultFileMeta,
 } from "@/lib/storage/vault-files"
 import { cn } from "@/lib/utils"
-import { Button, buttonVariants } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -193,6 +186,52 @@ export function VaultFiles({
 
   function openNoteEditor(path: string) {
     setNoteEditing({ path, value: noteOf(path) ?? "" })
+  }
+
+  // Corpo do editor de anotação — usado dentro do popover ancorado no ícone de
+  // nota (pasta ou arquivo). Só é montado no item aberto (noteEditing.path).
+  function noteEditorBody(path: string) {
+    const hasNote = !!noteOf(path)
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <StickyNote className="size-4" /> Anotação
+        </p>
+        <p className="truncate text-xs text-muted-foreground" title={path}>{path}</p>
+        <textarea
+          value={noteEditing?.value ?? ""}
+          onChange={(e) => setNoteEditing((prev) => (prev ? { ...prev, value: e.target.value } : prev))}
+          rows={4}
+          autoFocus
+          placeholder="Escreva uma anotação para esta pasta ou arquivo…"
+          className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
+        />
+        <div className="flex items-center justify-between gap-2">
+          {hasNote ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10"
+              onClick={() => persistNote(path, "")}
+            >
+              <Trash2 className="size-3.5" />
+              Remover
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => setNoteEditing(null)}>
+              Cancelar
+            </Button>
+            <Button type="button" size="sm" onClick={() => noteEditing && persistNote(path, noteEditing.value)}>
+              Salvar
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   function persistNote(path: string, value: string) {
@@ -344,15 +383,26 @@ export function VaultFiles({
                 </a>
                 {isGestor && (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => openNoteEditor(folderPath)}
-                      title={note ? "Editar anotação" : "Adicionar anotação"}
-                      aria-label="Anotação da pasta"
-                      className={`flex size-6 shrink-0 items-center justify-center rounded transition hover:bg-accent hover:text-foreground ${note ? "text-amber-500 opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-100"}`}
+                    <Popover
+                      open={noteEditing?.path === folderPath}
+                      onOpenChange={(o) => (o ? openNoteEditor(folderPath) : setNoteEditing(null))}
                     >
-                      <StickyNote className="size-3.5" />
-                    </button>
+                      <PopoverTrigger
+                        render={
+                          <button
+                            type="button"
+                            title={note ? "Editar anotação" : "Adicionar anotação"}
+                            aria-label="Anotação da pasta"
+                            className={`flex size-6 shrink-0 items-center justify-center rounded transition hover:bg-accent hover:text-foreground ${note ? "text-amber-500 opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-100"}`}
+                          >
+                            <StickyNote className="size-3.5" />
+                          </button>
+                        }
+                      />
+                      <PopoverContent align="end" className="w-72">
+                        {noteEditing?.path === folderPath && noteEditorBody(folderPath)}
+                      </PopoverContent>
+                    </Popover>
                     <button
                       type="button"
                       onClick={() => deleteFolder(folderPath)}
@@ -393,7 +443,11 @@ export function VaultFiles({
                 style={{ paddingLeft: depth * 14 + 22 }}
                 className="group flex items-center gap-2 rounded-md py-1.5 pr-2 text-sm hover:bg-accent/50"
               >
-                <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                {viewLoading === f.path ? (
+                  <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                ) : (
+                  <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                )}
                 <button
                   type="button"
                   onClick={() => openFile(f)}
@@ -407,15 +461,26 @@ export function VaultFiles({
                 <ShareButton path={f.path} name={f.name} />
                 {isGestor && (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => openNoteEditor(f.path)}
-                      title={note ? "Editar anotação" : "Adicionar anotação"}
-                      aria-label="Anotação do arquivo"
-                      className={`flex size-6 shrink-0 items-center justify-center rounded transition hover:bg-accent hover:text-foreground ${note ? "text-amber-500 opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-100"}`}
+                    <Popover
+                      open={noteEditing?.path === f.path}
+                      onOpenChange={(o) => (o ? openNoteEditor(f.path) : setNoteEditing(null))}
                     >
-                      <StickyNote className="size-3.5" />
-                    </button>
+                      <PopoverTrigger
+                        render={
+                          <button
+                            type="button"
+                            title={note ? "Editar anotação" : "Adicionar anotação"}
+                            aria-label="Anotação do arquivo"
+                            className={`flex size-6 shrink-0 items-center justify-center rounded transition hover:bg-accent hover:text-foreground ${note ? "text-amber-500 opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-100"}`}
+                          >
+                            <StickyNote className="size-3.5" />
+                          </button>
+                        }
+                      />
+                      <PopoverContent align="end" className="w-72">
+                        {noteEditing?.path === f.path && noteEditorBody(f.path)}
+                      </PopoverContent>
+                    </Popover>
                     <button
                       type="button"
                       onClick={() => handleDelete(f.path)}
@@ -687,46 +752,6 @@ export function VaultFiles({
         </div>
       )}
 
-      {/* Editor de anotação (só gestor) */}
-      <Dialog open={noteEditing != null} onOpenChange={(v) => !v && setNoteEditing(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <StickyNote className="size-4" /> Anotação
-            </DialogTitle>
-            <DialogDescription className="truncate">{noteEditing?.path}</DialogDescription>
-          </DialogHeader>
-          <textarea
-            value={noteEditing?.value ?? ""}
-            onChange={(e) => setNoteEditing((prev) => (prev ? { ...prev, value: e.target.value } : prev))}
-            rows={5}
-            autoFocus
-            placeholder="Escreva uma anotação para esta pasta ou arquivo…"
-            className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
-          />
-          <DialogFooter className="sm:justify-between">
-            {noteEditing && noteOf(noteEditing.path) ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className="text-destructive hover:bg-destructive/10"
-                onClick={() => noteEditing && persistNote(noteEditing.path, "")}
-              >
-                <Trash2 className="size-3.5" />
-                Remover
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex gap-2">
-              <DialogClose className={buttonVariants({ variant: "outline" })}>Cancelar</DialogClose>
-              <Button type="button" onClick={() => noteEditing && persistNote(noteEditing.path, noteEditing.value)}>
-                Salvar
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -10,16 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import {
@@ -294,17 +287,46 @@ export function UsersEditor({
                 </span>
               ) : (
                 <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={pending}
-                    onClick={() => openEdit(p)}
-                    title="Editar nome e e-mail"
+                  <Popover
+                    open={editing?.id === p.id}
+                    onOpenChange={(o) => (o ? openEdit(p) : setEditing(null))}
                   >
-                    <Pencil className="size-3.5" />
-                    Editar
-                  </Button>
+                    <PopoverTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={pending}
+                          title="Editar nome e e-mail"
+                        >
+                          <Pencil className="size-3.5" />
+                          Editar
+                        </Button>
+                      }
+                    />
+                    <PopoverContent align="end" className="w-72">
+                      <div className="flex flex-col gap-3">
+                        <p className="text-sm font-semibold">Editar usuário</p>
+                        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                          Nome
+                          <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-9" />
+                        </label>
+                        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                          E-mail
+                          <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="h-9" />
+                        </label>
+                        <div className="flex justify-end gap-2">
+                          <Button type="button" size="sm" variant="outline" onClick={() => setEditing(null)}>
+                            Cancelar
+                          </Button>
+                          <Button type="button" size="sm" disabled={pending} onClick={onEditSave}>
+                            Salvar
+                          </Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   {p.id !== currentUserId && (
                     <Button
                       type="button"
@@ -367,31 +389,6 @@ export function UsersEditor({
         clínicas atribuídas a ele. Usuário inativo não consegue entrar. Excluir remove de vez:
         clínicas da carteira dele ficam sem responsável.
       </p>
-
-      {/* ── Diálogo de edição ─────────────────────────────────── */}
-      <Dialog open={editing !== null} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar usuário</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Nome
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-9" />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              E-mail
-              <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="h-9" />
-            </label>
-          </div>
-          <DialogFooter>
-            <DialogClose className={buttonVariants({ variant: "outline" })}>Cancelar</DialogClose>
-            <Button type="button" disabled={pending} onClick={onEditSave}>
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
