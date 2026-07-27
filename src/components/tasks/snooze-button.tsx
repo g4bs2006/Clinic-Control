@@ -4,13 +4,7 @@ import { useState } from "react"
 import { Clock, CalendarClock, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 
 // Soma dias a uma data ISO (YYYY-MM-DD), ancorada ao meio-dia UTC pra não
 // escorregar de dia. Comparação/geração de datas segue lexicográfica de string.
@@ -74,89 +68,89 @@ export function SnoozeButton({ today, snoozedUntil, onSnooze, variant = "icon", 
   }
 
   return (
-    <>
+    <Popover open={open} onOpenChange={setOpen}>
       {variant === "icon" ? (
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          disabled={disabled}
-          title={isSnoozed ? `Adiada até ${fmtShort(snoozedUntil!)}` : "Adiar tarefa"}
-          aria-label="Adiar tarefa"
-          className={`size-9 sm:size-8 ${isSnoozed ? "text-brand" : ""}`}
-          onClick={() => setOpen(true)}
-        >
-          <Clock className="size-3.5" />
-        </Button>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              disabled={disabled}
+              title={isSnoozed ? `Adiada até ${fmtShort(snoozedUntil!)}` : "Adiar tarefa"}
+              aria-label="Adiar tarefa"
+              className={`size-9 sm:size-8 ${isSnoozed ? "text-brand" : ""}`}
+            >
+              <Clock className="size-3.5" />
+            </Button>
+          }
+        />
       ) : (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled}
-          className={className}
-          onClick={() => setOpen(true)}
-        >
-          <Clock className="size-4" />
-          {isSnoozed ? `Adiada até ${fmtShort(snoozedUntil!)}` : "Adiar"}
-        </Button>
+        <PopoverTrigger
+          render={
+            <Button type="button" size="sm" variant="outline" disabled={disabled} className={className}>
+              <Clock className="size-4" />
+              {isSnoozed ? `Adiada até ${fmtShort(snoozedUntil!)}` : "Adiar"}
+            </Button>
+          }
+        />
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <CalendarClock className="size-4" /> Adiar tarefa
-            </DialogTitle>
-            <DialogDescription>
-              Some da lista até a data escolhida e reaparece sozinha. Não altera o prazo.
-            </DialogDescription>
-          </DialogHeader>
+      <PopoverContent className="w-64">
+        <div className="mb-2 flex flex-col gap-0.5">
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <CalendarClock className="size-4" /> Adiar tarefa
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Some da lista até a data e reaparece sozinha. Não altera o prazo.
+          </p>
+        </div>
 
-          <div className="flex flex-col gap-2">
-            <Button type="button" variant="outline" className="justify-between" onClick={() => choose(tomorrow)}>
-              <span>Amanhã</span>
-              <span className="text-xs capitalize text-muted-foreground">{fmtShort(tomorrow)}</span>
+        <div className="flex flex-col gap-1.5">
+          <Button type="button" size="sm" variant="outline" className="justify-between" onClick={() => choose(tomorrow)}>
+            <span>Amanhã</span>
+            <span className="text-xs capitalize text-muted-foreground">{fmtShort(tomorrow)}</span>
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="justify-between" onClick={() => choose(nextWeek)}>
+            <span>Próxima semana</span>
+            <span className="text-xs capitalize text-muted-foreground">{fmtShort(nextWeek)}</span>
+          </Button>
+
+          <div className="mt-1 flex items-end gap-2">
+            <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
+              Escolher data
+              <Input
+                type="date"
+                min={tomorrow}
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                className="h-9"
+              />
+            </label>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!custom || custom <= today}
+              onClick={() => custom && choose(custom)}
+            >
+              Adiar
             </Button>
-            <Button type="button" variant="outline" className="justify-between" onClick={() => choose(nextWeek)}>
-              <span>Próxima semana</span>
-              <span className="text-xs capitalize text-muted-foreground">{fmtShort(nextWeek)}</span>
-            </Button>
-
-            <div className="mt-1 flex items-end gap-2">
-              <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
-                Escolher data
-                <Input
-                  type="date"
-                  min={tomorrow}
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  className="h-9"
-                />
-              </label>
-              <Button
-                type="button"
-                disabled={!custom || custom <= today}
-                onClick={() => custom && choose(custom)}
-              >
-                Adiar
-              </Button>
-            </div>
-
-            {isSnoozed && (
-              <Button
-                type="button"
-                variant="ghost"
-                className="mt-1 text-muted-foreground"
-                onClick={() => choose(null)}
-              >
-                <RotateCcw className="size-3.5" />
-                Remover adiamento (mostrar agora)
-              </Button>
-            )}
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+
+          {isSnoozed && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="mt-0.5 justify-start text-muted-foreground"
+              onClick={() => choose(null)}
+            >
+              <RotateCcw className="size-3.5" />
+              Remover adiamento
+            </Button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
