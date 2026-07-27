@@ -17,6 +17,7 @@ import { ClinicSystemSelect } from "@/components/clinics/clinic-system-select"
 import { ClinicStrategistSelect } from "@/components/clinics/clinic-strategist-select"
 import { ClinicOdontoImpact } from "@/components/clinics/clinic-odontoimpact"
 import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
+import { listPartnerContacts } from "@/lib/clinics/partner-contacts-actions"
 
 export const dynamic = "force-dynamic"
 
@@ -40,7 +41,7 @@ export default async function ClinicCadastroPage({
   const clinic = await getClinic(id)
   if (!clinic) notFound()
 
-  const [profiles, provisioning, formCredentials, helenaIntegration, files, fileNotes] =
+  const [profiles, provisioning, formCredentials, helenaIntegration, files, fileNotes, partnerContacts] =
     await Promise.all([
       listUserProfiles(),
       listProvisioning(id),
@@ -48,7 +49,10 @@ export default async function ClinicCadastroPage({
       getClinicHelenaIntegration(id),
       listClinicFiles(id),
       listClinicFileNotes(id),
+      listPartnerContacts(),
     ])
+  const strategistContacts = partnerContacts.filter((c) => c.role === "strategist")
+  const trafficManagerContacts = partnerContacts.filter((c) => c.role === "traffic_manager")
 
   return (
     <>
@@ -66,13 +70,18 @@ export default async function ClinicCadastroPage({
             />
           </FichaRow>
           <FichaRow label="Estrategista">
-            <ClinicStrategistSelect clinicId={id} current={clinic.strategist ?? null} />
+            <ClinicStrategistSelect
+              clinicId={id}
+              current={clinic.strategist ?? null}
+              contacts={strategistContacts}
+            />
           </FichaRow>
           <FichaRow label="OdontoImpact (tráfego pago)">
             <ClinicOdontoImpact
               clinicId={id}
               currentOdontoImpact={clinic.odontoimpact ?? false}
               currentTrafficManager={clinic.traffic_manager ?? null}
+              contacts={trafficManagerContacts}
             />
           </FichaRow>
         </div>

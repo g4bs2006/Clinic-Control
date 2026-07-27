@@ -8,8 +8,6 @@ import { clinicInputSchema, type ClinicInput, type Clinic } from "./schema";
 import { regionFromState } from "./region";
 import { geocodeAddress } from "@/lib/geocoding/nominatim";
 import { CLINIC_SYSTEMS } from "./systems";
-import { STRATEGISTS } from "./strategists";
-import { TRAFFIC_MANAGERS } from "./traffic-managers";
 
 export async function geoFields(input: ClinicInput) {
   const region = input.state ? regionFromState(input.state) : null;
@@ -147,8 +145,14 @@ export async function updateClinicStrategist(id: string, strategist: string) {
   const supabase = await createClient();
 
   const value = strategist.trim();
-  if (value && !(STRATEGISTS as readonly string[]).includes(value)) {
-    return { ok: false as const, error: "Estrategista inválido" };
+  if (value) {
+    const { data: exists } = await supabase
+      .from("partner_contacts")
+      .select("id")
+      .eq("role", "strategist")
+      .eq("name", value)
+      .maybeSingle();
+    if (!exists) return { ok: false as const, error: "Estrategista inválido" };
   }
 
   const { error } = await supabase
@@ -189,8 +193,14 @@ export async function updateClinicOdontoImpact(
   const supabase = await createClient();
 
   const value = input.traffic_manager.trim();
-  if (value && !(TRAFFIC_MANAGERS as readonly string[]).includes(value)) {
-    return { ok: false as const, error: "Gestor de tráfego inválido" };
+  if (value) {
+    const { data: exists } = await supabase
+      .from("partner_contacts")
+      .select("id")
+      .eq("role", "traffic_manager")
+      .eq("name", value)
+      .maybeSingle();
+    if (!exists) return { ok: false as const, error: "Gestor de tráfego inválido" };
   }
 
   const { error } = await supabase

@@ -16,8 +16,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Clinic, ClinicInput } from "@/lib/clinics/schema";
 import { CLINIC_SYSTEMS } from "@/lib/clinics/systems";
-import { STRATEGISTS } from "@/lib/clinics/strategists";
-import { TRAFFIC_MANAGERS } from "@/lib/clinics/traffic-managers";
 import { HelenaIntegrationFields } from "@/components/clinics/helena-integration-fields";
 import {
   HELENA_APPS,
@@ -38,13 +36,24 @@ type Mode = "manual" | "auto";
 
 interface ClinicFormProps {
   defaultValues?: Clinic;
+  /** Nomes selecionáveis (vindos de partner_contacts) — o cadastro guarda o nome. */
+  strategists: string[];
+  trafficManagers: string[];
   onSubmit: (
     input: ClinicInput,
     opts?: { provisionHelena?: boolean; helenaOptions?: HelenaProvisionOptions }
   ) => Promise<{ ok: true; id?: string } | { ok: true } | { ok: false; error: string }>;
 }
 
-export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
+export function ClinicForm({ defaultValues, strategists, trafficManagers, onSubmit }: ClinicFormProps) {
+  // Garante que o valor salvo apareça na lista mesmo se a pessoa tiver sido
+  // desativada depois (senão o Select mostraria valor cru).
+  const strategistOptions = defaultValues?.strategist && !strategists.includes(defaultValues.strategist)
+    ? [defaultValues.strategist, ...strategists]
+    : strategists;
+  const trafficManagerOptions = defaultValues?.traffic_manager && !trafficManagers.includes(defaultValues.traffic_manager)
+    ? [defaultValues.traffic_manager, ...trafficManagers]
+    : trafficManagers;
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [address, setAddress] = useState(defaultValues?.address ?? "");
   const [city, setCity] = useState(defaultValues?.city ?? "");
@@ -244,7 +253,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
               value={strategist || STRATEGIST_NONE}
               items={{
                 [STRATEGIST_NONE]: "— Não definido —",
-                ...Object.fromEntries(STRATEGISTS.map((s) => [s, s])),
+                ...Object.fromEntries(strategistOptions.map((s) => [s, s])),
               }}
               onValueChange={(val) => {
                 if (val) setStrategist(val === STRATEGIST_NONE ? "" : val);
@@ -255,7 +264,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={STRATEGIST_NONE}>— Não definido —</SelectItem>
-                {STRATEGISTS.map((s) => (
+                {strategistOptions.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
                   </SelectItem>
@@ -303,7 +312,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
                 value={trafficManager || TRAFFIC_MANAGER_NONE}
                 items={{
                   [TRAFFIC_MANAGER_NONE]: "— Não definido —",
-                  ...Object.fromEntries(TRAFFIC_MANAGERS.map((m) => [m, m])),
+                  ...Object.fromEntries(trafficManagerOptions.map((m) => [m, m])),
                 }}
                 onValueChange={(val) => {
                   if (val) setTrafficManager(val === TRAFFIC_MANAGER_NONE ? "" : val);
@@ -314,7 +323,7 @@ export function ClinicForm({ defaultValues, onSubmit }: ClinicFormProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={TRAFFIC_MANAGER_NONE}>— Não definido —</SelectItem>
-                  {TRAFFIC_MANAGERS.map((m) => (
+                  {trafficManagerOptions.map((m) => (
                     <SelectItem key={m} value={m}>
                       {m}
                     </SelectItem>

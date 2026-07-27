@@ -1,17 +1,20 @@
 // Aba "Equipe & Conta" (padrão) — usuários da plataforma e a própria senha.
 import { listClinics } from "@/lib/clinics/actions"
 import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
+import { listPartnerContacts } from "@/lib/clinics/partner-contacts-actions"
 import { Panel } from "@/components/dashboard/panel"
 import { UsersEditor } from "@/components/settings/users-editor"
+import { PartnerContactsEditor } from "@/components/settings/partner-contacts-editor"
 import { ChangePasswordForm } from "@/components/settings/change-password-form"
 
 export const dynamic = "force-dynamic"
 
 export default async function ConfiguracoesEquipePage() {
-  const [profiles, currentProfile, clinics] = await Promise.all([
+  const [profiles, currentProfile, clinics, partnerContacts] = await Promise.all([
     listUserProfiles(),
     getCurrentProfile(),
     listClinics(),
+    listPartnerContacts(),
   ])
 
   const clinicCountByDeveloper: Record<string, number> = {}
@@ -35,6 +38,20 @@ export default async function ConfiguracoesEquipePage() {
           initialProfiles={profiles}
           clinicCountByDeveloper={clinicCountByDeveloper}
           currentUserId={currentProfile?.id}
+          readOnly={currentProfile?.role !== "gestor"}
+        />
+      </Panel>
+
+      <Panel
+        title="Contatos de parceiros"
+        subtitle={
+          currentProfile?.role === "gestor"
+            ? "estrategistas e gestores de tráfego — e-mail e WhatsApp que aparecem no cadastro da clínica"
+            : "estrategistas e gestores de tráfego (só o gestor pode editar)"
+        }
+      >
+        <PartnerContactsEditor
+          initialContacts={partnerContacts}
           readOnly={currentProfile?.role !== "gestor"}
         />
       </Panel>
