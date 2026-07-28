@@ -1,11 +1,16 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { Fragment, useState, useTransition } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { useConfirm } from "@/components/ui/confirm-dialog"
-import { removeChurn, type ChurnRow } from "@/lib/churns/actions"
+import {
+  removeChurn,
+  requestChurnAnalysis,
+  type ChurnRow,
+  type ChurnAnalysis,
+} from "@/lib/churns/actions"
 
 function monthLabel(key: string): string {
   const [y, m] = key.split("-").map(Number)
@@ -21,13 +26,120 @@ function fmtBRL(value: number | null): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
-interface ChurnTableProps {
-  churns: ChurnRow[]
+const CONFIANCA_CLS: Record<string, string> = {
+  alta: "bg-red-500/15 text-red-400",
+  media: "bg-amber-500/15 text-amber-400",
+  baixa: "bg-zinc-500/15 text-zinc-400",
 }
 
-export function ChurnTable({ churns: initialChurns }: ChurnTableProps) {
+/** Bloco expandido: o post-mortem da IA sobre a conversa do grupo. */
+function AnalysisPanel({ analysis }: { analysis: ChurnAnalysis | undefined }) {
+  if (!analysis) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Sem análise ainda. Use <strong>Analisar</strong> para ler a conversa do grupo e levantar os
+        motivos prováveis.
+      </p>
+    )
+  }
+  if (analysis.status === "rodando") {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="size-1.5 animate-pulse rounded-full bg-teal-400" />
+        Lendo a conversa do grupo e analisando… atualize a página em alguns instantes.
+      </p>
+    )
+  }
+  if (analysis.status === "erro") {
+    return (
+      <p className="text-sm text-red-400">
+        Falhou: {analysis.error ?? "erro desconhecido"}
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {analysis.summary && <p className="text-sm text-foreground">{analysis.summary}</p>}
+
+      {analysis.reasons.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+            Motivos prováveis
+          </p>
+          <ul className="space-y-1.5">
+            {analysis.reasons.map((r, i) => (
+              <li key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[0.6rem] font-bold uppercase ${
+                    CONFIANCA_CLS[r.confianca ?? "baixa"] ?? CONFIANCA_CLS.baixa
+                  }`}
+                >
+                  {r.confianca ?? "baixa"}
+                </span>
+                <span className="text-foreground">{r.motivo}</span>
+                {r.evidencia && (
+                  <span className="text-xs text-muted-foreground">— {r.evidencia}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {analysis.signals.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+            Sinais anteriores
+          </p>
+          <ul className="space-y-1 text-sm">
+            {analysis.signals.map((s, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="shrink-0 tabular-nums text-muted-foreground">{s.quando ?? "—"}</span>
+                <span className="text-foreground">{s.sinal}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {analysis.quotes.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
+            No grupo
+          </p>
+          <ul className="space-y-1.5">
+            {analysis.quotes.map((q, i) => (
+              <li
+                key={i}
+                className="border-l-2 border-border pl-2.5 text-sm italic text-muted-foreground"
+              >
+                “{q}”
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        {analysis.messages_used} mensagem(ns) dos últimos {analysis.window_days} dias
+        {analysis.truncated && " (janela cortada por volume — período mais recente)"}
+        {analysis.model && ` · ${analysis.model}`}
+      </p>
+    </div>
+  )
+}
+
+interface ChurnTableProps {
+  churns: ChurnRow[]
+  analyses: Record<string, ChurnAnalysis>
+}
+
+export function ChurnTable({ churns: initialChurns, analyses }: ChurnTableProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [analyzing, setAnalyzing] = useState<string | null>(null)
   // Cópia local para remoção otimista (some da tabela na hora). Re-sincroniza
   // quando o servidor envia nova lista (padrão render-time, sem efeito).
   const [churns, setChurns] = useState(initialChurns)
@@ -69,6 +181,20 @@ export function ChurnTable({ churns: initialChurns }: ChurnTableProps) {
     })
   }
 
+  function analyze(id: string) {
+    setAnalyzing(id)
+    setExpanded(id)
+    startTransition(async () => {
+      const res = await requestChurnAnalysis(id)
+      setAnalyzing(null)
+      if (res.ok) {
+        toast.success("Análise iniciada — leva alguns instantes.")
+      } else {
+        toast.error(res.error)
+      }
+    })
+  }
+
   if (churns.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4 text-center">
@@ -91,8 +217,12 @@ export function ChurnTable({ churns: initialChurns }: ChurnTableProps) {
           </tr>
         </thead>
         <tbody>
-          {churns.map((c) => (
-            <tr key={c.id} className="border-b border-border/30 hover:bg-accent/40 align-top">
+          {churns.map((c) => {
+            const analysis = analyses[c.id]
+            const isOpen = expanded === c.id
+            return (
+              <Fragment key={c.id}>
+            <tr className="border-b border-border/30 hover:bg-accent/40 align-top">
               <td className="py-2.5 pr-3">
                 <Link href={`/clinicas/${c.clinic_id}`} className="text-brand-gradient hover:opacity-85 font-medium transition-opacity">
                   {c.clinic_name}
@@ -109,7 +239,31 @@ export function ChurnTable({ churns: initialChurns }: ChurnTableProps) {
                 {fmtBRL(c.lost_revenue)}
               </td>
               <td className="py-2.5 pl-3">
-                <div className="flex justify-end gap-1.5">
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isOpen ? "secondary" : "outline"}
+                    title="Post-mortem da IA sobre a conversa do grupo"
+                    onClick={() => setExpanded(isOpen ? null : c.id)}
+                  >
+                    Análise
+                    {analysis?.status === "concluido" && analysis.reasons.length > 0 && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        ({analysis.reasons.length})
+                      </span>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={pending || analyzing === c.id}
+                    title="Lê a conversa do grupo dos últimos 120 dias e levanta os motivos"
+                    onClick={() => analyze(c.id)}
+                  >
+                    {analyzing === c.id ? "Iniciando…" : analysis ? "Reanalisar" : "Analisar"}
+                  </Button>
                   <Button
                     type="button"
                     size="sm"
@@ -133,7 +287,16 @@ export function ChurnTable({ churns: initialChurns }: ChurnTableProps) {
                 </div>
               </td>
             </tr>
-          ))}
+            {isOpen && (
+              <tr className="border-b border-border/30 bg-accent/20">
+                <td colSpan={6} className="px-3 py-3">
+                  <AnalysisPanel analysis={analysis} />
+                </td>
+              </tr>
+            )}
+              </Fragment>
+            )
+          })}
         </tbody>
       </table>
     </div>
