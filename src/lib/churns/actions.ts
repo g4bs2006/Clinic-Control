@@ -162,6 +162,49 @@ export async function registerChurn(input: {
   return { ok: true };
 }
 
+/** Um desligamento + sua análise — usado pelo deep-link /churns/[id]. */
+export async function getChurnDetail(
+  id: string,
+): Promise<{ churn: ChurnRow; analysis: ChurnAnalysis | null } | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("clinic_churns")
+    .select(
+      "id, clinic_id, churn_month, reason, notes, lost_revenue, created_at, clinics(name, developer_id)",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+
+  type JoinedClinic = { name: string; developer_id: string | null };
+  const clinics = data.clinics as JoinedClinic | JoinedClinic[] | null;
+  const clinic = Array.isArray(clinics) ? clinics[0] : clinics;
+
+  const { data: analysis } = await supabase
+    .from("churn_analyses")
+    .select(
+      "churn_id, status, summary, reasons, signals, quotes, messages_used, truncated, window_days, model, error, updated_at",
+    )
+    .eq("churn_id", id)
+    .maybeSingle();
+
+  return {
+    churn: {
+      id: data.id as string,
+      clinic_id: data.clinic_id as string,
+      clinic_name: clinic?.name ?? "—",
+      clinic_developer_id: clinic?.developer_id ?? null,
+      churn_month: data.churn_month as string,
+      reason: data.reason as string | null,
+      notes: data.notes as string | null,
+      lost_revenue: data.lost_revenue as number | null,
+      created_at: data.created_at as string,
+    },
+    analysis: (analysis as ChurnAnalysis | null) ?? null,
+  };
+}
+
 /** Análises por churn_id — a tabela lê tudo de uma vez, sem N+1. */
 export async function listChurnAnalyses(): Promise<Record<string, ChurnAnalysis>> {
   const supabase = await createClient();
