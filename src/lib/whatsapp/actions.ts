@@ -182,12 +182,21 @@ export type EvolutionHealth = {
   down_since: string | null;
 };
 
-/** Último health check + início da indisponibilidade atual (se houver). */
-export async function getEvolutionHealth(): Promise<EvolutionHealth | null> {
+/**
+ * Último health check de um canal + início da indisponibilidade atual.
+ *
+ * 'leitura' = instância que coleta os grupos; 'envio' = a que manda os
+ * relatórios. São instâncias distintas nos secrets e falham separado — o
+ * histórico anterior à 0068 é todo de leitura (default da coluna).
+ */
+export async function getEvolutionHealth(
+  channel: "leitura" | "envio" = "leitura",
+): Promise<EvolutionHealth | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("evolution_health_checks")
     .select("checked_at, state, ok")
+    .eq("channel", channel)
     .order("checked_at", { ascending: false })
     .limit(50);
   if (error) throw new Error(error.message);
@@ -204,6 +213,53 @@ export async function getEvolutionHealth(): Promise<EvolutionHealth | null> {
     }
   }
   return { ...latest, down_since: downSince };
+}
+
+// ── Entregas dos relatórios ao grupo ─────────────────────────────────────────
+
+export type NotifyDelivery = {
+  type: string;
+  ok: boolean;
+  recipients: number;
+  error: string | null;
+  created_at: string;
+};
+
+export type NotifyDeliveryStatus = {
+  /** Última entrega em que TODOS os destinatários receberam. */
+  lastOk: NotifyDelivery | null;
+  /** Última tentativa, dando certo ou não. */
+  lastAttempt: NotifyDelivery | null;
+  /** Sem entrega boa há mais de 26h (o ciclo é diário: 9h e 19h BRT). */
+  stale: boolean;
+  /** Últimas tentativas, para a faixa de histórico. */
+  recent: NotifyDelivery[];
+};
+
+/**
+ * Estado do envio dos relatórios ao grupo (notify_deliveries, 0068).
+ *
+ * A instância pode estar "open" e mesmo assim nada chegar — destinatário
+ * errado, bot removido do grupo. Só o histórico de entregas mostra isso.
+ */
+export async function getNotifyDeliveryStatus(): Promise<NotifyDeliveryStatus> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("notify_deliveries")
+    .select("type, ok, recipients, error, created_at")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as NotifyDelivery[];
+
+  const lastAttempt = rows[0] ?? null;
+  const lastOk = rows.find((r) => r.ok) ?? null;
+  // Tabela vazia não é falha: é projeto sem histórico ainda.
+  const stale =
+    lastAttempt != null &&
+    (lastOk == null || Date.now() - new Date(lastOk.created_at).getTime() > 26 * 3600_000);
+
+  return { lastOk, lastAttempt, stale, recent: rows.slice(0, 8) };
 }
 
 // ── Grupos ───────────────────────────────────────────────────────────────────

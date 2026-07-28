@@ -9,6 +9,7 @@ import {
   listWhatsappGroups,
   getLastCollectedAt,
   getEvolutionHealth,
+  getNotifyDeliveryStatus,
 } from "@/lib/whatsapp/actions"
 import { fmtDuration } from "@/lib/whatsapp/format"
 import { Panel } from "@/components/dashboard/panel"
@@ -67,15 +68,18 @@ export default async function WhatsappPage({
   const rawMonth = params.month ?? ""
   const month = /^\d{4}-\d{2}$/.test(rawMonth) ? rawMonth : currentMonth
 
-  const [allClinics, stats, allGroups, summaryDates, lastCollectedAt, health, scope] = await Promise.all([
-    listClinics(),
-    listResponseStats(month),
-    listWhatsappGroups(),
-    listSummaryDates(),
-    getLastCollectedAt(),
-    getEvolutionHealth(),
-    getCarteiraScope(),
-  ])
+  const [allClinics, stats, allGroups, summaryDates, lastCollectedAt, health, sendHealth, delivery, scope] =
+    await Promise.all([
+      listClinics(),
+      listResponseStats(month),
+      listWhatsappGroups(),
+      listSummaryDates(),
+      getLastCollectedAt(),
+      getEvolutionHealth("leitura"),
+      getEvolutionHealth("envio"),
+      getNotifyDeliveryStatus(),
+      getCarteiraScope(),
+    ])
 
   // Escopo por carteira: desenvolvedor vê só as suas clínicas; gestor vê todas.
   const clinics = scope.developerFilter
@@ -201,6 +205,40 @@ export default async function WhatsappPage({
               )}
               ). Reconecte no painel da Evolution — mensagens enviadas durante a
               queda podem ser perdidas.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Alerta do canal de ENVIO dos relatórios ──────────────
+          Separado do de cima de propósito: a instância que lê os grupos e a
+          que manda os relatórios são distintas e já falharam sozinhas — em
+          julho/2026 o envio ficou 19 dias fora com a leitura verde. */}
+      {((sendHealth && !sendHealth.ok) || delivery.stale) && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+          <span className="mt-1.5 size-2 shrink-0 rounded-full bg-amber-400 animate-pulse" />
+          <div className="text-sm">
+            <span className="font-semibold text-amber-400">
+              Relatórios não estão chegando ao grupo
+            </span>{" "}
+            <span className="text-muted-foreground">
+              {sendHealth && !sendHealth.ok
+                ? `(instância de envio: ${sendHealth.state ?? "desconhecida"})`
+                : delivery.lastOk
+                  ? `(última entrega em ${new Date(delivery.lastOk.created_at).toLocaleString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      timeZone: "America/Sao_Paulo",
+                    })})`
+                  : "(nenhuma entrega bem-sucedida registrada)"}
+              . Confira os secrets NOTIFY_* e a instância na Evolution.
+              {delivery.lastAttempt?.error && (
+                <span className="mt-1 block break-words font-mono text-xs text-amber-400/80">
+                  {delivery.lastAttempt.error.slice(0, 200)}
+                </span>
+              )}
             </span>
           </div>
         </div>

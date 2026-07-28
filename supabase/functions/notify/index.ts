@@ -41,6 +41,32 @@ async function sendText(number: string, text: string) {
   if (!res.ok) throw new Error(`sendText ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
+/**
+ * Registra a tentativa de envio em notify_deliveries (0068).
+ *
+ * Existe porque esta função devolve HTTP 200 mesmo quando ninguém recebeu — o
+ * erro vai só no corpo — e o registro do pg_net expira em horas. Sem isto, uma
+ * falha de envio some sem deixar rastro (aconteceu por 19 dias em julho/2026).
+ * Nunca lança: registrar é efeito colateral e não pode derrubar o envio.
+ */
+async function recordDelivery(
+  supabase: ReturnType<typeof createClient>,
+  type: string,
+  errors: string[],
+  recipients: number,
+): Promise<void> {
+  try {
+    await supabase.from("notify_deliveries").insert({
+      type,
+      ok: errors.length === 0,
+      recipients,
+      error: errors.length ? errors.join(" | ").slice(0, 500) : null,
+    });
+  } catch (e) {
+    console.error("recordDelivery:", e instanceof Error ? e.message : e);
+  }
+}
+
 type Clinic = { id: string; name: string; developer_id: string | null };
 
 Deno.serve(async (req) => {
@@ -224,6 +250,7 @@ Deno.serve(async (req) => {
         errors.push(`${to}: ${(e as Error).message}`);
       }
     }
+    await recordDelivery(supabase, type, errors, RECIPIENTS.length);
     if (!errors.length) {
       await supabase
         .from("openai_containment_runs")
@@ -283,6 +310,8 @@ Deno.serve(async (req) => {
       errors.push(`${to}: ${(e as Error).message}`);
     }
   }
+
+  await recordDelivery(supabase, type, errors, RECIPIENTS.length);
 
   return Response.json({ ok: errors.length === 0, type, recipients: RECIPIENTS.length, errors, preview: text.slice(0, 500) });
 });
