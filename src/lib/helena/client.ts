@@ -52,6 +52,57 @@ async function post(token: string, path: string, body: unknown, opts?: Opts) {
   return res.json().catch(() => ({}));
 }
 
+async function put(token: string, path: string, body: unknown, opts?: Opts) {
+  const fetchImpl = opts?.fetchImpl ?? fetch;
+  const base = opts?.baseUrl ?? DEFAULT_BASE;
+  const res = await fetchImpl(`${base}${path}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Helena API ${res.status}${text ? `: ${text.slice(0, 600)}` : ""}`);
+  }
+  return res.json().catch(() => ({}));
+}
+
+/**
+ * Conclui (finaliza) uma conversa. É uma ESCRITA que o paciente enxerga — o
+ * atendimento sai da fila da clínica —, então só deve ser chamada por fluxo com
+ * critério explícito e trilha de auditoria (ver lib/openai-usage/containment).
+ *
+ * stopBotInExecution é o que efetivamente para o gasto: sem ele o chatbot
+ * continua rodando e responde de novo. reactivateOnNewMessage=false evita que o
+ * robô do outro lado reabra a mesma conversa no próximo disparo do loop.
+ */
+export async function completeSession(
+  token: string,
+  sessionId: string,
+  options?: { reactivateOnNewMessage?: boolean; stopBotInExecution?: boolean },
+  opts?: Opts,
+): Promise<void> {
+  await put(
+    token,
+    `/chat/v1/session/${sessionId}/complete`,
+    {
+      reactivateOnNewMessage: options?.reactivateOnNewMessage ?? false,
+      stopBotInExecution: options?.stopBotInExecution ?? true,
+    },
+    opts,
+  );
+}
+
+/** Nota interna numa conversa — visível só para a equipe da clínica, nunca para o contato. */
+export async function addSessionNote(
+  token: string,
+  sessionId: string,
+  text: string,
+  opts?: Opts,
+): Promise<void> {
+  await post(token, `/chat/v1/session/${sessionId}/note`, { text }, opts);
+}
+
 export async function listPanels(token: string, opts?: Opts): Promise<HelenaPanel[]> {
   const data = await get(token, "/crm/v1/panel", { PageSize: "100" }, opts);
   return (data.items ?? []).map((p: HelenaPanel) => ({ id: p.id, title: p.title, key: p.key, companyId: p.companyId }));

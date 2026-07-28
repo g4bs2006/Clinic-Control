@@ -43,3 +43,12 @@ supabase/dump/data.sql
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# grafo de conhecimento gerado localmente (graphify update .) — pesado, não versionar
+graphify-out/
+
+# configuração local do Claude Code
+.claude/
+
+# scripts temporários de importação/migração pontual
+tmp-*.mts

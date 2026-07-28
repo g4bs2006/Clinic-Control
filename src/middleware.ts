@@ -16,6 +16,7 @@ const PUBLIC_PREFIXES = [
   "/login",
   "/api/reports/process",
   "/api/tasks/generate/process",
+  "/api/openai-containment/process",
   "/api/form-credentials",
 ];
 

@@ -4,16 +4,28 @@
 // (vínculo em clinics.openai_api_key_id, join na leitura).
 //
 // Tokens por key: /organization/usage/completions com group_by=api_key_id,model.
-// Custo por key: ESTIMADO (tokens × preço por modelo) e depois CALIBRADO por dia
-// para a soma bater com o custo real de /organization/costs (que só quebra por
-// projeto). Assim o rateio por clínica soma exatamente a fatura do dia.
+// Custo por key: ESTIMADO (tokens × preço por modelo) e depois CALIBRADO em duas
+// etapas contra /organization/costs agrupado por project_id + line_item:
+//   (a) por MODELO — o line_item ("gpt-4.1-2025-04-14, input") dá o custo real
+//       de cada modelo, então as linhas daquele modelo são reescaladas para
+//       somá-lo. Dentro de um modelo o preço da tabela se cancela e sobra a
+//       razão real de tokens entre as clínicas;
+//   (b) do DIA — a sobra (whisper/tts/embeddings/file search, invisíveis à
+//       usage/completions) é rateada proporcionalmente.
+// Resultado: o total por clínica fecha com a fatura E um modelo mal precificado
+// não contamina mais o rateio das outras clínicas.
 //
 // Também mantém as tabelas por projeto da 0053 (openai_projects +
 // clinic_openai_usage): são o agregado real e a base da calibração.
 //
+// Ao alertar, também ENFILEIRA a contenção ativa (0067) e aciona o endpoint
+// /api/openai-containment/process no Next, que investiga as conversas e conclui
+// os loops. O executor mora lá porque só o Next descriptografa o token Helena.
+//
 // Secrets: OPENAI_ADMIN_KEY (sk-admin-... com escopos api.usage.read e
-//   api.management.read), CRON_SECRET. SUPABASE_URL e
-//   SUPABASE_SERVICE_ROLE_KEY são injetadas automaticamente.
+//   api.management.read), CRON_SECRET, APP_URL (origem do app no Vercel, p/ o
+//   disparo da contenção). SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são
+//   injetadas automaticamente.
 //
 // Chamada: POST com header x-cron-secret: <CRON_SECRET> e ?lookbackDays=3
 //   (use lookbackDays=30 no primeiro backfill; a Usage API guarda o histórico).
@@ -33,14 +45,23 @@ const CRON_SECRET = (Deno.env.get("CRON_SECRET") ?? "").trim();
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-// Preços por 1M tokens (USD) — pesos da calibração, não a fatura final: o
-// rateio é reescalado para somar o custo real do dia, então errar o valor
-// absoluto pouco importa, errar a PROPORÇÃO entre modelos importa. Prefixos
-// mais específicos primeiro (match por startsWith).
+// Preços por 1M tokens (USD). ATENÇÃO ao que estes números são e ao que NÃO são:
+// desde a calibração por modelo (ver etapa 4) eles só decidem como o custo real
+// de UM modelo se divide entre as keys que o usaram — ou seja, valem apenas
+// como PESO RELATIVO entre input/cached/output dentro do mesmo modelo. O nível
+// absoluto e a proporção ENTRE modelos vêm do /organization/costs agrupado por
+// line_item, não daqui. Consequência prática: um modelo novo que não esteja
+// nesta lista não distorce mais o rateio entre clínicas (era o bug do
+// gpt-5.2, que caía no perfil "mini" e subestimava a clínica em ~5×).
+// Prefixos mais específicos primeiro (match por startsWith).
 const MODEL_PRICES: [string, { input: number; cached: number; output: number }][] = [
   ["gpt-5.4-mini", { input: 0.25, cached: 0.025, output: 2 }],
   ["gpt-5.4-nano", { input: 0.05, cached: 0.005, output: 0.4 }],
   ["gpt-5.4", { input: 1.25, cached: 0.125, output: 10 }],
+  ["gpt-5.3-mini", { input: 0.25, cached: 0.025, output: 2 }],
+  ["gpt-5.3", { input: 1.25, cached: 0.125, output: 10 }],
+  ["gpt-5.2-mini", { input: 0.25, cached: 0.025, output: 2 }],
+  ["gpt-5.2", { input: 1.25, cached: 0.125, output: 10 }],
   ["gpt-5-mini", { input: 0.25, cached: 0.025, output: 2 }],
   ["gpt-5-nano", { input: 0.05, cached: 0.005, output: 0.4 }],
   ["gpt-5", { input: 1.25, cached: 0.125, output: 10 }],
@@ -50,13 +71,36 @@ const MODEL_PRICES: [string, { input: number; cached: number; output: number }][
   ["gpt-4o-mini", { input: 0.15, cached: 0.075, output: 0.6 }],
   ["gpt-4o", { input: 2.5, cached: 1.25, output: 10 }],
 ];
-const DEFAULT_PRICE = { input: 0.25, cached: 0.025, output: 2 }; // perfil "mini"
+const DEFAULT_PRICE = { input: 1.25, cached: 0.125, output: 10 }; // perfil full-tier
+
+// Modelos sem preço próprio caem no DEFAULT. Isso deixou de distorcer o rateio
+// (a calibração por modelo corrige), mas ainda vale saber que aconteceu — o
+// nome vai no JSON de retorno em `unpricedModels` para entrar na lista acima.
+const unpricedModels = new Set<string>();
 
 function priceFor(model: string): { input: number; cached: number; output: number } {
   for (const [prefix, price] of MODEL_PRICES) {
     if (model.startsWith(prefix)) return price;
   }
+  if (model) unpricedModels.add(model);
   return DEFAULT_PRICE;
+}
+
+// line_item do /organization/costs → nome do modelo. Formatos observados:
+//   "gpt-4.1-2025-04-14, input"        → gpt-4.1-2025-04-14
+//   "evals | gpt-4o-mini-..., output"  → gpt-4o-mini-...
+//   "assistants api | file search"     → null (não é consumo de modelo)
+// A parte após a vírgula (input/output/cached input) é descartada: calibramos
+// o modelo inteiro de uma vez e deixamos a divisão input/output para os pesos
+// de MODEL_PRICES.
+function modelFromLineItem(lineItem: string): string | null {
+  const afterPipe = lineItem.includes("|")
+    ? lineItem.slice(lineItem.lastIndexOf("|") + 1)
+    : lineItem;
+  const comma = afterPipe.lastIndexOf(",");
+  if (comma < 0) return null; // sem ", input"/", output" não é linha de modelo
+  const model = afterPipe.slice(0, comma).trim().replace(/^ft-/, "");
+  return model || null;
 }
 
 type KeyUsageRow = {
@@ -163,8 +207,30 @@ async function run(req: Request): Promise<Response> {
       results: ((b.results as Record<string, unknown>[]) ?? []).slice(0, 15),
       total_results: ((b.results as Record<string, unknown>[]) ?? []).length,
     }));
-    return Response.json({ ok: true, probe: true, projects, keyCount: keys.length, keys, usageSample });
+    // Amostra dos line_items de custo: confirma que o group_by=line_item está
+    // sendo respeitado (se vier sem o campo, a calibração por modelo degrada
+    // sozinha para o rateio proporcional antigo — ver etapa 4).
+    const cj = await openai(
+      `/organization/costs?start_time=${st}&bucket_width=1d&group_by=project_id,line_item&limit=2`,
+    );
+    const costSample = ((cj.data as Record<string, unknown>[]) ?? []).map((b) => ({
+      start_time: b.start_time,
+      results: ((b.results as Record<string, unknown>[]) ?? []).slice(0, 20),
+    }));
+    return Response.json({
+      ok: true,
+      probe: true,
+      projects,
+      keyCount: keys.length,
+      keys,
+      usageSample,
+      costSample,
+    });
   }
+
+  // O isolate é reaproveitado entre invocações; sem o reset o diagnóstico
+  // acumularia modelos de execuções anteriores.
+  unpricedModels.clear();
 
   const lookbackDays = Math.max(1, Number(new URL(req.url).searchParams.get("lookbackDays") ?? "3"));
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
@@ -285,43 +351,120 @@ async function run(req: Request): Promise<Response> {
       row.requests += Number(r.num_model_requests ?? 0) || 0;
     }
   }
+  // group_by=project_id,line_item traz o custo REAL quebrado por modelo
+  // ("gpt-4.1-2025-04-14, input") além do projeto — é o insumo da calibração
+  // fina da etapa 4. Somando os line_items de um projeto/dia obtemos o mesmo
+  // total que o group_by=project_id sozinho dava antes.
+  const realByDayModel = new Map<string, number>(); // "dia|modelo" → US$ real
+  const realTotalByDay = new Map<string, number>();
   const costBuckets = await fetchAllBuckets(
-    `/organization/costs?start_time=${startTime}&bucket_width=1d&group_by=project_id&limit=${lookbackDays + 1}`,
+    // Vírgula, não parâmetro repetido — é a forma que a Usage API já aceita no
+    // group_by=api_key_id,model da etapa 2.
+    `/organization/costs?start_time=${startTime}&bucket_width=1d&group_by=project_id,line_item&limit=${lookbackDays + 1}`,
   );
   for (const bucket of costBuckets) {
     const day = dayFromUnix(bucket.start_time as number);
     for (const r of (bucket.results as Record<string, unknown>[]) ?? []) {
-      const projectId = r.project_id as string | null;
-      if (!projectId) continue;
       // amount.value chega como STRING na API de costs — sem Number() o +=
       // vira concatenação e a calibração quebra (real deixa de ser > 0).
       const amount = Number((r.amount as { value?: number | string } | null)?.value ?? 0) || 0;
-      projRow(projectId, day).cost_usd += amount;
+      const projectId = r.project_id as string | null;
+      if (projectId) projRow(projectId, day).cost_usd += amount;
+      realTotalByDay.set(day, (realTotalByDay.get(day) ?? 0) + amount);
+
+      const model = modelFromLineItem((r.line_item as string) ?? "");
+      if (model) {
+        const k = `${day}|${model}`;
+        realByDayModel.set(k, (realByDayModel.get(k) ?? 0) + amount);
+      }
     }
   }
 
-  // 4) Calibração: reescala a estimativa de cada (key, dia, modelo) para que a
-  // soma do dia bata com o custo real do dia inteiro (todas as fontes — inclui
-  // whisper/tts/embeddings que a usage/completions não vê; o rateio vira
-  // "participação no gasto"). Dia sem custo real ainda (lag) fica com a
-  // estimativa crua; o re-upsert do cron seguinte corrige.
-  const realByDay = new Map<string, number>();
-  for (const r of projRows.values()) {
-    realByDay.set(r.day, (realByDay.get(r.day) ?? 0) + r.cost_usd);
-  }
-  const estByDay = new Map<string, number>();
+  // 4) Calibração em duas etapas.
+  //
+  // 4a) POR MODELO: para cada (dia, modelo) com custo real conhecido via
+  // line_item, reescala as linhas daquele modelo para somarem exatamente esse
+  // valor. Como todas as keys de um mesmo modelo compartilham o mesmo preço,
+  // aqui o preço da tabela se cancela e o que sobra é a razão real de tokens
+  // entre as clínicas. É isso que impede um modelo mal precificado de roubar
+  // gasto das outras clínicas — o erro fica confinado ao próprio modelo.
+  //
+  // 4b) RECONCILIAÇÃO DO DIA: o que sobrar entre o total real do dia e a soma
+  // já calibrada (whisper/tts/embeddings/file search, que a usage/completions
+  // não enxerga, mais qualquer modelo sem line_item correspondente) é rateado
+  // proporcionalmente sobre todas as linhas do dia — vira "participação no
+  // gasto", e garante que a soma por clínica feche com a fatura.
+  //
+  // Dia sem custo real ainda (lag de consolidação) fica com a estimativa crua;
+  // o re-upsert do cron seguinte corrige.
+  const estByDayModel = new Map<string, number>();
+  const estRawByDay = new Map<string, number>(); // estimativa crua, só p/ o debug
   for (const r of keyRows.values()) {
-    estByDay.set(r.day, (estByDay.get(r.day) ?? 0) + r.est_cost_usd);
+    const k = `${r.day}|${r.model}`;
+    estByDayModel.set(k, (estByDayModel.get(k) ?? 0) + r.est_cost_usd);
+    estRawByDay.set(r.day, (estRawByDay.get(r.day) ?? 0) + r.est_cost_usd);
   }
-  const calibDebug: Record<string, { real: number; est: number; factor: number | null }> = {};
-  for (const [day, est] of estByDay) {
-    const real = realByDay.get(day) ?? 0;
-    calibDebug[day] = { real, est, factor: real > 0 && est > 0 ? real / est : null };
+
+  const modelsCalibrated = new Set<string>();
+  const modelsWithoutCost = new Set<string>();
+  for (const row of keyRows.values()) {
+    const k = `${row.day}|${row.model}`;
+    const real = realByDayModel.get(k);
+    const est = estByDayModel.get(k) ?? 0;
+    if (real !== undefined && real > 0 && est > 0) {
+      row.est_cost_usd = row.est_cost_usd * (real / est);
+      modelsCalibrated.add(row.model);
+    } else if (row.model) {
+      modelsWithoutCost.add(row.model);
+    }
+  }
+
+  // 4b) sobra do dia, rateada proporcionalmente.
+  const afterModelByDay = new Map<string, number>();
+  for (const r of keyRows.values()) {
+    afterModelByDay.set(r.day, (afterModelByDay.get(r.day) ?? 0) + r.est_cost_usd);
+  }
+  const calibDebug: Record<
+    string,
+    { real: number; est: number; afterModel: number; leftover: number; factor: number | null }
+  > = {};
+  for (const [day, afterModel] of afterModelByDay) {
+    const real = realTotalByDay.get(day) ?? 0;
+    const leftover = real - afterModel;
+    calibDebug[day] = {
+      real,
+      est: estRawByDay.get(day) ?? 0,
+      afterModel,
+      leftover,
+      factor: real > 0 && afterModel > 0 ? real / afterModel : null,
+    };
   }
   for (const row of keyRows.values()) {
-    const real = realByDay.get(row.day) ?? 0;
-    const est = estByDay.get(row.day) ?? 0;
-    if (real > 0 && est > 0) row.est_cost_usd = row.est_cost_usd * (real / est);
+    const real = realTotalByDay.get(row.day) ?? 0;
+    const afterModel = afterModelByDay.get(row.day) ?? 0;
+    if (real > 0 && afterModel > 0) row.est_cost_usd = row.est_cost_usd * (real / afterModel);
+  }
+
+  // 4c) Keys vistas no uso mas ausentes do admin listing: a key foi DELETADA na
+  // OpenAI depois de gastar. Sem um stub aqui ela nunca ganha nome nem aparece
+  // no select de vínculo, e o gasto some da UI mesmo continuando na fatura —
+  // foi assim que US$ 632 de julho/2026 ficaram invisíveis. O stub é criado uma
+  // vez e nunca sobrescreve uma key real (ignoreDuplicates).
+  const knownKeyIds = new Set(apiKeys.map((k) => k.api_key_id));
+  const orphanKeyIds = [...new Set([...keyRows.values()].map((r) => r.api_key_id))].filter(
+    (id) => !knownKeyIds.has(id),
+  );
+  if (orphanKeyIds.length) {
+    await supabase.from("openai_api_keys").upsert(
+      orphanKeyIds.map((id) => ({
+        api_key_id: id,
+        name: `(key removida da OpenAI · ${id.slice(0, 12)}…)`,
+        redacted_value: null,
+        project_id: null,
+        synced_at: new Date().toISOString(),
+      })),
+      { onConflict: "api_key_id", ignoreDuplicates: true },
+    );
   }
 
   // 5) Upserts (merge: re-runs atualizam a consolidação do dia).
@@ -352,6 +495,7 @@ async function run(req: Request): Promise<Response> {
   const yesterday = dayFromUnix(Math.floor(Date.now() / 1000) - 86400);
   const alerts: { clinic: string; kind: string; cost: number }[] = [];
   let alertErrors = 0;
+  let queuedRuns = 0;
 
   const { data: settings } = await supabase
     .from("openai_alert_settings")
@@ -459,9 +603,48 @@ async function run(req: Request): Promise<Response> {
             .update({ acompanhamento_id: acompanhamentoId })
             .eq("id", alertRow.id);
         }
+
+        // Contenção ativa: enfileira a rodada que vai investigar as conversas e
+        // concluir os loops. O unique (clinic_id, day) faz o dedup — re-runs do
+        // cron no mesmo dia não enfileiram de novo. A execução em si é do Next
+        // (0067), que é onde o token Helena pode ser descriptografado.
+        const { error: queueError } = await supabase.from("openai_containment_runs").insert({
+          clinic_id: clinic.id,
+          alert_id: alertRow.id,
+          day: yesterday,
+          cost_usd: cost,
+        });
+        if (!queueError) queuedRuns += 1;
+
         alerts.push({ clinic: clinic.name as string, kind, cost });
       } catch {
         alertErrors++;
+      }
+    }
+  }
+
+  // Dispara a contenção no Next. Fire-and-forget com timeout curto: basta a
+  // request chegar, o handler segue mesmo se abortarmos, e ele encadeia o resto
+  // da fila sozinho. Se a chamada se perder, os runs ficam 'na fila' e a rodada
+  // de amanhã (ou o botão na UI) retoma — nada é perdido.
+  let containmentDispatch: string | null = null;
+  if (queuedRuns > 0) {
+    const appUrl = (Deno.env.get("APP_URL") ?? "").trim().replace(/\/+$/, "");
+    if (!appUrl) {
+      containmentDispatch = "APP_URL ausente — runs enfileirados, mas ninguém foi acionado";
+    } else {
+      try {
+        await fetch(`${appUrl}/api/openai-containment/process`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-cron-secret": CRON_SECRET },
+          body: JSON.stringify({}),
+          signal: AbortSignal.timeout(3_000),
+        });
+        containmentDispatch = "disparado";
+      } catch (e) {
+        // TimeoutError é o caminho ESPERADO aqui (não esperamos a resposta).
+        containmentDispatch =
+          (e as Error)?.name === "TimeoutError" ? "disparado (timeout esperado)" : `falhou: ${e}`;
       }
     }
   }
@@ -478,6 +661,17 @@ async function run(req: Request): Promise<Response> {
     alertDay: yesterday,
     alerts,
     alertErrors,
+    queuedRuns,
+    containmentDispatch,
     calibDebug,
+    // Observabilidade da calibração — antes isso falhava em silêncio:
+    //   unpricedModels     → sem preço em MODEL_PRICES (adicione lá)
+    //   modelsWithoutCost  → sem line_item correspondente em /costs; caem só na
+    //                        reconciliação proporcional, rateio menos preciso
+    //   orphanKeys         → gastaram mas não existem mais na OpenAI
+    unpricedModels: [...unpricedModels],
+    modelsCalibrated: [...modelsCalibrated],
+    modelsWithoutCost: [...modelsWithoutCost],
+    orphanKeys: orphanKeyIds,
   });
 }

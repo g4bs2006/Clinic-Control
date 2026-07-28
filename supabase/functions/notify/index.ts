@@ -1,6 +1,9 @@
 // Edge Function: relatórios por WhatsApp (Evolution/contactia) via pg_cron.
-//   ?type=manha  → pendências da carteira (o que falta fazer)  [9h BRT]
-//   ?type=noite  → o que aconteceu no dia                       [19h BRT]
+//   ?type=manha     → pendências da carteira (o que falta fazer)  [9h BRT]
+//   ?type=noite     → o que aconteceu no dia                       [19h BRT]
+//   ?type=contencao → conversas concluídas automaticamente por gasto de IA
+//                     (event-driven: chamado pelo Next ao fim da fila de
+//                      contenção, não pelo cron)
 // Envia para NOTIFY_RECIPIENTS (número(s) ou JID de grupo, separados por vírgula),
 // com a mensagem agrupada por carteira (dev responsável).
 //
@@ -49,7 +52,8 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const type = url.searchParams.get("type") === "noite" ? "noite" : "manha";
+  const rawType = url.searchParams.get("type");
+  const type = rawType === "noite" || rawType === "contencao" ? rawType : "manha";
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
     db: { schema: SCHEMA },
     auth: { persistSession: false, autoRefreshToken: false },
@@ -133,6 +137,107 @@ Deno.serve(async (req) => {
     }
     if (pendingSuggestions) lines.push(`🤖 ${pendingSuggestions} sugestão(ões) da IA aguardando revisão em /tarefas.`);
     text = lines.join("\n").trim();
+  } else if (type === "contencao") {
+    // CONTENÇÃO — o que a automação fechou (ou teria fechado) por gasto de IA.
+    // Pega os runs terminados ainda não notificados; o notified_at no fim é o
+    // que impede o mesmo relatório de sair duas vezes.
+    const { data: runs } = await supabase
+      .from("openai_containment_runs")
+      .select("id, clinic_id, day, cost_usd, status, dry_run, sessions_scanned, suspects_found, sessions_closed, error")
+      .is("notified_at", null)
+      .in("status", ["concluido", "erro"])
+      .order("created_at");
+
+    if (!runs?.length) {
+      return Response.json({ ok: true, type, skipped: "nenhum run pendente de aviso" });
+    }
+
+    const { data: acts } = await supabase
+      .from("openai_containment_actions")
+      .select("run_id, contact_name, contact_phone, outcome, reason, error")
+      .in("run_id", runs.map((r) => r.id as string));
+    const byRun = new Map<string, Record<string, unknown>[]>();
+    for (const a of acts ?? []) {
+      const list = byRun.get(a.run_id as string) ?? [];
+      list.push(a);
+      byRun.set(a.run_id as string, list);
+    }
+
+    const usd = (v: number) => `US$ ${Number(v).toFixed(2)}`;
+    const who = (a: Record<string, unknown>) =>
+      [a.contact_name, a.contact_phone].filter(Boolean).join(" · ") || "(contato sem nome)";
+
+    const lines = [`🛑 *Contenção de gasto de IA* — ${ddmm(today)}`, ""];
+    for (const r of runs) {
+      const clinicName = clinics.get(r.clinic_id as string)?.name ?? "Clínica";
+      const dev = carteiraOf(r.clinic_id as string, null);
+      lines.push(`*${clinicName}* — ${usd(r.cost_usd as number)} em ${ddmm(r.day as string)} · ${dev}`);
+
+      if (r.status === "erro") {
+        lines.push(`  ❌ Falhou: ${String(r.error ?? "erro desconhecido").slice(0, 160)}`, "");
+        continue;
+      }
+
+      lines.push(
+        `  ${r.sessions_scanned} conversa(s) varrida(s) · ${r.suspects_found} em loop`,
+      );
+
+      const list = byRun.get(r.id as string) ?? [];
+      const fechadas = list.filter((a) => a.outcome === "concluida");
+      const simuladas = list.filter((a) => a.outcome === "simulada");
+      const falhas = list.filter((a) => a.outcome === "falhou");
+      const poupadas = list.filter((a) => a.outcome === "poupada");
+
+      if (r.dry_run) {
+        lines.push(`  🔎 *Simulação* — contenção desligada; ${simuladas.length} conversa(s) seriam concluídas:`);
+        for (const a of simuladas.slice(0, 5)) lines.push(`    • ${who(a)}`, `      ${a.reason}`);
+      } else if (fechadas.length) {
+        lines.push(`  ✅ ${fechadas.length} conversa(s) concluída(s) e chatbot interrompido:`);
+        for (const a of fechadas.slice(0, 5)) lines.push(`    • ${who(a)}`, `      ${a.reason}`);
+      } else {
+        lines.push("  ✅ Nenhuma conversa bateu o critério de loop — nada foi fechado.");
+      }
+
+      if (falhas.length) {
+        lines.push(`  ⚠️ ${falhas.length} não pôde(puderam) ser concluída(s):`);
+        for (const a of falhas.slice(0, 3)) {
+          lines.push(`    • ${who(a)} — ${String(a.error ?? "").slice(0, 100)}`);
+        }
+      }
+      if (poupadas.length) {
+        lines.push(`  ⏸️ Avaliadas e mantidas (ficaram perto do critério):`);
+        for (const a of poupadas.slice(0, 3)) lines.push(`    • ${who(a)} — ${a.reason}`);
+      }
+      lines.push("");
+    }
+    lines.push("_Detalhes e histórico na aba IA & Custos da clínica._");
+    text = lines.join("\n").trim();
+
+    // Marca antes de enviar seria mais seguro contra duplicata, mas esconderia
+    // uma falha de envio para sempre. Marcamos depois: no pior caso o grupo
+    // recebe o mesmo relatório duas vezes, o que é melhor do que perdê-lo.
+    const errors: string[] = [];
+    for (const to of RECIPIENTS) {
+      try {
+        await sendText(to, text);
+      } catch (e) {
+        errors.push(`${to}: ${(e as Error).message}`);
+      }
+    }
+    if (!errors.length) {
+      await supabase
+        .from("openai_containment_runs")
+        .update({ notified_at: new Date().toISOString() })
+        .in("id", runs.map((r) => r.id as string));
+    }
+    return Response.json({
+      ok: errors.length === 0,
+      type,
+      runs: runs.length,
+      recipients: RECIPIENTS.length,
+      errors,
+      preview: text.slice(0, 800),
+    });
   } else {
     // NOITE — o que aconteceu hoje
     const [summaries, createdTasks, completedTasks, newAcomps, newSuggestions] = await Promise.all([

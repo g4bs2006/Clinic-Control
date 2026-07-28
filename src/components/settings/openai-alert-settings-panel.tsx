@@ -18,6 +18,13 @@ export function OpenAiAlertSettingsPanel({ settings }: { settings: OpenAiAlertSe
   const [multiplier, setMultiplier] = useState(String(settings.spikeMultiplier))
   const [minCost, setMinCost] = useState(String(settings.minCostUsd))
 
+  // Contenção ativa
+  const [contEnabled, setContEnabled] = useState(settings.containmentEnabled)
+  const [maxSessions, setMaxSessions] = useState(String(settings.containmentMaxSessions))
+  const [minDup, setMinDup] = useState(String(Math.round(settings.containmentMinDupRatio * 100)))
+  const [minIa, setMinIa] = useState(String(settings.containmentMinIaMsgs))
+  const [minHours, setMinHours] = useState(String(settings.containmentMinActiveHours))
+
   function save() {
     startTransition(async () => {
       const res = await updateOpenAiAlertSettings({
@@ -25,6 +32,11 @@ export function OpenAiAlertSettingsPanel({ settings }: { settings: OpenAiAlertSe
         dailyLimitUsd: Number(dailyLimit.replace(",", ".")),
         spikeMultiplier: Number(multiplier.replace(",", ".")),
         minCostUsd: Number(minCost.replace(",", ".")),
+        containmentEnabled: contEnabled,
+        containmentMaxSessions: Number(maxSessions),
+        containmentMinDupRatio: Number(minDup.replace(",", ".")) / 100,
+        containmentMinIaMsgs: Number(minIa),
+        containmentMinActiveHours: Number(minHours),
       })
       if (res.ok) toast.success("Alertas de gasto OpenAI salvos.")
       else toast.error(res.error)
@@ -83,6 +95,87 @@ export function OpenAiAlertSettingsPanel({ settings }: { settings: OpenAiAlertSe
             Dias abaixo disso nunca alertam (evita alarme de centavos)
           </p>
         </div>
+      </div>
+
+      {/* ── Contenção ativa ──────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-3">
+        <div className="flex items-start gap-2">
+          <Switch
+            id="openai-containment-enabled"
+            checked={contEnabled}
+            onCheckedChange={setContEnabled}
+          />
+          <div className="flex flex-col gap-0.5">
+            <Label htmlFor="openai-containment-enabled" className="text-sm">
+              Contenção ativa — concluir conversas em loop automaticamente
+            </Label>
+            <p className="text-[0.7rem] leading-relaxed text-muted-foreground">
+              Ao estourar o limite, o sistema investiga as conversas das últimas 48h sozinho,
+              conclui na Helena as que forem loop de robô (interrompendo o chatbot) e avisa no
+              grupo o que fechou e por quê.{" "}
+              <span className="text-amber-500/90">
+                Desligado, a rodada ainda acontece e relata o que teria fechado — sem tocar em
+                nada.
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cont-max" className="text-xs text-muted-foreground">
+              Máx. por rodada
+            </Label>
+            <Input
+              id="cont-max"
+              inputMode="numeric"
+              value={maxSessions}
+              onChange={(e) => setMaxSessions(e.target.value)}
+            />
+            <p className="text-[0.65rem] text-muted-foreground">conversas</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cont-dup" className="text-xs text-muted-foreground">
+              Repetição mín. (%)
+            </Label>
+            <Input
+              id="cont-dup"
+              inputMode="numeric"
+              value={minDup}
+              onChange={(e) => setMinDup(e.target.value)}
+            />
+            <p className="text-[0.65rem] text-muted-foreground">msgs iguais do contato</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cont-ia" className="text-xs text-muted-foreground">
+              Respostas da IA
+            </Label>
+            <Input
+              id="cont-ia"
+              inputMode="numeric"
+              value={minIa}
+              onChange={(e) => setMinIa(e.target.value)}
+            />
+            <p className="text-[0.65rem] text-muted-foreground">mínimo na janela</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cont-hours" className="text-xs text-muted-foreground">
+              Horas ativas
+            </Label>
+            <Input
+              id="cont-hours"
+              inputMode="numeric"
+              value={minHours}
+              onChange={(e) => setMinHours(e.target.value)}
+            />
+            <p className="text-[0.65rem] text-muted-foreground">distintas no dia</p>
+          </div>
+        </div>
+        <p className="text-[0.65rem] leading-relaxed text-muted-foreground">
+          Os três critérios são exigidos <strong>juntos</strong> — um paciente real pode bater um
+          deles, dificilmente os três. Afrouxar aumenta o risco de encerrar um atendimento
+          legítimo.
+        </p>
       </div>
 
       <div>

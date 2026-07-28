@@ -4,10 +4,15 @@ import { notFound } from "next/navigation"
 import { getClinic } from "@/lib/clinics/actions"
 import { monthKey, prevMonth } from "@/lib/snapshots/month"
 import { Panel } from "@/components/dashboard/panel"
-import { getClinicOpenAiUsage, listOpenAiKeys } from "@/lib/openai-usage/actions"
+import {
+  getClinicOpenAiUsage,
+  listOpenAiKeys,
+  listClinicContainment,
+} from "@/lib/openai-usage/actions"
 import { ClinicOpenAiUsagePanel } from "@/components/clinics/clinic-openai-usage"
 import { ClinicOpenAiKeySelect } from "@/components/clinics/clinic-openai-key-select"
 import { InvestigateContacts } from "@/components/clinics/investigate-contacts"
+import { ClinicContainmentHistory } from "@/components/clinics/clinic-containment-history"
 import { LazyMount } from "@/components/ui/lazy-mount"
 import { monthLabel, lastNMonths } from "../shared"
 
@@ -26,9 +31,10 @@ export default async function ClinicIaPage({
   if (!clinic) notFound()
 
   const currentMonth = monthKey(new Date())
-  const [openAiUsage, openAiKeys] = await Promise.all([
+  const [openAiUsage, openAiKeys, containment] = await Promise.all([
     getClinicOpenAiUsage(id),
     listOpenAiKeys(),
+    listClinicContainment(id),
   ])
 
   return (
@@ -66,6 +72,14 @@ export default async function ClinicIaPage({
           />
         </div>
         <InvestigateContacts clinicId={id} />
+      </Panel>
+
+      {/* ── Contenção automática ───────────────────────────────── */}
+      <Panel
+        title="Contenção automática"
+        subtitle="conversas concluídas pelo sistema após estouro do limite de gasto · evidências da decisão"
+      >
+        <ClinicContainmentHistory runs={containment} />
       </Panel>
     </>
   )

@@ -304,18 +304,170 @@ export async function updateClinicOpenAiKey(
   return { ok: true };
 }
 
+export type OrphanKeySpend = {
+  apiKeyId: string;
+  name: string;
+  costUsd: number;
+  requests: number;
+  lastDay: string;
+};
+
+/**
+ * Keys com gasto no mês que NÃO estão vinculadas a nenhuma clínica — dinheiro
+ * real na fatura que não aparece em lugar nenhum do painel. Inclui keys já
+ * deletadas na OpenAI (a coleta cria um stub para elas justamente para que não
+ * sumam daqui).
+ */
+export async function listOrphanKeySpend(yearMonth?: string): Promise<OrphanKeySpend[]> {
+  const supabase = await createClient();
+  const ym = yearMonth ?? currentYearMonthUtc();
+
+  const [{ data: usage }, { data: linked }, { data: keys }] = await Promise.all([
+    supabase
+      .from("openai_key_monthly")
+      .select("api_key_id, est_cost_usd, requests")
+      .eq("month", ym),
+    supabase.from("clinics").select("openai_api_key_id").not("openai_api_key_id", "is", null),
+    supabase.from("openai_api_keys").select("api_key_id, name"),
+  ]);
+
+  const linkedIds = new Set((linked ?? []).map((c) => c.openai_api_key_id as string));
+  const nameOf = new Map((keys ?? []).map((k) => [k.api_key_id as string, k.name as string]));
+
+  const orphans = (usage ?? []).filter((u) => !linkedIds.has(u.api_key_id as string));
+  if (!orphans.length) return [];
+
+  // Último dia com uso: separa "key ativa que ninguém vinculou" de "key que já
+  // morreu" — a ação para cada uma é diferente.
+  const { data: lastDays } = await supabase
+    .from("openai_key_usage")
+    .select("api_key_id, day")
+    .in("api_key_id", orphans.map((o) => o.api_key_id as string))
+    .order("day", { ascending: false });
+  const lastDayOf = new Map<string, string>();
+  for (const r of lastDays ?? []) {
+    const id = r.api_key_id as string;
+    if (!lastDayOf.has(id)) lastDayOf.set(id, r.day as string);
+  }
+
+  return orphans
+    .map((o) => ({
+      apiKeyId: o.api_key_id as string,
+      name: nameOf.get(o.api_key_id as string) ?? "(desconhecida)",
+      costUsd: Number(o.est_cost_usd ?? 0),
+      requests: Number(o.requests ?? 0),
+      lastDay: lastDayOf.get(o.api_key_id as string) ?? "",
+    }))
+    .filter((o) => o.costUsd > 0)
+    .sort((a, b) => b.costUsd - a.costUsd);
+}
+
+export type ContainmentAction = {
+  sessionId: string;
+  contactName: string;
+  contactPhone: string;
+  outcome: "concluida" | "poupada" | "falhou" | "simulada";
+  reason: string;
+  msgsIa: number;
+  msgsPaciente: number;
+  dupRatio: number;
+  activeHours: number;
+  error: string | null;
+};
+
+export type ContainmentRun = {
+  id: string;
+  day: string;
+  costUsd: number;
+  status: string;
+  dryRun: boolean;
+  sessionsScanned: number;
+  suspectsFound: number;
+  sessionsClosed: number;
+  error: string | null;
+  createdAt: string;
+  actions: ContainmentAction[];
+};
+
+/** Histórico de contenção da clínica (rodadas + o que foi decidido em cada). */
+export async function listClinicContainment(
+  clinicId: string,
+  limit = 5,
+): Promise<ContainmentRun[]> {
+  const supabase = await createClient();
+  const { data: runs } = await supabase
+    .from("openai_containment_runs")
+    .select(
+      "id, day, cost_usd, status, dry_run, sessions_scanned, suspects_found, sessions_closed, error, created_at",
+    )
+    .eq("clinic_id", clinicId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (!runs?.length) return [];
+
+  const { data: acts } = await supabase
+    .from("openai_containment_actions")
+    .select(
+      "run_id, session_id, contact_name, contact_phone, outcome, reason, msgs_ia, msgs_paciente, dup_ratio, active_hours, error",
+    )
+    .in("run_id", runs.map((r) => r.id as string));
+
+  const byRun = new Map<string, ContainmentAction[]>();
+  for (const a of acts ?? []) {
+    const list = byRun.get(a.run_id as string) ?? [];
+    list.push({
+      sessionId: a.session_id as string,
+      contactName: (a.contact_name as string) ?? "(sem nome)",
+      contactPhone: (a.contact_phone as string) ?? "",
+      outcome: a.outcome as ContainmentAction["outcome"],
+      reason: a.reason as string,
+      msgsIa: Number(a.msgs_ia ?? 0),
+      msgsPaciente: Number(a.msgs_paciente ?? 0),
+      dupRatio: Number(a.dup_ratio ?? 0),
+      activeHours: Number(a.active_hours ?? 0),
+      error: (a.error as string | null) ?? null,
+    });
+    byRun.set(a.run_id as string, list);
+  }
+
+  return runs.map((r) => ({
+    id: r.id as string,
+    day: r.day as string,
+    costUsd: Number(r.cost_usd ?? 0),
+    status: r.status as string,
+    dryRun: Boolean(r.dry_run),
+    sessionsScanned: Number(r.sessions_scanned ?? 0),
+    suspectsFound: Number(r.suspects_found ?? 0),
+    sessionsClosed: Number(r.sessions_closed ?? 0),
+    error: (r.error as string | null) ?? null,
+    createdAt: r.created_at as string,
+    // Concluídas primeiro: é o que alguém abrindo a tela quer conferir.
+    actions: (byRun.get(r.id as string) ?? []).sort((a, b) =>
+      a.outcome === b.outcome ? 0 : a.outcome === "concluida" ? -1 : 1,
+    ),
+  }));
+}
+
 export type OpenAiAlertSettings = {
   enabled: boolean;
   dailyLimitUsd: number;
   spikeMultiplier: number;
   minCostUsd: number;
+  /** Contenção ativa: conclui sozinha as conversas em loop após um estouro. */
+  containmentEnabled: boolean;
+  containmentMaxSessions: number;
+  containmentMinDupRatio: number;
+  containmentMinIaMsgs: number;
+  containmentMinActiveHours: number;
 };
 
 export async function getOpenAiAlertSettings(): Promise<OpenAiAlertSettings> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("openai_alert_settings")
-    .select("enabled, daily_limit_usd, spike_multiplier, min_cost_usd")
+    .select(
+      "enabled, daily_limit_usd, spike_multiplier, min_cost_usd, containment_enabled, containment_max_sessions, containment_min_dup_ratio, containment_min_ia_msgs, containment_min_active_hours",
+    )
     .eq("id", true)
     .maybeSingle();
   return {
@@ -323,6 +475,11 @@ export async function getOpenAiAlertSettings(): Promise<OpenAiAlertSettings> {
     dailyLimitUsd: Number(data?.daily_limit_usd ?? 5),
     spikeMultiplier: Number(data?.spike_multiplier ?? 2.5),
     minCostUsd: Number(data?.min_cost_usd ?? 1),
+    containmentEnabled: (data?.containment_enabled as boolean) ?? true,
+    containmentMaxSessions: Number(data?.containment_max_sessions ?? 5),
+    containmentMinDupRatio: Number(data?.containment_min_dup_ratio ?? 0.5),
+    containmentMinIaMsgs: Number(data?.containment_min_ia_msgs ?? 40),
+    containmentMinActiveHours: Number(data?.containment_min_active_hours ?? 12),
   };
 }
 
@@ -334,6 +491,20 @@ export async function updateOpenAiAlertSettings(
   if (!(input.dailyLimitUsd > 0)) return { ok: false, error: "Limite diário deve ser positivo" };
   if (!(input.spikeMultiplier >= 1.5)) return { ok: false, error: "Multiplicador mínimo: 1,5×" };
   if (!(input.minCostUsd >= 0)) return { ok: false, error: "Piso não pode ser negativo" };
+  // Limites do critério de contenção. Afrouxar demais faz a automação fechar
+  // atendimento de paciente real, então os pisos aqui são deliberados.
+  if (!(input.containmentMaxSessions >= 1 && input.containmentMaxSessions <= 20)) {
+    return { ok: false, error: "Teto de conversas por rodada: entre 1 e 20" };
+  }
+  if (!(input.containmentMinDupRatio >= 0.3 && input.containmentMinDupRatio <= 1)) {
+    return { ok: false, error: "Repetição mínima: entre 30% e 100%" };
+  }
+  if (!(input.containmentMinIaMsgs >= 10)) {
+    return { ok: false, error: "Mínimo de respostas da IA: 10" };
+  }
+  if (!(input.containmentMinActiveHours >= 4 && input.containmentMinActiveHours <= 24)) {
+    return { ok: false, error: "Horas ativas: entre 4 e 24" };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -343,6 +514,11 @@ export async function updateOpenAiAlertSettings(
       daily_limit_usd: input.dailyLimitUsd,
       spike_multiplier: input.spikeMultiplier,
       min_cost_usd: input.minCostUsd,
+      containment_enabled: input.containmentEnabled,
+      containment_max_sessions: input.containmentMaxSessions,
+      containment_min_dup_ratio: input.containmentMinDupRatio,
+      containment_min_ia_msgs: input.containmentMinIaMsgs,
+      containment_min_active_hours: input.containmentMinActiveHours,
     })
     .eq("id", true);
   if (error) return { ok: false, error: error.message };
