@@ -20,15 +20,16 @@ interface ChurnFormProps {
   /** Clínicas elegíveis (não arquivadas) para registrar desligamento */
   clinics: { id: string; name: string }[]
   currentMonth: string // YYYY-MM
+  /** Chamado após registrar — o dialog usa para fechar sozinho. */
+  onDone?: () => void
 }
 
-export function ChurnForm({ clinics, currentMonth }: ChurnFormProps) {
+export function ChurnForm({ clinics, currentMonth, onDone }: ChurnFormProps) {
   const router = useRouter()
   const [clinicId, setClinicId] = useState<string | null>(null)
   const [month, setMonth] = useState(currentMonth)
   const [reason, setReason] = useState<string>(CHURN_REASONS[0])
   const [notes, setNotes] = useState("")
-  const [revenue, setRevenue] = useState("")
   const [pending, startTransition] = useTransition()
 
   function submit() {
@@ -37,19 +38,13 @@ export function ChurnForm({ clinics, currentMonth }: ChurnFormProps) {
       return
     }
     startTransition(async () => {
-      const res = await registerChurn({
-        clinicId,
-        churnMonth: month,
-        reason,
-        notes,
-        lostRevenue: revenue ? Number(revenue.replace(",", ".")) : null,
-      })
+      const res = await registerChurn({ clinicId, churnMonth: month, reason, notes })
       if (res.ok) {
-        toast.success("Churn registrado — clínica arquivada.")
+        toast.success("Desligamento registrado — analisando a conversa do grupo.")
         setClinicId(null)
         setNotes("")
-        setRevenue("")
         router.refresh()
+        onDone?.()
       } else {
         toast.error(res.error)
       }
@@ -58,7 +53,7 @@ export function ChurnForm({ clinics, currentMonth }: ChurnFormProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="churn-clinic">Clínica</Label>
           <Select
@@ -106,17 +101,6 @@ export function ChurnForm({ clinics, currentMonth }: ChurnFormProps) {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="churn-revenue">Mensalidade perdida (R$)</Label>
-          <Input
-            id="churn-revenue"
-            inputMode="decimal"
-            placeholder="Ex.: 1500"
-            value={revenue}
-            onChange={(e) => setRevenue(e.target.value)}
-            className="h-9 tabular-nums"
-          />
-        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -135,7 +119,8 @@ export function ChurnForm({ clinics, currentMonth }: ChurnFormProps) {
           Registrar desligamento
         </Button>
         <p className="mt-2 text-xs text-muted-foreground">
-          Ao registrar, a clínica é marcada como <strong>Arquivada</strong> e sai da carteira ativa.
+          A clínica é marcada como <strong>Arquivada</strong> e sai da carteira ativa. Em seguida a
+          conversa do grupo é lida para levantar o que levou ao desligamento.
         </p>
       </div>
     </div>

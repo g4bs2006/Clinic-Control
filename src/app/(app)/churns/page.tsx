@@ -4,13 +4,35 @@ import { getCarteiraScope } from "@/lib/users/actions"
 import { monthKey } from "@/lib/snapshots/month"
 import { Panel } from "@/components/dashboard/panel"
 import { KpiCard } from "@/components/dashboard/kpi-card"
-import { ChurnForm } from "@/components/churns/churn-form"
-import { ChurnTable } from "@/components/churns/churn-table"
+import { ChurnRegisterDialog } from "@/components/churns/churn-register-dialog"
+import { ChurnLedger } from "@/components/churns/churn-ledger"
+import { ChurnPatterns } from "@/components/churns/churn-patterns"
 
 export const dynamic = "force-dynamic"
 
-function fmtBRL(value: number): string {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+/** Micro-barras do ritmo mensal — o eixo do tempo como atributo da contagem. */
+function MonthRhythm({ counts }: { counts: [string, number][] }) {
+  if (counts.length === 0) return null
+  const max = Math.max(...counts.map(([, n]) => n))
+  return (
+    <div className="flex items-end gap-1.5" aria-hidden>
+      {counts.map(([month, n]) => {
+        const [, m] = month.split("-").map(Number)
+        const label = new Date(Date.UTC(2000, m - 1, 1))
+          .toLocaleDateString("pt-BR", { month: "short", timeZone: "UTC" })
+          .replace(".", "")
+        return (
+          <div key={month} className="flex flex-col items-center gap-1">
+            <div
+              className="w-3 rounded-sm bg-[oklch(0.7_0.19_22)]"
+              style={{ height: `${Math.max(3, (n / max) * 20)}px` }}
+            />
+            <span className="text-[0.6rem] capitalize text-muted-foreground">{label}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 export default async function ChurnsPage() {
@@ -38,7 +60,6 @@ export default async function ChurnsPage() {
 
   const activeClinics = clinics.filter((c) => c.contract_status !== "archived")
   const churnsThisYear = churns.filter((c) => c.churn_month.startsWith(currentYear))
-  const lostRevenueTotal = churns.reduce((sum, c) => sum + (c.lost_revenue ?? 0), 0)
 
   // Churn rate do ano: desligamentos do ano ÷ (ativas + desligadas no ano)
   const churnRate =
@@ -46,37 +67,49 @@ export default async function ChurnsPage() {
       ? churnsThisYear.length / (activeClinics.length + churnsThisYear.length)
       : 0
 
-  // Motivos mais comuns
-  const reasonCounts = new Map<string, number>()
-  for (const c of churns) {
-    const key = c.reason ?? "Sem motivo"
-    reasonCounts.set(key, (reasonCounts.get(key) ?? 0) + 1)
-  }
-  const topReasons = [...reasonCounts.entries()].sort((a, b) => b[1] - a[1])
-  const maxReasonCount = Math.max(1, ...topReasons.map(([, n]) => n))
+  // Ritmo: contagem por mês em ordem cronológica (a lista vem desc).
+  const byMonth = new Map<string, number>()
+  for (const c of churns) byMonth.set(c.churn_month, (byMonth.get(c.churn_month) ?? 0) + 1)
+  const rhythm = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-6)
+
+  const analyzed = churns.filter((c) => analyses[c.id]?.status === "concluido").length
 
   return (
-    <main className="p-4 space-y-6 sm:p-6 max-w-screen-xl mx-auto">
+    <main className="mx-auto max-w-screen-xl space-y-6 p-4 sm:p-6">
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div>
-        <h1 className="text-2xl font-bold brand-header">Churns</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Desligamentos da carteira · registro, motivos e impacto
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="brand-header text-2xl font-bold">Churns</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Desligamentos da carteira · o que foi dito antes de sair
+          </p>
+        </div>
+        <ChurnRegisterDialog
+          clinics={activeClinics.map((c) => ({ id: c.id, name: c.name }))}
+          currentMonth={currentMonth}
+        />
       </div>
 
-      {/* ── KPI strip ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <KpiCard
-          label="Desligamentos"
-          value={churns.length.toLocaleString("pt-BR")}
-          hint="total registrado"
-        />
-        <KpiCard
-          label={`Em ${currentYear}`}
-          value={churnsThisYear.length.toLocaleString("pt-BR")}
-          accent="rose"
-        />
+      {/* ── Indicadores ────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Panel className="min-w-0">
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">
+              Saídas em {currentYear}
+            </span>
+            <span className="text-4xl font-semibold leading-none tabular-nums text-foreground">
+              {churnsThisYear.length.toLocaleString("pt-BR")}
+            </span>
+            {rhythm.length > 1 ? (
+              <MonthRhythm counts={rhythm} />
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {churns.length} no total registrado
+              </span>
+            )}
+          </div>
+        </Panel>
+
         <KpiCard
           label="Churn rate"
           value={
@@ -88,58 +121,23 @@ export default async function ChurnsPage() {
           accent="purple"
           hint={`desligadas ÷ carteira de ${currentYear}`}
         />
+
         <KpiCard
-          label="Receita perdida"
-          value={fmtBRL(lostRevenueTotal)}
-          accent="teal"
-          hint="soma das mensalidades"
+          label="Post-mortem"
+          value={`${analyzed} de ${churns.length}`}
+          accent={analyzed === churns.length && churns.length > 0 ? "rose" : undefined}
+          hint="saídas com a conversa analisada"
         />
       </div>
 
-      {/* ── Registrar ──────────────────────────────────────────── */}
-      <Panel
-        title="Registrar desligamento"
-        subtitle="a clínica é arquivada e sai da carteira ativa"
-      >
-        <ChurnForm
-          clinics={activeClinics.map((c) => ({ id: c.id, name: c.name }))}
-          currentMonth={currentMonth}
-        />
-      </Panel>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(260px,320px)]">
-        {/* ── Lista ──────────────────────────────────────────────── */}
-        <Panel
-          title="Histórico de desligamentos"
-          subtitle="mais recentes primeiro · abra “Análise” para o post-mortem da conversa"
-        >
-          <ChurnTable churns={churns} analyses={analyses} />
+      {/* ── Registro + padrões ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(240px,300px)]">
+        <Panel title="Registro de saídas" subtitle="do mais recente para o mais antigo">
+          <ChurnLedger churns={churns} analyses={analyses} />
         </Panel>
 
-        {/* ── Motivos ────────────────────────────────────────────── */}
-        <Panel title="Motivos" subtitle="frequência entre os desligamentos">
-          {topReasons.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sem registros ainda.</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {topReasons.map(([reason, count]) => (
-                <li key={reason}>
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="text-foreground truncate">{reason}</span>
-                    <span className="font-semibold tabular-nums text-muted-foreground shrink-0">
-                      {count}
-                    </span>
-                  </div>
-                  <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-red-400/70"
-                      style={{ width: `${(count / maxReasonCount) * 100}%` }}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+        <Panel title="Padrões" subtitle="o formulário contra a conversa">
+          <ChurnPatterns churns={churns} analyses={analyses} />
         </Panel>
       </div>
     </main>
