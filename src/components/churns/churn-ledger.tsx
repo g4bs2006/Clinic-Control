@@ -51,7 +51,7 @@ function groupByMonth(churns: ChurnRow[]): [string, ChurnRow[]][] {
 /** Post-mortem completo, revelado ao expandir a entrada. */
 function AnalysisDetail({ analysis }: { analysis: ChurnAnalysis }) {
   return (
-    <div className="mt-3 space-y-3 border-t border-border/50 pt-3">
+    <div className="mt-3 max-w-[85ch] space-y-3 border-t border-border/50 pt-3">
       {analysis.summary && <p className="text-sm text-foreground">{analysis.summary}</p>}
 
       {analysis.reasons.length > 0 && (
@@ -230,12 +230,15 @@ export function ChurnLedger({ churns: initialChurns, analyses }: ChurnLedgerProp
                         <span className="text-xs text-muted-foreground">{c.reason ?? "sem motivo"}</span>
                       </div>
 
-                      {c.notes && <p className="mt-1 text-sm text-muted-foreground">{c.notes}</p>}
+                      {c.notes && (
+                        <p className="mt-1 max-w-[75ch] text-sm text-muted-foreground">{c.notes}</p>
+                      )}
 
-                      {/* A frase do cliente — o coração da entrada */}
+                      {/* A frase do cliente — o coração da entrada. Limite de
+                          linha: em tela cheia, citação esticada não se lê. */}
                       {topQuote && (
                         <blockquote
-                          className="mt-2.5 border-l-2 pl-3 text-sm italic text-foreground/90"
+                          className="mt-2.5 max-w-[75ch] border-l-2 pl-3 text-sm italic text-foreground/90"
                           style={{ borderImage: "var(--brand) 1" }}
                         >
                           “{topQuote}”

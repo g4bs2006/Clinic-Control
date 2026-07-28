@@ -74,8 +74,11 @@ export default async function ChurnsPage() {
 
   const analyzed = churns.filter((c) => analyses[c.id]?.status === "concluido").length
 
+  // Largura cheia, como /clinicas e /mensal. O comprimento de linha é limitado
+  // dentro dos componentes: soltar o container não pode virar texto esticado a
+  // 1600px, que é ilegível.
   return (
-    <main className="mx-auto max-w-screen-xl space-y-6 p-4 sm:p-6">
+    <main className="space-y-6 p-4 sm:p-8">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -131,7 +134,7 @@ export default async function ChurnsPage() {
       </div>
 
       {/* ── Registro + padrões ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(240px,300px)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(240px,300px)] 2xl:grid-cols-[1fr_360px]">
         <Panel title="Registro de saídas" subtitle="do mais recente para o mais antigo">
           <ChurnLedger churns={churns} analyses={analyses} />
         </Panel>
