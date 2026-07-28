@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { mapLimit, STORAGE_CONCURRENCY } from "./map-limit"
 // Normalização de chave é idêntica à do repositório de clínicas (remove
 // acentos/caracteres inválidos, preserva "/") — reaproveitada para não divergir.
 export { toStorageKey } from "@/lib/storage/clinic-files"
@@ -29,12 +30,16 @@ export async function listAllVaultFiles(
       .from(VAULT_FILES_BUCKET)
       .list(prefix, { limit: 1000, sortBy: { column: "name", order: "asc" } })
     if (error || !data) return
+
+    // Subpastas do mesmo nível em paralelo: cada .list() é uma ida e volta, e
+    // descer uma por vez fazia o tempo crescer com a árvore (43 pastas aqui).
+    const folders: string[] = []
     for (const item of data) {
       if (item.name === ".emptyFolderPlaceholder") continue
       const full = prefix ? `${prefix}/${item.name}` : item.name
       // Pastas vêm com id null; arquivos têm id.
       if (item.id === null) {
-        await walk(full)
+        folders.push(full)
       } else {
         out.push({
           path: full,
@@ -43,6 +48,7 @@ export async function listAllVaultFiles(
         })
       }
     }
+    await mapLimit(folders, STORAGE_CONCURRENCY, walk)
   }
 
   await walk("")

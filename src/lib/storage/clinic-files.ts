@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { mapLimit, STORAGE_CONCURRENCY } from "./map-limit"
 
 export const CLINIC_FILES_BUCKET = "clinic-files"
 
@@ -34,6 +35,10 @@ export type StoredFile = {
 
 // Lista recursiva de todos os arquivos sob "<clinicId>/" (Supabase Storage
 // lista só um nível por chamada, então descemos nas subpastas).
+//
+// As subpastas de um mesmo nível são visitadas EM PARALELO: cada .list() é uma
+// ida e volta de rede, e descer uma pasta por vez fazia o tempo crescer com a
+// profundidade da árvore, não com o tamanho dos arquivos.
 export async function listAllFiles(
   // schema-agnostic: só usa .storage (independe do schema do banco)
   supabase: Pick<SupabaseClient, "storage">,
@@ -46,12 +51,14 @@ export async function listAllFiles(
       .from(CLINIC_FILES_BUCKET)
       .list(prefix, { limit: 1000, sortBy: { column: "name", order: "asc" } })
     if (error || !data) return
+
+    const folders: string[] = []
     for (const item of data) {
       if (item.name === ".emptyFolderPlaceholder") continue
       const full = `${prefix}/${item.name}`
       // Pastas vêm com id null; arquivos têm id.
       if (item.id === null) {
-        await walk(full)
+        folders.push(full)
       } else {
         out.push({
           fullPath: full,
@@ -61,6 +68,7 @@ export async function listAllFiles(
         })
       }
     }
+    await mapLimit(folders, STORAGE_CONCURRENCY, walk)
   }
 
   await walk(clinicId)
