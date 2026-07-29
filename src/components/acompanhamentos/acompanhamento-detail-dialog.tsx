@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { Paperclip, Trash2, Send, Loader2 } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -66,42 +66,40 @@ export function AcompanhamentoDetailDialog({
   const [pendingUploads, setPendingUploads] = useState<{ id: string; name: string }[]>([])
   const [pendingComments, setPendingComments] = useState<{ id: string; body: string }[]>([])
 
-  async function reload(aId: string) {
+  // Troca de acompanhamento zera o estado local EM TEMPO DE RENDER, não dentro
+  // de um efeito (convenção do projeto; ver a nota de resync em ui-otimista).
+  // Fazer isso num efeito rendia uma passada com os dados do item anterior na
+  // tela antes do reset — e é o que o lint aponta como render em cascata.
+  const [prevId, setPrevId] = useState(id)
+  if (prevId !== id) {
+    setPrevId(id)
+    setPendingUploads([])
+    setPendingComments([])
+    setComments([])
+    setAttachments([])
+    setComment("")
+    setLoading(id != null)
+  }
+
+  // Descarta resposta velha: alternar rápido entre dois acompanhamentos podia
+  // deixar o fetch mais antigo chegar depois e sobrescrever o mais novo.
+  const reqRef = useRef(0)
+
+  const reload = useCallback(async (aId: string) => {
+    const req = ++reqRef.current
     const [cs, atts] = await Promise.all([
       listAcompanhamentoComments(aId),
       listAcompanhamentoAttachments(aId),
     ])
+    if (req !== reqRef.current) return
     setComments(cs)
     setAttachments(atts)
-  }
+  }, [])
 
-  useEffect(() => {
-    setPendingUploads([])
-    setPendingComments([])
-    if (!id) {
-      setComments([])
-      setAttachments([])
-      setComment("")
-      return
-    }
-    setLoading(true)
-    reload(id).finally(() => setLoading(false))
-  }, [id])
-
-  // Colar print (Ctrl+V) com o diálogo aberto vira anexo. Sem imagem no
-  // clipboard (colar texto num campo), o Ctrl+V segue normal.
   useEffect(() => {
     if (!id) return
-    function onPaste(e: ClipboardEvent) {
-      const imgs = imageFilesFromClipboard(e.clipboardData)
-      if (!imgs.length) return
-      e.preventDefault()
-      uploadFiles(imgs)
-    }
-    window.addEventListener("paste", onPaste)
-    return () => window.removeEventListener("paste", onPaste)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+    reload(id).finally(() => setLoading(false))
+  }, [id, reload])
 
   function submitComment() {
     if (!id || !comment.trim()) return
@@ -129,7 +127,11 @@ export function AcompanhamentoDetailDialog({
     uploadFiles(files)
   }
 
-  async function uploadFiles(files: File[]) {
+  // useCallback (e não `function`) para poder entrar na lista de dependências do
+  // efeito do Ctrl+V abaixo. Como declaração hoistada ela funcionava, mas o
+  // efeito capturava a versão da primeira renderização — o lint aponta esse
+  // acesso-antes-de-declarar justamente por causa do closure velho.
+  const uploadFiles = useCallback(async (files: File[]) => {
     if (!files.length || !id) return
     const aId = id
     const pend = files.map((f, i) => ({ id: `pend-up-${Date.now()}-${i}`, name: f.name }))
@@ -172,7 +174,22 @@ export function AcompanhamentoDetailDialog({
       const pendIds = new Set(pend.map((p) => p.id))
       setPendingUploads((prev) => prev.filter((p) => !pendIds.has(p.id)))
     }
-  }
+  }, [id, reload])
+
+  // Colar print (Ctrl+V) com o diálogo aberto vira anexo. Sem imagem no
+  // clipboard (colar texto num campo), o Ctrl+V segue normal. Fica depois de
+  // uploadFiles para poder depender dela de verdade.
+  useEffect(() => {
+    if (!id) return
+    function onPaste(e: ClipboardEvent) {
+      const imgs = imageFilesFromClipboard(e.clipboardData)
+      if (!imgs.length) return
+      e.preventDefault()
+      void uploadFiles(imgs)
+    }
+    window.addEventListener("paste", onPaste)
+    return () => window.removeEventListener("paste", onPaste)
+  }, [id, uploadFiles])
 
   async function downloadAttachment(attId: string) {
     const res = await getAcompanhamentoAttachmentUrl(attId)

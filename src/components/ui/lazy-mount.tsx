@@ -1,6 +1,15 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+
+// Capacidade do navegador é estado EXTERNO ao React: nunca muda durante a vida
+// da página, então a assinatura é um no-op. Lido por useSyncExternalStore em vez
+// de setState num efeito — que gerava render em cascata (e era o que o lint
+// apontava). getServerSnapshot devolve `true`: no SSR assumimos que dá para
+// observar, e o navegador sem IntersectionObserver corrige depois da hidratação.
+const subscribeNever = () => () => {}
+const hasIO = () => typeof IntersectionObserver !== "undefined"
+const hasIOOnServer = () => true
 
 /**
  * Só monta os filhos quando o bloco se aproxima da viewport. Gráficos Recharts
@@ -21,14 +30,11 @@ export function LazyMount({
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
+  const canObserve = useSyncExternalStore(subscribeNever, hasIO, hasIOOnServer)
 
   useEffect(() => {
     const el = ref.current
-    if (!el || visible) return
-    if (typeof IntersectionObserver === "undefined") {
-      setVisible(true)
-      return
-    }
+    if (!el || visible || !canObserve) return
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
@@ -40,9 +46,11 @@ export function LazyMount({
     )
     io.observe(el)
     return () => io.disconnect()
-  }, [visible, rootMargin])
+  }, [visible, rootMargin, canObserve])
 
-  if (visible) return <>{children}</>
+  // Sem IntersectionObserver não há como saber quando aproximou: monta tudo, que
+  // é o comportamento seguro (era o mesmo de antes, só decidido em render).
+  if (visible || !canObserve) return <>{children}</>
   return (
     <div
       ref={ref}

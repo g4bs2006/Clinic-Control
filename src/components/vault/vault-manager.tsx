@@ -80,12 +80,21 @@ function fmtRelative(iso: string): string {
 const SCRAMBLE_CHARS = "!<>-_\\/[]{}=+*^?#";
 
 function ScrambleText({ text }: { text: string }) {
-  const [display, setDisplay] = useState(text);
+  // `null` = mostrar o texto real. Guardar só os quadros embaralhados (em vez de
+  // inicializar com o texto e reescrevê-lo dentro do efeito) deixa o caso "pular
+  // a animação" sem nenhum setState — que era o render em cascata apontado pelo
+  // lint. Troca de segredo zera em tempo de render, convenção do projeto.
+  const [display, setDisplay] = useState<string | null>(null);
+  const [prevText, setPrevText] = useState(text);
+  if (prevText !== text) {
+    setPrevText(text);
+    setDisplay(null);
+  }
 
   useEffect(() => {
-    // Textos longos (docs/JSON) e reduced-motion pulam direto pro texto real.
+    // Textos longos (docs/JSON) e reduced-motion pulam direto pro texto real —
+    // que já é o que aparece enquanto `display` for null.
     if (text.length > 160 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setDisplay(text);
       return;
     }
     let frame = 0;
@@ -103,12 +112,18 @@ function ScrambleText({ text }: { text: string }) {
     return () => clearInterval(id);
   }, [text]);
 
-  return <>{display}</>;
+  return <>{display ?? text}</>;
 }
 
 function ExposureTimer({ onExpire }: { onExpire: () => void }) {
+  // Ref "sempre a última versão": a atribuição vai num efeito, não no corpo do
+  // render — escrever em ref durante o render é o que o lint acusa (e quebraria
+  // com renderização concorrente). O timer de 30s lê expireRef.current no fim,
+  // então continua chamando a callback atual.
   const expireRef = useRef(onExpire);
-  expireRef.current = onExpire;
+  useEffect(() => {
+    expireRef.current = onExpire;
+  }, [onExpire]);
   const [draining, setDraining] = useState(false);
 
   useEffect(() => {
