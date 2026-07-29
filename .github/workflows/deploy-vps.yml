@@ -53,7 +53,9 @@ jobs:
 
       - name: Conferir que o site respondeu
         run: |
-          código=$(curl -sS -o /dev/null -w '%{http_code}' \
-                   --max-time 30 https://clinic.control.contactia.com.br/login)
-          echo "GET /login -> $código"
-          [ "$código" = "200" ] || exit 1
+          # Nome de variável sem acento de propósito: bash só aceita ASCII em
+          # identificador, e `código=...` virava "command not found" (exit 127).
+          http_status=$(curl -sS -o /dev/null -w '%{http_code}' \
+                        --max-time 30 https://clinic.control.contactia.com.br/login)
+          echo "GET /login -> $http_status"
+          [ "$http_status" = "200" ] || exit 1
