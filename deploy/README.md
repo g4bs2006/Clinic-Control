@@ -12,7 +12,7 @@ entra como container na rede `contactia_default` e ganha um `server block` novo.
 ```
                      ┌──────── nginx (stack contactia, 80/443) ────────┐
 navegador  ──▶       │  ligacoes.contactia.com.br      → api:3333 + SPA│
-                     │  cliniccontrol.contactia.com.br → clinic-control:3000
+                     │  clinic.control.contactia.com.br → clinic-control:3000
                      └─────────────────────────────────────────────────┘
                                         │
                                    Supabase (banco, storage, crons)
@@ -20,7 +20,7 @@ navegador  ──▶       │  ligacoes.contactia.com.br      → api:3333 + SP
 
 | Domínio | Serve |
 |---|---|
-| `cliniccontrol.contactia.com.br` | Clinic Control (Next.js) |
+| `clinic.control.contactia.com.br` | Clinic Control (Next.js) |
 
 ⚠️ Não usar `api.` nem `painel.` (outra aplicação, TurboCloud `178.156.203.95`)
 nem `ligacoes.`/`ligacoes-api.` (projeto de ligações, mesma VPS).
@@ -29,7 +29,7 @@ nem `ligacoes.`/`ligacoes-api.` (projeto de ligações, mesma VPS).
 
 - **Deploy contínuo:** não existe mais `git push` → deploy. Use `deploy/deploy.sh`.
 - **Alerta de queda:** configurar algo externo (ex.: UptimeRobot) apontando para
-  `https://cliniccontrol.contactia.com.br/login`.
+  `https://clinic.control.contactia.com.br/login`.
 - **CDN/edge:** o app passa a ser servido de um único servidor no Brasil. Para
   uso interno, sem impacto relevante.
 
@@ -95,6 +95,11 @@ código (`deepseek-chat`, `https://api.deepseek.com`).
 Repositório privado (`g4bs2006/Clinic-Control`) — a VPS acessa por **deploy key**
 (somente leitura). O usuário `contactia` já existe e já está no grupo `docker`.
 
+A chave e o alias **já estão criados** na VPS (2026-07-29) e a deploy key já está
+cadastrada no GitHub sem write access — `ssh -T git@github-cliniccontrol` responde
+`Hi g4bs2006/Clinic-Control!`. Os comandos abaixo ficam registrados para o caso de
+precisar refazer em outra máquina:
+
 ```bash
 ssh contactia-app                 # atalho já configurado em ~/.ssh/config
 
@@ -106,7 +111,11 @@ Host github-cliniccontrol
     IdentityFile ~/.ssh/github_cliniccontrol
     IdentitiesOnly yes
 EOF
+```
 
+O clone em si:
+
+```bash
 mkdir -p ~/clinic-control && cd ~/clinic-control
 git clone git@github-cliniccontrol:g4bs2006/Clinic-Control.git app
 cd app
@@ -138,20 +147,24 @@ chmod 600 .env
 
 O `.gitignore` cobre `.env*` — nada disso vai para o Git.
 
-## 4. DNS
-
-⚠️ `cliniccontrol.contactia.com.br` **já existe** e aponta para o servidor cPanel
-(`107.150.167.163`, devolve 404). É um subdomínio criado e não usado. Não há
-wildcard na zona, então é um registro explícito a **editar**, não criar.
+## 4. DNS — feito em 2026-07-29
 
 O DNS de `contactia.com.br` não é gerenciado no GoDaddy (só registradora). Os
 nameservers são `ns1/ns2.brasil126-5173.com.br` → **Zone Editor do cPanel**.
 
-| Nome | Antes | Depois |
+| Nome | Tipo | Valor |
 |---|---|---|
-| `cliniccontrol` (A) | `107.150.167.163` | `179.197.235.183` |
+| `clinic.control` | A | `179.197.235.183` |
 
-Deixe o registro **TXT/SPF** em paz (é o SPF que o cPanel cria junto; inofensivo).
+O nome tem um ponto no meio de propósito — foi assim que o registro foi criado e
+resolve normalmente. **Todo o resto da infra usa `clinic.control.contactia.com.br`**;
+não existe registro para `cliniccontrol` (sem ponto).
+
+Histórico, para não confundir quem for ler depois: antes existia um
+`cliniccontrol.contactia.com.br` apontando para o servidor cPanel
+(`107.150.167.163`, devolvia 404) — um subdomínio criado e nunca usado. Ele foi
+removido. Sobrou na zona um **TXT/SPF** órfão nesse nome antigo; é resíduo do
+cPanel e é inofensivo. Não há wildcard na zona.
 
 ⚠️ Nunca trocar os nameservers: a mesma zona sustenta o site, o e-mail (MX) e as
 aplicações em `api`/`painel`.
@@ -159,7 +172,7 @@ aplicações em `api`/`painel`.
 Confirme antes de emitir o certificado — pode levar até o TTL para propagar:
 
 ```bash
-dig +short cliniccontrol.contactia.com.br    # tem que devolver 179.197.235.183
+dig +short clinic.control.contactia.com.br    # tem que devolver 179.197.235.183
 ```
 
 ## 5. Subir o app (ainda sem HTTPS)
@@ -179,7 +192,7 @@ cp deploy/nginx/cliniccontrol-bootstrap.conf \
 cd ~/contactia/app
 docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
 
-curl -I http://cliniccontrol.contactia.com.br/login    # 200
+curl -I http://clinic.control.contactia.com.br/login    # 200
 ```
 
 O primeiro build leva alguns minutos (npm ci + `next build` na VPS).
@@ -193,8 +206,8 @@ docker run --rm \
   -v contactia_certbot-www:/var/www/certbot \
   -v contactia_certbot-conf:/etc/letsencrypt \
   certbot/certbot certonly --webroot -w /var/www/certbot \
-  --cert-name cliniccontrol.contactia.com.br \
-  -d cliniccontrol.contactia.com.br \
+  --cert-name clinic.control.contactia.com.br \
+  -d clinic.control.contactia.com.br \
   --email gabriel.rodrigues@escalarodonto.com.br \
   --agree-tos --no-eff-email --non-interactive
 ```
@@ -208,7 +221,7 @@ cp deploy/nginx/cliniccontrol.conf \
 cd ~/contactia/app
 docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
 
-curl -I https://cliniccontrol.contactia.com.br/login    # 200, cadeado válido
+curl -I https://clinic.control.contactia.com.br/login    # 200, cadeado válido
 ```
 
 **Renovação:** nada a fazer. O cron mensal que já existe
@@ -234,7 +247,7 @@ IA é disparada. Não mexa nele ainda.
 ## 8. Corte
 
 1. ☐ Trocar o secret `APP_URL` da Edge Function `collect-openai-usage` para
-      `https://cliniccontrol.contactia.com.br` (Supabase Dashboard → Edge
+      `https://clinic.control.contactia.com.br` (Supabase Dashboard → Edge
       Functions → Secrets)
 2. ☐ Avisar os usuários do novo endereço
 3. ☐ **Pausar** o projeto na Vercel (não excluir — é o rollback)
@@ -265,7 +278,7 @@ docker compose restart app
 - **Jobs em background** (relatórios, sugestões de IA, contenção) rodam no
   processo do próprio app via `after()` + um tick HTTP para a própria URL
   pública. O `extra_hosts` do compose faz o container resolver
-  `cliniccontrol.contactia.com.br` no próprio host, sem sair para a internet.
+  `clinic.control.contactia.com.br` no próprio host, sem sair para a internet.
   Todo endpoint de tick novo precisa entrar em `PUBLIC_PREFIXES` do middleware.
 - **Deploy corta job em andamento.** O `stop_grace_period: 30s` dá tempo do
   `after()` terminar, mas job longo (relatório grande) pode morrer no meio — o

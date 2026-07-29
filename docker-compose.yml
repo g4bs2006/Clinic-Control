@@ -27,7 +27,7 @@ services:
     # esta linha o container sairia pela internet para voltar na própria VPS;
     # aqui ele resolve o domínio direto no host, onde o nginx publica 443.
     extra_hosts:
-      - "cliniccontrol.contactia.com.br:host-gateway"
+      - "clinic.control.contactia.com.br:host-gateway"
     # `after()` e os ticks precisam terminar antes do container morrer num deploy.
     stop_grace_period: 30s
     networks:
