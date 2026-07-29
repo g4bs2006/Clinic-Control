@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Trash2, Plus, MessageCircle } from "lucide-react"
+import { Trash2, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useConfirm } from "@/components/ui/confirm-dialog"
-import { waLink, type PartnerContact, type PartnerRole } from "@/lib/clinics/partner-contacts"
+import { type PartnerContact, type PartnerRole } from "@/lib/clinics/partner-contacts"
+import { WhatsAppButton } from "@/components/ui/whatsapp-button"
 import {
   createPartnerContact,
   updatePartnerContact,
@@ -21,9 +22,6 @@ const ROLES: PartnerRole[] = ["strategist", "traffic_manager"]
 
 type Draft = { name: string; email: string; phone: string }
 const EMPTY: Draft = { name: "", email: "", phone: "" }
-
-const waPill =
-  "inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-500 transition-colors hover:bg-emerald-500/25"
 
 export function PartnerContactsEditor({
   initialContacts,
@@ -106,7 +104,6 @@ export function PartnerContactsEditor({
 
             <ul className="flex flex-col gap-1.5">
               {rows.map((c) => {
-                const wa = waLink(c.phone)
                 return (
                   <li
                     key={c.id}
@@ -118,12 +115,7 @@ export function PartnerContactsEditor({
                         <span className="truncate text-xs text-muted-foreground">{c.email || "—"}</span>
                         <span className="truncate text-xs text-muted-foreground">{c.phone || "—"}</span>
                         <span className="flex justify-end">
-                          {wa && (
-                            <a href={wa} target="_blank" rel="noopener noreferrer" className={waPill}>
-                              <MessageCircle className="size-3" />
-                              WhatsApp
-                            </a>
-                          )}
+                          <WhatsAppButton phone={c.phone} className="text-xs" />
                         </span>
                       </>
                     ) : (
@@ -148,17 +140,8 @@ export function PartnerContactsEditor({
                           placeholder="(00) 00000-0000"
                         />
                         <div className="flex items-center justify-end gap-1.5">
-                          {wa && (
-                            <a
-                              href={wa}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="Abrir conversa no WhatsApp"
-                              className="flex size-8 items-center justify-center rounded-md text-emerald-500 transition-colors hover:bg-emerald-500/15"
-                            >
-                              <MessageCircle className="size-3.5" />
-                            </a>
-                          )}
+                          {/* Só o ícone: a linha em edição já tem três inputs. */}
+                          <WhatsAppButton phone={c.phone} label="" className="text-xs" />
                           <Button
                             type="button"
                             size="sm"

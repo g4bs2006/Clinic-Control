@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Mail, MessageCircle, X } from "lucide-react"
+import { Mail, X } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select"
 import { updateClinicStrategists } from "@/lib/clinics/actions"
 import { waLink, type PartnerContact } from "@/lib/clinics/partner-contacts"
+import { WhatsAppButton } from "@/components/ui/whatsapp-button"
 
 const ADD = "__add__"
 
@@ -80,17 +81,7 @@ export function ClinicStrategistSelect({ clinicId, current, contacts }: ClinicSt
                         <span className="truncate">{c.email}</span>
                       </a>
                     )}
-                    {wa && (
-                      <a
-                        href={wa}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-500 transition-colors hover:bg-emerald-500/25"
-                      >
-                        <MessageCircle className="size-3" />
-                        WhatsApp
-                      </a>
-                    )}
+                    <WhatsAppButton phone={c.phone} />
                   </div>
                 )}
               </li>

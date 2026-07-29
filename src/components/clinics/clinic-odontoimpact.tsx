@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Mail, MessageCircle } from "lucide-react"
+import { Mail } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import {
   Select,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select"
 import { updateClinicOdontoImpact } from "@/lib/clinics/actions"
 import { waLink, type PartnerContact } from "@/lib/clinics/partner-contacts"
+import { WhatsAppButton } from "@/components/ui/whatsapp-button"
 
 const NONE = "__none__"
 
@@ -115,17 +116,7 @@ export function ClinicOdontoImpact({
               <span className="truncate">{selected.email}</span>
             </a>
           )}
-          {wa && (
-            <a
-              href={wa}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-500 transition-colors hover:bg-emerald-500/25"
-            >
-              <MessageCircle className="size-3" />
-              WhatsApp
-            </a>
-          )}
+          <WhatsAppButton phone={selected.phone} />
         </div>
       )}
     </div>
