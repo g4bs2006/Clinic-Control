@@ -27,7 +27,8 @@ nem `ligacoes.`/`ligacoes-api.` (projeto de ligações, mesma VPS).
 
 ### O que a Vercel fazia e agora é responsabilidade nossa
 
-- **Deploy contínuo:** não existe mais `git push` → deploy. Use `deploy/deploy.sh`.
+- **Deploy contínuo:** resolvido por GitHub Actions — ver "Deploy automático" no
+  fim deste arquivo. `deploy/deploy.sh` continua valendo para deploy manual.
 - **Alerta de queda:** configurar algo externo (ex.: UptimeRobot) apontando para
   `https://clinic.control.contactia.com.br/login`.
 - **CDN/edge:** o app passa a ser servido de um único servidor no Brasil. Para
@@ -295,3 +296,52 @@ docker compose restart app
 - **Backup:** nada novo. Todo o estado vive no Supabase; a VPS não guarda dado
   do Clinic Control (o volume `pgdata` da stack `contactia` está ocioso e não é
   usado por este app).
+
+---
+
+## Deploy automático (GitHub Actions)
+
+`.github/workflows/deploy-vps.yml` roda a cada push no `main` (e à mão em
+*Actions → Deploy na VPS → Run workflow*). O job não faz checkout: só abre um SSH
+e chama o `deploy.sh`, que é quem puxa o código e builda **na VPS**. A saída do
+script aparece no log do Actions, e o exit code dele é o do job — se o app não
+subir saudável, o workflow fica vermelho.
+
+### A chave é restrita a um único comando
+
+O usuário `contactia` está nos grupos `docker` **e** `sudo`. Uma chave SSH sem
+restrição guardada como secret do GitHub seria, na prática, root na VPS. Por isso
+a entrada no `~/.ssh/authorized_keys` tem comando forçado:
+
+```
+command="/home/contactia/clinic-control/app/deploy/deploy.sh",no-agent-forwarding,no-port-forwarding,no-pty,no-user-rc,no-X11-forwarding ssh-ed25519 AAAA... github-actions-cliniccontrol
+```
+
+Com isso, qualquer comando que o cliente peça é **ignorado** e só o deploy roda —
+inclusive se o secret vazar. Testado: `ssh ... whoami` executa o deploy, não o
+`whoami`.
+
+A chave da Gabriel (`contactia_vps`) segue sem restrição na mesma
+`authorized_keys`, para administração normal via `ssh contactia-app`.
+
+### Configuração (feita em 2026-07-29)
+
+| Onde | O que |
+|---|---|
+| Secret `VPS_SSH_KEY` do repo | chave **privada** ed25519 dedicada ao CI |
+| `~/.ssh/authorized_keys` da VPS | pública, com o `command=` acima |
+| workflow | host key da VPS fixada em `known_hosts` |
+
+A host key fica no arquivo do workflow, não num secret: é informação pública. Mas
+**não** troque por `StrictHostKeyChecking=no` — isso aceitaria qualquer servidor
+que respondesse naquele IP.
+
+Para rotacionar a chave do CI: gere um par novo, troque a linha na
+`authorized_keys` (mantendo o `command=`) e atualize o secret. Nada no código
+precisa mudar.
+
+### Se o VPS_SSH_KEY vazar
+
+O dano é limitado a disparar deploys do que já está no `main`. Ainda assim,
+rotacione: remova a linha `github-actions-cliniccontrol` da `authorized_keys` e
+repita o passo acima.

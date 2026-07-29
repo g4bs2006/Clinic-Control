@@ -1,0 +1,59 @@
+# Deploy contínuo na VPS Hostinger — devolve o "git push e pronto" que a Vercel
+# dava. Ver deploy/README.md.
+#
+# Não faz checkout: quem puxa o código é a própria VPS, dentro do deploy.sh.
+# O job só abre um SSH; o build inteiro acontece lá.
+name: Deploy na VPS
+
+on:
+  push:
+    branches: [main]
+  # Permite disparar à mão em Actions > Deploy na VPS > Run workflow (útil para
+  # redeployar sem commit novo, ou depois de mexer no .env da VPS).
+  workflow_dispatch:
+
+# Dois deploys ao mesmo tempo brigariam pelo mesmo container. `cancel-in-progress:
+# false` de propósito: um deploy em andamento termina: matar no meio deixaria a
+# stack num estado indefinido.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Preparar chave SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Host key fixada. É informação pública, então mora aqui em vez de num
+          # secret — mas NÃO trocar por StrictHostKeyChecking=no, que aceitaria
+          # qualquer servidor se respondesse no IP.
+          cat > ~/.ssh/known_hosts <<'EOF'
+          179.197.235.183 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICTopTUExQHrfJ7Es8lXz+ug2zJUSW5i3jGWtXFIs8KB
+          EOF
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Rodar o deploy na VPS
+        run: |
+          # A chave tem `command=` forçado no authorized_keys da VPS: ela SÓ
+          # consegue executar deploy/deploy.sh, qualquer argumento é ignorado.
+          # O que vem abaixo é a saída do script, e o exit code é o dele — se o
+          # app não subir saudável, este step falha.
+          ssh -i ~/.ssh/deploy_key \
+              -o IdentitiesOnly=yes \
+              -o BatchMode=yes \
+              -o ConnectTimeout=20 \
+              contactia@179.197.235.183 deploy
+
+      - name: Conferir que o site respondeu
+        run: |
+          código=$(curl -sS -o /dev/null -w '%{http_code}' \
+                   --max-time 30 https://clinic.control.contactia.com.br/login)
+          echo "GET /login -> $código"
+          [ "$código" = "200" ] || exit 1
