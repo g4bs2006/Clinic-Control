@@ -1,0 +1,41 @@
+# Clinic Control na VPS Hostinger.
+#
+# O app NÃO publica portas: quem atende 80/443 é o nginx do projeto de ligações
+# (stack `contactia`), que já está no ar. Este container entra na mesma rede
+# docker e o nginx faz proxy para `clinic-control:3000`.
+#
+# Uso: ./deploy/deploy.sh  (ele carrega o .env antes de chamar o compose)
+name: clinic-control
+
+services:
+  app:
+    container_name: clinic-control
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Vêm do .env ao lado deste arquivo (compose interpola automaticamente).
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?defina no .env}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?defina no .env}
+    restart: unless-stopped
+    # Segredos em runtime. O mesmo arquivo alimenta os build args acima.
+    env_file: .env
+    expose:
+      - "3000"
+    # Os jobs em background (relatórios, sugestões de IA, contenção) rodam via
+    # `after()` + um tick que o próprio app dispara para a sua URL pública. Sem
+    # esta linha o container sairia pela internet para voltar na própria VPS;
+    # aqui ele resolve o domínio direto no host, onde o nginx publica 443.
+    extra_hosts:
+      - "cliniccontrol.contactia.com.br:host-gateway"
+    # `after()` e os ticks precisam terminar antes do container morrer num deploy.
+    stop_grace_period: 30s
+    networks:
+      - contactia
+
+networks:
+  # Rede já criada pela stack `contactia` (api/worker/nginx/postgres).
+  # `external: true` = não criar, só entrar.
+  contactia:
+    name: contactia_default
+    external: true

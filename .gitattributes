@@ -1,0 +1,8 @@
+# Arquivos que rodam no Linux da VPS precisam sair com LF, independente do
+# autocrlf de quem commitou no Windows. Com CRLF o shell falha com
+# "bash\r: bad interpreter" e o nginx recusa a config.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.conf          text eol=lf
+docker-compose.yml text eol=lf
+.dockerignore   text eol=lf

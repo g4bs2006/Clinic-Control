@@ -1,0 +1,30 @@
+# Contexto do build da imagem de produção. Manter enxuto: cada arquivo aqui
+# viaja para o daemon do Docker a cada build.
+
+node_modules
+.next
+.git
+.gitignore
+
+# Segredos NUNCA entram na imagem — chegam em runtime via env_file do compose.
+# As NEXT_PUBLIC_* são a exceção e entram como build args (ver Dockerfile).
+.env
+.env.*
+
+# Material de apoio, não faz parte do runtime.
+docs
+design
+tests
+graphify-out
+.superpowers
+.claude
+supabase
+*.md
+!README.md
+
+# Ferramental local
+.vscode
+coverage
+vitest.config.ts
+tsconfig.tsbuildinfo
+tmp-*.mts
