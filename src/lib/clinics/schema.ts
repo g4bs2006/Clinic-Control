@@ -37,5 +37,6 @@ export type Clinic = ClinicInput & {
   openai_project_id: string | null; // legado (0053) — vínculo atual é por API key
   openai_api_key_id: string | null; // API key da clínica na organização OpenAI (monitor de consumo)
   openai_daily_limit_usd: number | null; // teto de alerta próprio; null = limite global
+  n8n_url: string | null; // link do workflow no n8n — só referência, ninguém chama
   created_at: string;
 };

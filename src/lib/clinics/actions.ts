@@ -115,6 +115,41 @@ export async function updateClinic(id: string, input: ClinicInput) {
   return { ok: true as const };
 }
 
+/**
+ * Link do workflow do n8n da clínica — anotação de referência, ninguém chama
+ * essa URL. Vazio limpa o campo.
+ *
+ * Valida que é http/https e rejeita `javascript:` e afins: o valor é renderizado
+ * como link clicável, e um esquema arbitrário viraria execução no clique. Não
+ * restringe o domínio de propósito — o n8n é auto-hospedado e o host muda.
+ */
+export async function updateClinicN8nUrl(id: string, url: string) {
+  const user = await getSessionUser();
+  if (!user) return { ok: false as const, error: "Não autenticado" };
+
+  const value = url.trim();
+  if (value) {
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      return { ok: false as const, error: "Link inválido — cole a URL completa (com https://)" };
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return { ok: false as const, error: "O link precisa começar com http:// ou https://" };
+    }
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("clinics")
+    .update({ n8n_url: value || null })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath(`/clinicas/${id}`);
+  return { ok: true as const };
+}
+
 // Atualiza apenas o sistema/prontuário da clínica (sem re-geocodificar).
 // `system` vazio limpa o campo. Valida contra a lista conhecida.
 export async function updateClinicSystem(id: string, system: string) {

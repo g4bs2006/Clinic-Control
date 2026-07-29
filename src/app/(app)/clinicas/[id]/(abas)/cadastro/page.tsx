@@ -20,6 +20,7 @@ import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credenti
 import { listPartnerContacts } from "@/lib/clinics/partner-contacts-actions"
 import { automationIsConfigurable } from "@/lib/clinics/automation-actions"
 import { ClinicAutomationConfig } from "@/components/clinics/clinic-automation-config"
+import { ClinicN8nUrl } from "@/components/clinics/clinic-n8n-url"
 
 export const dynamic = "force-dynamic"
 
@@ -87,6 +88,9 @@ export default async function ClinicCadastroPage({
               current={clinic.strategists ?? []}
               contacts={strategistContacts}
             />
+          </FichaRow>
+          <FichaRow label="Workflow no n8n">
+            <ClinicN8nUrl clinicId={id} current={clinic.n8n_url ?? null} />
           </FichaRow>
           <FichaRow label="OdontoImpact (tráfego pago)">
             <ClinicOdontoImpact
