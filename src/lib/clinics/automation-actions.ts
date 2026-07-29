@@ -223,6 +223,23 @@ export async function projectClinicAutomation(
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
+/**
+ * A automação é configurável para esta clínica? Consulta só o banco — serve para
+ * a página decidir se mostra o painel, SEM chamar a API da Helena no
+ * carregamento (a página da clínica é otimizada para uma rodada de fetch).
+ */
+export async function automationIsConfigurable(clinicId: string): Promise<boolean> {
+  const user = await getSessionUser();
+  if (!user) return false;
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("clinic_integrations")
+    .select("panel_id")
+    .eq("clinic_id", clinicId)
+    .maybeSingle();
+  return Boolean(data?.panel_id);
+}
+
 // ── Diagnóstico detalhado da clínica ────────────────────────────────────────
 
 export type AutomationFieldDiagnostic = {

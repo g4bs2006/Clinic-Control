@@ -18,6 +18,8 @@ import { ClinicStrategistSelect } from "@/components/clinics/clinic-strategist-s
 import { ClinicOdontoImpact } from "@/components/clinics/clinic-odontoimpact"
 import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
 import { listPartnerContacts } from "@/lib/clinics/partner-contacts-actions"
+import { automationIsConfigurable } from "@/lib/clinics/automation-actions"
+import { ClinicAutomationConfig } from "@/components/clinics/clinic-automation-config"
 
 export const dynamic = "force-dynamic"
 
@@ -41,16 +43,26 @@ export default async function ClinicCadastroPage({
   const clinic = await getClinic(id)
   if (!clinic) notFound()
 
-  const [profiles, provisioning, formCredentials, helenaIntegration, files, fileNotes, partnerContacts] =
-    await Promise.all([
-      listUserProfiles(),
-      listProvisioning(id),
-      listFormCredentials(id),
-      getClinicHelenaIntegration(id),
-      listClinicFiles(id),
-      listClinicFileNotes(id),
-      listPartnerContacts(),
-    ])
+  const [
+    profiles,
+    provisioning,
+    formCredentials,
+    helenaIntegration,
+    files,
+    fileNotes,
+    partnerContacts,
+    automationOk,
+  ] = await Promise.all([
+    listUserProfiles(),
+    listProvisioning(id),
+    listFormCredentials(id),
+    getClinicHelenaIntegration(id),
+    listClinicFiles(id),
+    listClinicFileNotes(id),
+    listPartnerContacts(),
+    // Só o banco: entra na mesma rodada de fetch, sem chamar a Helena.
+    automationIsConfigurable(id),
+  ])
   const strategistContacts = partnerContacts.filter((c) => c.role === "strategist")
   const trafficManagerContacts = partnerContacts.filter((c) => c.role === "traffic_manager")
 
@@ -121,6 +133,19 @@ export default async function ClinicCadastroPage({
           account={helenaIntegration.account}
           events={helenaIntegration.events}
         />
+      )}
+
+      {/* ── Automação de agendamento (o que o n8n consome) ──────── */}
+      {automationOk && (
+        <Panel
+          title="Automação de agendamento"
+          subtitle="etapas, etiquetas e campos que o n8n usa para agendar · o Clinic Control é a fonte da verdade e espelha para a tabela que os workflows leem"
+        >
+          <ClinicAutomationConfig
+            clinicId={id}
+            label="Abrir configuração (consulta a Helena)"
+          />
+        </Panel>
       )}
 
       {/* ── Arquivos da clínica ────────────────────────────────── */}

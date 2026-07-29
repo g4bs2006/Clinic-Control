@@ -111,7 +111,16 @@ function optionsFor(
  * mais) e o que a tabela do n8n está lendo naquele campo. Dá para trocar, refazer
  * a busca de um campo só e reenviar para o n8n.
  */
-export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
+export function ClinicAutomationConfig({
+  clinicId,
+  label = "Automação de agendamento",
+}: {
+  clinicId: string;
+  /** Rótulo do cabeçalho recolhível. Fica recolhido de propósito: abrir dispara
+   *  4 chamadas à API da Helena, e a página da clínica não deve pagar isso no
+   *  carregamento (ver clinic-control-otimizacao). */
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [setup, setSetup] = useState<AutomationSetup | null>(null);
   const [diag, setDiag] = useState<AutomationDiagnostics | null>(null);
@@ -252,7 +261,7 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
       >
         <span className="flex items-center gap-2">
           <Workflow className="size-3.5" />
-          Automação de agendamento
+          {label}
         </span>
         <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
       </button>
