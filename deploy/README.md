@@ -52,31 +52,43 @@ Nenhum cron vivia na Vercel — todos são Supabase (pg_cron + Edge Functions):
 
 ---
 
-## 1. Coletar as chaves da Vercel (fazer PRIMEIRO)
+## 1. As chaves — já resolvido (2026-07-29)
 
-Quatro variáveis existem **só na Vercel** — não estão no `.env.local`:
-`VAULT_ENC_KEY`, `DEEPSEEK_API_KEY`, `FORM_WEBHOOK_SECRET` e, opcionalmente,
-`LLM_MODEL` / `LLM_BASE_URL`.
+O projeto na Vercel é `clinic-control`, team `gabriels-projects-5f76b3b1`
+(`vercel login` como `g4bs2006`; o `.vercel/project.json` já está linkado).
 
-🔴 **`VAULT_ENC_KEY` não pode ser regenerada.** É a chave que decifra as senhas
-já salvas no Cofre. Se o app subir sem ela, cai no fallback
-(`HELENA_TOKEN_ENC_KEY`) e tudo que foi cifrado com a chave original fica
-ilegível.
+**Produção tem exatamente 9 variáveis**, e todas são marcadas *Sensitive* —
+`vercel env pull` devolve string vazia, e não há API que leia o valor de volta.
+Foi assim que o conteúdo de cada uma foi determinado:
 
-A conta da CLI (`vercel whoami` → `contactia`, team `contact-ia-s-projects`) **não
-enxerga** o projeto do Clinic Control. Duas saídas:
+| Variável | De onde veio o valor | Como foi provado |
+|---|---|---|
+| as 8 do `.env.local` | `.env.local` | ver abaixo |
+| `DEEPSEEK_API_KEY` | item **API's / Deepseek** do próprio Cofre | prefixo `sk-` |
 
-```bash
-# a) logar com a conta dona de contactiacliniccontrol.vercel.app
-vercel login
-vercel link                       # escolher o projeto do Clinic Control
-vercel env pull .env.producao --environment production
-```
+As duas chaves de cifra foram **provadas contra o banco real**, não presumidas.
+AES-256-GCM tem auth tag, então chave errada falha explicitamente:
 
-b) ou copiar à mão do Dashboard: *Project → Settings → Environment Variables →
-Production*, revelando cada valor.
+- `clinic_integrations.helena_token_encrypted` → **25/25** decifraram
+- `credential_vault.secret_encrypted` → **17/17** decifraram
 
-Confira que a lista bate com `.env.example`.
+Logo o `HELENA_TOKEN_ENC_KEY` local **é** o de produção.
+
+### Duas variáveis que devem ficar de fora
+
+🔴 **`VAULT_ENC_KEY` nunca existiu na Vercel.** O Cofre sempre usou o fallback
+(`HELENA_TOKEN_ENC_KEY`) — foi exatamente isso que os 17/17 acima provaram.
+Definir uma chave própria agora tornaria esses 17 itens ilegíveis. O
+`verificar-env.sh` falha o deploy se ela aparecer.
+
+⚠️ **`FORM_WEBHOOK_SECRET` também não existe** — ou seja, `/api/form-credentials`
+devolve "FORM_WEBHOOK_SECRET não configurado no servidor" em produção **hoje**.
+Não é regressão da migração; é um webhook que está desligado. Definir na VPS o
+*ligaria*, com comportamento diferente da Vercel. Deixe fora e trate como bug
+separado.
+
+`LLM_MODEL` / `LLM_BASE_URL` também não estão na Vercel — usam os defaults do
+código (`deepseek-chat`, `https://api.deepseek.com`).
 
 ## 2. Clonar o projeto na VPS
 
@@ -110,11 +122,12 @@ Um único arquivo, `.env` na raiz (ao lado do `docker-compose.yml`). Ele serve
 para **duas** coisas: `env_file` do runtime e interpolação dos build args das
 `NEXT_PUBLIC_*` (que são embutidas no bundle em tempo de build).
 
-Transfira do seu computador via `scp`, sem passar por ferramenta externa:
+O arquivo já está montado no computador do Gabriel como `.env.vps` (gitignored).
+Transfira via `scp`, sem passar por ferramenta externa:
 
 ```bash
-# no SEU computador, depois de montar o arquivo com os valores do passo 1
-scp .env.producao contactia@179.197.235.183:~/clinic-control/app/.env
+# no SEU computador
+scp .env.vps contactia@179.197.235.183:~/clinic-control/app/.env
 ```
 
 ```bash

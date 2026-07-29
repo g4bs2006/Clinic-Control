@@ -35,13 +35,18 @@ OBRIGATORIAS=(
   COLLECT_GROUPS_CRON_SECRET        # disparo on-demand das Edge Functions
 )
 
-# Ausentes não quebram o boot, mas desligam recurso (ou pior, no caso do cofre).
+# Ausentes não quebram o boot, mas desligam recurso.
 RECOMENDADAS=(
-  VAULT_ENC_KEY                     # cofre; sem ela cai no fallback HELENA_TOKEN_ENC_KEY
   DEEPSEEK_API_KEY                  # "Gerar da IA" em /tarefas
-  FORM_WEBHOOK_SECRET               # webhook /api/form-credentials
   LLM_MODEL                         # default deepseek-chat
   LLM_BASE_URL                      # default https://api.deepseek.com
+)
+
+# Estas devem ficar AUSENTES para reproduzir o comportamento da Vercel — ver
+# o bloco de avisos no fim.
+NAO_DEFINIR=(
+  VAULT_ENC_KEY
+  FORM_WEBHOOK_SECRET
 )
 
 mascarar() {
@@ -80,20 +85,46 @@ for k in "${RECOMENDADAS[@]}"; do
 done
 
 echo
+echo "=============================================="
+echo " NÃO DEFINIR (a Vercel também não define)"
+echo "=============================================="
+definida_indevidamente=0
+for k in "${NAO_DEFINIR[@]}"; do
+  v="${!k:-}"
+  if [ -z "$v" ]; then
+    printf "  %-30s ausente — correto\n" "$k"
+  else
+    printf "  %-30s DEFINIDA — ver aviso abaixo\n" "$k"
+    definida_indevidamente=$((definida_indevidamente + 1))
+  fi
+done
+
+echo
 if [ "$faltando" -gt 0 ]; then
   echo "ERRO: $faltando variável(is) obrigatória(s) faltando — deploy abortado." >&2
   exit 1
 fi
 
-if [ -z "${VAULT_ENC_KEY:-}" ]; then
+if [ -n "${VAULT_ENC_KEY:-}" ]; then
   cat >&2 <<'AVISO'
 
-⚠️  VAULT_ENC_KEY ausente. NÃO gere uma nova: as senhas já salvas no Cofre foram
-    cifradas com a chave que está na Vercel. Sem ela o app usa o fallback
-    (HELENA_TOKEN_ENC_KEY) e as linhas cifradas com a chave original ficam
-    ILEGÍVEIS. Copie o valor de produção antes de liberar o Cofre.
+🔴 VAULT_ENC_KEY está definida — e não deveria. A Vercel NUNCA a definiu, então
+   os itens já salvos no Cofre foram cifrados com o fallback
+   (HELENA_TOKEN_ENC_KEY). Definir uma chave própria agora torna esses itens
+   ILEGÍVEIS. Remova a linha do .env.
 AVISO
 fi
 
+if [ -n "${FORM_WEBHOOK_SECRET:-}" ]; then
+  cat >&2 <<'AVISO'
+
+⚠️  FORM_WEBHOOK_SECRET está definida, mas a Vercel não a tem — ou seja,
+   /api/form-credentials está devolvendo erro em produção hoje. Definir aqui
+   LIGA um webhook que estava desligado. Só faça isso de propósito, conferindo
+   que quem chama (Apps Script / n8n) manda o mesmo x-webhook-secret.
+AVISO
+fi
+
+[ "$definida_indevidamente" -gt 0 ] && exit 1
 [ "$REVELAR" != "1" ] && echo "Valores mascarados. Use --revelar para ver completos."
 exit 0
