@@ -283,6 +283,11 @@ docker compose restart app
 - **Deploy corta job em andamento.** O `stop_grace_period: 30s` dá tempo do
   `after()` terminar, mas job longo (relatório grande) pode morrer no meio — o
   auto-kick do polling recupera. Prefira deployar fora do horário de uso.
+- **`docker compose exec -T` engole stdin.** Num script alimentado por pipe ou
+  heredoc (`ssh host bash -s <<'EOF'`), ele consome o resto do script e os
+  comandos seguintes simplesmente não rodam — sem erro, sem saída. Sempre
+  `docker compose exec -T ... < /dev/null`. Foi assim que um `nginx -s reload`
+  passou batido no deploy inicial.
 - **ufw** está inativo, como no outro projeto. Atenção: o Docker publica portas
   via `DOCKER-USER` no iptables, avaliada **antes** do ufw — regra de bloqueio
   não protege container. Aqui o app não publica porta nenhuma (só `expose`), o

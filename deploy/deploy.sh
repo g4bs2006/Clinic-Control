@@ -30,8 +30,12 @@ docker image prune -f
 
 echo "==> aguardando o app responder"
 for _ in $(seq 1 45); do
+  # `< /dev/null` não é decorativo: `docker compose exec -T` lê stdin e, se o
+  # script estiver sendo alimentado por pipe ou heredoc, engole o resto dele
+  # (o comando seguinte simplesmente não roda, sem erro nenhum).
   if docker compose exec -T app node -e \
-      "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
+      "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" \
+      < /dev/null 2>/dev/null; then
     echo "OK — app saudável"
     docker compose ps
     exit 0
