@@ -148,6 +148,7 @@ export default async function ClinicCadastroPage({
           <ClinicAutomationConfig
             clinicId={id}
             label="Abrir configuração (consulta a Helena)"
+            n8nUrl={clinic.n8n_url ?? null}
           />
         </Panel>
       )}

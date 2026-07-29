@@ -11,6 +11,7 @@ import {
   RotateCw,
   Send,
   Database,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -114,12 +115,17 @@ function optionsFor(
 export function ClinicAutomationConfig({
   clinicId,
   label = "Automação de agendamento",
+  n8nUrl = null,
 }: {
   clinicId: string;
   /** Rótulo do cabeçalho recolhível. Fica recolhido de propósito: abrir dispara
    *  4 chamadas à API da Helena, e a página da clínica não deve pagar isso no
    *  carregamento (ver clinic-control-otimizacao). */
   label?: string;
+  /** Link do workflow no n8n (clinics.n8n_url). Aparece FORA do recolhível, para
+   *  poder abrir o workflow sem disparar as chamadas à Helena. Editar é na Ficha
+   *  da clínica — aqui é só atalho. */
+  n8nUrl?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [setup, setSetup] = useState<AutomationSetup | null>(null);
@@ -253,7 +259,21 @@ export function ClinicAutomationConfig({
   const diagByField = new Map((diag?.fields ?? []).map((f) => [f.field, f]));
 
   return (
-    <div className="rounded-lg border border-border/50">
+    <div className="space-y-2">
+      {n8nUrl && (
+        <a
+          href={n8nUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex max-w-full items-center gap-1.5 text-xs text-brand hover:underline"
+          title={n8nUrl}
+        >
+          <ExternalLink className="size-3.5 shrink-0" />
+          <span className="truncate">Abrir o workflow desta clínica no n8n</span>
+        </a>
+      )}
+
+      <div className="rounded-lg border border-border/50">
       <button
         type="button"
         onClick={handleToggle}
@@ -547,6 +567,7 @@ export function ClinicAutomationConfig({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
