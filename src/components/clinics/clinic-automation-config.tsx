@@ -26,13 +26,11 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
-  getAutomationSetup,
   getAutomationDiagnostics,
   saveAutomationConfig,
   detectAutomationForClinic,
   redetectAutomationField,
   reprojectAutomation,
-  type AutomationSetup,
   type AutomationDiagnostics,
 } from "@/lib/clinics/automation-actions";
 import {
@@ -128,7 +126,6 @@ export function ClinicAutomationConfig({
   n8nUrl?: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const [setup, setSetup] = useState<AutomationSetup | null>(null);
   const [diag, setDiag] = useState<AutomationDiagnostics | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [config, setConfig] = useState<AutomationConfig | null>(null);
@@ -140,26 +137,25 @@ export function ClinicAutomationConfig({
   const [isSaving, startSave] = useTransition();
   const [isSending, startSend] = useTransition();
 
+  // Uma action só: o diagnóstico já traz catálogo + config. Antes eram duas em
+  // paralelo, e cada uma carregava o MESMO catálogo da Helena — abrir o painel
+  // custava 6 chamadas à API em vez de 3.
   async function load() {
-    const [s, d] = await Promise.all([
-      getAutomationSetup(clinicId),
-      getAutomationDiagnostics(clinicId),
-    ]);
-    if (!s.ok) {
-      toast.error(s.error);
+    const d = await getAutomationDiagnostics(clinicId);
+    if (!d.ok) {
+      toast.error(d.error);
       setOpen(false);
       return;
     }
-    setSetup(s.setup);
-    setEnabled(s.setup.enabled);
-    setConfig(s.setup.config);
-    if (d.ok) setDiag(d.diagnostics);
+    setDiag(d.diagnostics);
+    setEnabled(d.diagnostics.enabled);
+    setConfig(d.diagnostics.config);
   }
 
   function handleToggle() {
     const next = !open;
     setOpen(next);
-    if (next && !setup) startLoad(load);
+    if (next && !diag) startLoad(load);
   }
 
   function handleDetect() {
@@ -288,7 +284,7 @@ export function ClinicAutomationConfig({
 
       {open && (
         <div className="space-y-4 border-t border-border/50 p-3">
-          {isLoading || !config || !setup ? (
+          {isLoading || !config || !diag ? (
             <p className="text-sm text-muted-foreground">Carregando a conta da Helena…</p>
           ) : (
             <>
@@ -352,8 +348,7 @@ export function ClinicAutomationConfig({
               </div>
 
               {/* Estado do espelho no n8n — "o que está no banco de dados" do outro lado */}
-              {diag && (
-                <div className="rounded-md border border-border/50 bg-muted/20 p-2.5 text-xs">
+              <div className="rounded-md border border-border/50 bg-muted/20 p-2.5 text-xs">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <span className="flex items-center gap-1.5 font-medium text-foreground">
                       <Database className="size-3.5" />
@@ -395,14 +390,13 @@ export function ClinicAutomationConfig({
                       <span className="font-medium">status_obs:</span> {diag.mirror.statusObs}
                     </p>
                   )}
-                </div>
-              )}
+              </div>
 
-              {(setup.conflicts.length > 0 || (diag?.conflicts.length ?? 0) > 0) && (
+              {diag.conflicts.length > 0 && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-400">
                   <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                   <ul className="space-y-1">
-                    {(diag?.conflicts ?? setup.conflicts).map((c) => (
+                    {diag.conflicts.map((c) => (
                       <li key={c}>{c}</li>
                     ))}
                   </ul>
@@ -432,7 +426,7 @@ export function ClinicAutomationConfig({
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {group.fields.map((field) => {
-                      const items = optionsFor(field, setup.catalog);
+                      const items = optionsFor(field, diag.catalog);
                       const hasOptions = Object.keys(items).length > 1;
                       const fd = diagByField.get(field);
                       const dirty = fd ? (config[field] ?? null) !== fd.stored : false;
@@ -531,15 +525,15 @@ export function ClinicAutomationConfig({
                 </div>
               ))}
 
-              {(detectionWarnings ?? setup.savedWarnings).length > 0 && (
+              {(detectionWarnings ?? diag.warnings).length > 0 && (
                 <details className="rounded-md border border-border/50 p-2.5 text-xs">
                   <summary className="cursor-pointer text-muted-foreground">
                     {detectionWarnings
                       ? `Avisos da detecção (${detectionWarnings.length})`
-                      : `Avisos da última varredura (${setup.savedWarnings.length})`}
+                      : `Avisos da última varredura (${diag.warnings.length})`}
                   </summary>
                   <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
-                    {(detectionWarnings ?? setup.savedWarnings).map((w) => (
+                    {(detectionWarnings ?? diag.warnings).map((w) => (
                       <li key={w}>{w}</li>
                     ))}
                   </ul>
@@ -548,10 +542,10 @@ export function ClinicAutomationConfig({
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[0.65rem] text-muted-foreground">
-                  {setup.detectedAt
-                    ? `Última varredura: ${new Date(setup.detectedAt).toLocaleString("pt-BR")}.`
+                  {diag.detectedAt
+                    ? `Última varredura: ${new Date(diag.detectedAt).toLocaleString("pt-BR")}.`
                     : "Nunca varrida."}
-                  {diag?.companyId && ` company ${diag.companyId.slice(0, 8)}…`}
+                  {diag.companyId && ` company ${diag.companyId.slice(0, 8)}…`}
                 </p>
                 <Button
                   type="button"

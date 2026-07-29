@@ -277,6 +277,12 @@ export type AutomationDiagnostics = {
   };
   panelId: string;
   companyId: string | null;
+  /** Catálogos da Helena para montar os Selects. Vêm daqui para o painel não
+   *  precisar de uma segunda action: getAutomationSetup faria a MESMA carga de
+   *  catálogo (3 chamadas à Helena), e as duas em paralelo dobravam o custo de
+   *  abrir o painel. */
+  catalog: AutomationCatalog;
+  config: AutomationConfig;
 };
 
 /** Qual coluna do espelho corresponde a cada campo — para comparar lado a lado. */
@@ -386,6 +392,8 @@ export async function getAutomationDiagnostics(
         },
         panelId: row.panel_id,
         companyId: row.company_id ?? null,
+        catalog,
+        config,
       },
     };
   } catch (e) {
