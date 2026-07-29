@@ -7,6 +7,7 @@ import {
   Clock,
   AlertTriangle,
   ClipboardList,
+  Workflow,
   Bell,
   type LucideIcon,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const VISUALS: Record<NotificationType, NotificationVisual> = {
   task_due_soon: { Icon: Clock, colorClass: "text-amber-400" },
   task_overdue: { Icon: AlertTriangle, colorClass: "text-red-400" },
   acompanhamento_assigned: { Icon: ClipboardList, colorClass: "text-teal-400" },
+  automation_warning: { Icon: Workflow, colorClass: "text-amber-400" },
 };
 
 /** Ícone + cor por tipo. Fallback neutro para tipo desconhecido (nunca quebra). */

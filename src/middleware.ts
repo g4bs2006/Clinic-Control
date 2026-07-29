@@ -12,11 +12,14 @@ import { verifySessionToken } from "@/lib/auth/token";
 // gate abaixo (senão o job fica preso em "queued" para sempre).
 // /api/form-credentials é um webhook externo (Google Apps Script / n8n) com auth
 // própria via header x-webhook-secret — não pode exigir cookie de sessão.
+// /api/automacao/scan é o gatilho do pg_cron semanal (header x-cron-secret).
 const PUBLIC_PREFIXES = [
   "/login",
   "/api/reports/process",
   "/api/tasks/generate/process",
   "/api/openai-containment/process",
+  "/api/automacao/process",
+  "/api/automacao/scan",
   "/api/form-credentials",
 ];
 

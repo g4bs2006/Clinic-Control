@@ -8,6 +8,7 @@ const TABS = [
   { path: "/ia", label: "IA", gestorOnly: true },
   { path: "/tarefas", label: "Tarefas & Checklist", gestorOnly: false },
   { path: "/funil", label: "Funil & Status", gestorOnly: false },
+  { path: "/automacao", label: "Automação", gestorOnly: false },
   { path: "/whatsapp", label: "WhatsApp", gestorOnly: false },
 ]
 

@@ -15,7 +15,7 @@ export default async function ConfiguracoesLayout({ children }: { children: Reac
       <div>
         <h1 className="text-2xl font-bold brand-header">Configurações</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Equipe, IA, tarefas, funil e WhatsApp — tudo que ajusta a plataforma
+          Equipe, IA, tarefas, funil, automação e WhatsApp — tudo que ajusta a plataforma
         </p>
       </div>
 

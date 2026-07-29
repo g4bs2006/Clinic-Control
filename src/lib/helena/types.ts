@@ -33,6 +33,16 @@ export interface HelenaTag {
   name: string;
 }
 
+/**
+ * Campo personalizado de um painel do CRM — GET /crm/v1/panel/{id}/custom-fields.
+ * O identificador usado para gravar valor no card é a `key` (string), não o id;
+ * é ela que a automação de agendamento guarda.
+ */
+export interface HelenaCustomField {
+  key: string;
+  name: string;
+}
+
 export interface HelenaCompany {
   id: string;
   name: string | null;

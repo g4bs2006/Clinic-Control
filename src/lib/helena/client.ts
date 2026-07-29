@@ -8,6 +8,7 @@ import type {
   HelenaChannel,
   HelenaWebhookSubscription,
   HelenaTag,
+  HelenaCustomField,
 } from "./types";
 
 const DEFAULT_BASE = "https://api.wts.chat";
@@ -117,6 +118,48 @@ export async function getPanelWithSteps(token: string, panelId: string, opts?: O
   // (GET /core/v1/tag). Só existe via IncludeDetails=Tags neste endpoint.
   const tags: HelenaTag[] = (data.tags ?? []).map((t: HelenaTag) => ({ id: t.id, name: t.name }));
   return { panel: { id: data.id, title: data.title, key: data.key, companyId: data.companyId } as HelenaPanel, steps, tags };
+}
+
+/**
+ * Campos personalizados do painel. Endpoint devolve ARRAY no topo (não
+ * `{items}`), por isso o normalize — o mesmo cuidado que o workflow do n8n
+ * tinha que tomar no helper `coletar`.
+ */
+export async function getPanelCustomFields(
+  token: string,
+  panelId: string,
+  opts?: Opts,
+): Promise<HelenaCustomField[]> {
+  const data = await get(token, `/crm/v1/panel/${panelId}/custom-fields`, {}, opts);
+  const items: { key?: string; name?: string }[] = Array.isArray(data) ? data : (data.items ?? []);
+  return items
+    .filter((f): f is { key: string; name: string } => Boolean(f.key && f.name))
+    .map((f) => ({ key: f.key, name: f.name }));
+}
+
+/**
+ * Catálogo de etiquetas de CONTATO da conta (GET /core/v1/tag) — distinto das
+ * etiquetas de card, que vêm embutidas no painel. Paginado; algumas contas
+ * devolvem array no topo em vez de `{items}`.
+ */
+export async function listContactTags(token: string, opts?: Opts): Promise<HelenaTag[]> {
+  const out: HelenaTag[] = [];
+  let page = 1;
+  for (;;) {
+    const data = await get(
+      token,
+      "/core/v1/tag",
+      { PageSize: "200", PageNumber: String(page) },
+      opts,
+    );
+    const items: HelenaTag[] = Array.isArray(data) ? data : (data.items ?? []);
+    for (const t of items) if (t?.id && t?.name) out.push({ id: t.id, name: t.name });
+    // Array cru no topo = resposta não paginada: não há mais o que buscar.
+    if (Array.isArray(data) || !data.hasMorePages || items.length === 0) break;
+    page += 1;
+    if (page > MAX_PAGES) throw new Error("Helena API: paginação excedeu o limite de páginas");
+  }
+  return out;
 }
 
 export async function listCards(

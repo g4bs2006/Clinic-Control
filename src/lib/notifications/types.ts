@@ -8,6 +8,9 @@ export const NOTIFICATION_TYPES = [
   "task_due_soon",
   "task_overdue",
   "acompanhamento_assigned",
+  // Varredura semanal da automação de agendamento achou config incompleta ou
+  // incoerente com o mapeamento do funil. Vai só para gestores.
+  "automation_warning",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

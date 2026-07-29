@@ -16,6 +16,7 @@ import { getHelenaSetupOverview, getLiveFunnel, saveIntegration } from "@/lib/cl
 import type { HelenaChannel, HelenaCompany } from "@/lib/helena/types";
 import { ClinicFunnelMapping } from "@/components/clinics/clinic-funnel-mapping";
 import { ClinicSchedulerTagMapping } from "@/components/clinics/clinic-scheduler-tag-mapping";
+import { ClinicAutomationConfig } from "@/components/clinics/clinic-automation-config";
 
 interface Panel {
   id: string;
@@ -286,6 +287,11 @@ export function HelenaIntegrationFields({
       {/* Configuração de quem agendou (CRC/IA) — dimensão por etiqueta,
           independente do mapeamento de colunas acima. */}
       {clinicId && <ClinicSchedulerTagMapping clinicId={clinicId} />}
+
+      {/* Automação de agendamento (o que o n8n consome). Fica junto dos dois
+          mapeamentos acima porque é a mesma família de config — a diferença é
+          que esta é ESCRITA na Helena, e as outras duas são leitura. */}
+      {clinicId && <ClinicAutomationConfig clinicId={clinicId} />}
 
       {/* Create-mode note */}
       {!clinicId && selectedPanelId && (

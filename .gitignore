@@ -55,3 +55,4 @@ tmp-*.mts
 
 # estado local da CLI do Supabase
 supabase/.temp/
+.commit-msg.txt
