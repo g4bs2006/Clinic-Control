@@ -157,6 +157,20 @@ describe("automationFunnelConflicts", () => {
     expect(conflicts[0]).toContain("não entram na taxa");
   });
 
+  it("distingue etapa que NÃO existe no painel de etapa não marcada como agendado", () => {
+    // Caso real: Yamar, 2026-07-29 — o agendado_step_id herdado do n8n apontava
+    // para uma etapa fora do painel vinculado. A mensagem antiga dizia só "não
+    // está marcada como Agendado" e imprimia o uuid cru, escondendo o problema.
+    const conflicts = automationFunnelConflicts(
+      { ...EMPTY_AUTOMATION_CONFIG, scheduledStepId: "id-de-outro-painel" },
+      { scheduledStepIds: ["s-ag"], leadStepIds: null },
+      steps,
+    );
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toContain("não existe no painel vinculado");
+    expect(conflicts[0]).not.toContain("não entram na taxa");
+  });
+
   it("não acusa quando a clínica não tem mapeamento de funil (cai no fallback)", () => {
     expect(
       automationFunnelConflicts(

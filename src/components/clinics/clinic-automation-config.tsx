@@ -2,10 +2,20 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, ChevronDown, Workflow, Wand2, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  Workflow,
+  Wand2,
+  Loader2,
+  RotateCw,
+  Send,
+  Database,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   Select,
   SelectContent,
@@ -16,9 +26,13 @@ import {
 import { cn } from "@/lib/utils";
 import {
   getAutomationSetup,
+  getAutomationDiagnostics,
   saveAutomationConfig,
   detectAutomationForClinic,
+  redetectAutomationField,
+  reprojectAutomation,
   type AutomationSetup,
+  type AutomationDiagnostics,
 } from "@/lib/clinics/automation-actions";
 import {
   AUTOMATION_FIELD_LABEL,
@@ -63,6 +77,13 @@ const GROUPS: { title: string; hint: string; fields: AutomationFieldName[] }[] =
   },
 ];
 
+const SOURCE_LABEL: Record<string, string> = {
+  step: "etapa do painel",
+  panelTag: "etiqueta de card",
+  contactTag: "etiqueta de contato",
+  customField: "campo personalizado",
+};
+
 /** Opções do catálogo certo para cada campo, já como mapa valor→rótulo. */
 function optionsFor(
   field: AutomationFieldName,
@@ -85,36 +106,45 @@ function optionsFor(
  * consome para mover cards, etiquetar e gravar datas na Helena.
  *
  * Até 2026-07-29 isso vivia só numa tabela do schema `public` mantida à mão. Aqui
- * o gestor escolhe cada campo a partir do que EXISTE na conta (as opções vêm da
- * API), e "Detectar da Helena" preenche o que der por nome — o mesmo casamento
- * que o workflow do n8n fazia, mas com revisão antes de salvar.
+ * o gestor vê, por campo: o valor CRU que está no banco, o nome que esse id tem
+ * na Helena hoje, se ele virou órfão (aponta para painel/coluna que não existe
+ * mais) e o que a tabela do n8n está lendo naquele campo. Dá para trocar, refazer
+ * a busca de um campo só e reenviar para o n8n.
  */
 export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
   const [open, setOpen] = useState(false);
   const [setup, setSetup] = useState<AutomationSetup | null>(null);
+  const [diag, setDiag] = useState<AutomationDiagnostics | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [config, setConfig] = useState<AutomationConfig | null>(null);
   const [detectionWarnings, setDetectionWarnings] = useState<string[] | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
+  const [busyField, setBusyField] = useState<AutomationFieldName | null>(null);
   const [isLoading, startLoad] = useTransition();
   const [isDetecting, startDetect] = useTransition();
   const [isSaving, startSave] = useTransition();
+  const [isSending, startSend] = useTransition();
+
+  async function load() {
+    const [s, d] = await Promise.all([
+      getAutomationSetup(clinicId),
+      getAutomationDiagnostics(clinicId),
+    ]);
+    if (!s.ok) {
+      toast.error(s.error);
+      setOpen(false);
+      return;
+    }
+    setSetup(s.setup);
+    setEnabled(s.setup.enabled);
+    setConfig(s.setup.config);
+    if (d.ok) setDiag(d.diagnostics);
+  }
 
   function handleToggle() {
     const next = !open;
     setOpen(next);
-    if (next && !setup) {
-      startLoad(async () => {
-        const res = await getAutomationSetup(clinicId);
-        if (!res.ok) {
-          toast.error(res.error);
-          setOpen(false);
-          return;
-        }
-        setSetup(res.setup);
-        setEnabled(res.setup.enabled);
-        setConfig(res.setup.config);
-      });
-    }
+    if (next && !setup) startLoad(load);
   }
 
   function handleDetect() {
@@ -124,7 +154,8 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
         toast.error(res.error);
         return;
       }
-      // Preenche só o que está vazio — detectar nunca desfaz escolha manual.
+      // Preenche só o que está vazio — o detectar geral nunca desfaz escolha
+      // manual. Para sobrescrever um campo específico existe o botão por campo.
       let filled = 0;
       setConfig((prev) => {
         if (!prev) return prev;
@@ -146,6 +177,32 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
     });
   }
 
+  async function handleRedetectField(field: AutomationFieldName) {
+    setBusyField(field);
+    try {
+      const res = await redetectAutomationField(clinicId, field);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      if (!res.value) {
+        toast.warning(`${AUTOMATION_FIELD_LABEL[field]}: nada escolhido`, {
+          description:
+            res.candidates.length > 0
+              ? `${res.candidates.length} candidatas na Helena — escolha na lista: ${res.candidates.map((c) => c.label).join(" | ")}`
+              : "Nenhuma candidata encontrada na Helena com esse nome.",
+        });
+        return;
+      }
+      setConfig((prev) => (prev ? { ...prev, [field]: res.value } : prev));
+      toast.success(`${AUTOMATION_FIELD_LABEL[field]} → “${res.label}”`, {
+        description: "Ainda não salvo — confirme com Salvar automação.",
+      });
+    } finally {
+      setBusyField(null);
+    }
+  }
+
   function handleSave() {
     if (!config) return;
     startSave(async () => {
@@ -161,12 +218,30 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
       } else {
         toast.success("Automação salva e espelhada para o n8n.");
       }
+      // Recarrega o diagnóstico: os "diferente do n8n" tinham que sumir.
+      const d = await getAutomationDiagnostics(clinicId);
+      if (d.ok) setDiag(d.diagnostics);
+      setDetectionWarnings(null);
+    });
+  }
+
+  function handleReproject() {
+    startSend(async () => {
+      const res = await reprojectAutomation(clinicId);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Configuração reenviada para a tabela do n8n.");
+      const d = await getAutomationDiagnostics(clinicId);
+      if (d.ok) setDiag(d.diagnostics);
     });
   }
 
   const missing = config
     ? (Object.keys(config) as AutomationFieldName[]).filter((f) => !config[f])
     : [];
+  const diagByField = new Map((diag?.fields ?? []).map((f) => [f.field, f]));
 
   return (
     <div className="rounded-lg border border-border/50">
@@ -177,7 +252,7 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
       >
         <span className="flex items-center gap-2">
           <Workflow className="size-3.5" />
-          Configurar automação de agendamento
+          Automação de agendamento
         </span>
         <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
       </button>
@@ -194,7 +269,7 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
                 os workflows leem.
               </p>
 
-              {/* Liga/desliga + detectar: empilha no mobile */}
+              {/* Liga/desliga + ações. Empilha no mobile. */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                   <Switch
@@ -206,36 +281,119 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
                     Automação ativa
                   </Label>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleDetect}
-                  disabled={isDetecting}
-                  className="w-full sm:w-auto"
-                >
-                  {isDetecting ? (
-                    <>
-                      <Loader2 className="size-3.5 animate-spin" /> Detectando…
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="size-3.5" /> Detectar da Helena
-                    </>
-                  )}
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleDetect}
+                    disabled={isDetecting}
+                    className="w-full sm:w-auto"
+                  >
+                    {isDetecting ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" /> Detectando…
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="size-3.5" /> Detectar vazios
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleReproject}
+                    disabled={isSending}
+                    className="w-full sm:w-auto"
+                    title="Reenvia o que está salvo para a tabela do n8n, sem alterar nada aqui"
+                  >
+                    {isSending ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" /> Enviando…
+                      </>
+                    ) : (
+                      <>
+                        <Send className="size-3.5" /> Reenviar ao n8n
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
 
-              {setup.conflicts.length > 0 && (
+              {/* Estado do espelho no n8n — "o que está no banco de dados" do outro lado */}
+              {diag && (
+                <div className="rounded-md border border-border/50 bg-muted/20 p-2.5 text-xs">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="flex items-center gap-1.5 font-medium text-foreground">
+                      <Database className="size-3.5" />
+                      Tabela do n8n
+                    </span>
+                    {diag.mirror.exists ? (
+                      <>
+                        <span className="text-muted-foreground">
+                          nome: <span className="text-foreground">{diag.mirror.nome ?? "—"}</span>
+                        </span>
+                        <span className="text-muted-foreground">
+                          ativo:{" "}
+                          <span className="text-foreground">{diag.mirror.ativo ? "sim" : "não"}</span>
+                        </span>
+                        {diag.mirror.updatedAt && (
+                          <span className="text-muted-foreground">
+                            atualizada em{" "}
+                            {new Date(diag.mirror.updatedAt).toLocaleString("pt-BR")}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-amber-400">
+                        sem linha para esta clínica — salve para criar
+                      </span>
+                    )}
+                  </div>
+                  {diag.mirror.panelDrifted && (
+                    <p className="mt-1.5 flex items-start gap-1.5 text-amber-400">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                      O n8n aponta para o painel{" "}
+                      <code className="font-mono">{diag.mirror.panelId}</code> e o app usa{" "}
+                      <code className="font-mono">{diag.panelId}</code>. A automação e as métricas
+                      estão olhando painéis diferentes — precisa de decisão manual.
+                    </p>
+                  )}
+                  {diag.mirror.statusObs && diag.mirror.statusObs !== "ok" && (
+                    <p className="mt-1.5 text-muted-foreground">
+                      <span className="font-medium">status_obs:</span> {diag.mirror.statusObs}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {(setup.conflicts.length > 0 || (diag?.conflicts.length ?? 0) > 0) && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-400">
                   <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                   <ul className="space-y-1">
-                    {setup.conflicts.map((c) => (
+                    {(diag?.conflicts ?? setup.conflicts).map((c) => (
                       <li key={c}>{c}</li>
                     ))}
                   </ul>
                 </div>
               )}
+
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  {missing.length === 0
+                    ? "Todos os 13 campos definidos."
+                    : `${missing.length} de 13 campos sem definição.`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowRaw((v) => !v)}
+                  className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  {showRaw ? "esconder ids" : "mostrar ids do banco"}
+                </button>
+              </div>
 
               {GROUPS.map((group) => (
                 <div key={group.title} className="space-y-2">
@@ -247,11 +405,32 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
                     {group.fields.map((field) => {
                       const items = optionsFor(field, setup.catalog);
                       const hasOptions = Object.keys(items).length > 1;
+                      const fd = diagByField.get(field);
+                      const dirty = fd ? (config[field] ?? null) !== fd.stored : false;
                       return (
                         <div key={field} className="space-y-1">
-                          <Label htmlFor={`aut-${field}`} className="text-xs text-muted-foreground">
-                            {AUTOMATION_FIELD_LABEL[field]}
-                          </Label>
+                          <div className="flex items-center justify-between gap-2">
+                            <Label
+                              htmlFor={`aut-${field}`}
+                              className="text-xs text-muted-foreground"
+                            >
+                              {AUTOMATION_FIELD_LABEL[field]}
+                            </Label>
+                            <button
+                              type="button"
+                              onClick={() => handleRedetectField(field)}
+                              disabled={busyField === field}
+                              title="Refazer a busca deste campo na Helena (sobrescreve o valor atual)"
+                              aria-label={`Redetectar ${AUTOMATION_FIELD_LABEL[field]}`}
+                              className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                            >
+                              {busyField === field ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
+                                <RotateCw className="size-3.5" />
+                              )}
+                            </button>
+                          </div>
                           <Select
                             value={config[field] ?? NONE}
                             items={items}
@@ -276,11 +455,46 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
                               ))}
                             </SelectContent>
                           </Select>
-                          {!hasOptions && (
-                            <p className="text-[0.65rem] text-amber-400/80">
-                              Nada desse tipo cadastrado na conta da Helena.
-                            </p>
-                          )}
+
+                          {/* Procedência: de qual catálogo vem, id cru, órfão, e o
+                              que o n8n lê hoje. É o "destrinchado" do campo. */}
+                          <div className="space-y-0.5 text-[0.65rem] leading-tight">
+                            {!hasOptions && (
+                              <p className="text-amber-400/80">
+                                Nada desse tipo cadastrado na conta da Helena.
+                              </p>
+                            )}
+                            {fd?.orphan && (
+                              <p className="text-red-400">
+                                O id gravado não existe no painel vinculado — aponta para outro
+                                painel ou foi apagado na Helena.
+                              </p>
+                            )}
+                            {fd?.drifted && !dirty && (
+                              <p className="text-amber-400/90">
+                                No n8n está {fd.mirrored ? "outro valor" : "vazio"} — use “Reenviar
+                                ao n8n”.
+                              </p>
+                            )}
+                            {dirty && <p className="text-brand">alterado, ainda não salvo</p>}
+                            {showRaw && (
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <span className="shrink-0">
+                                  {SOURCE_LABEL[AUTOMATION_FIELD_SOURCE[field]]} ·
+                                </span>
+                                <code className="truncate font-mono" title={config[field] ?? ""}>
+                                  {config[field] ?? "null"}
+                                </code>
+                                {config[field] && (
+                                  <CopyButton
+                                    value={config[field] as string}
+                                    label={`id de ${AUTOMATION_FIELD_LABEL[field]}`}
+                                    className="size-5"
+                                  />
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -305,11 +519,10 @@ export function ClinicAutomationConfig({ clinicId }: { clinicId: string }) {
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[0.65rem] text-muted-foreground">
-                  {missing.length === 0
-                    ? "Todos os campos definidos."
-                    : `${missing.length} campo(s) sem definição.`}
-                  {setup.detectedAt &&
-                    ` Última detecção: ${new Date(setup.detectedAt).toLocaleString("pt-BR")}.`}
+                  {setup.detectedAt
+                    ? `Última varredura: ${new Date(setup.detectedAt).toLocaleString("pt-BR")}.`
+                    : "Nunca varrida."}
+                  {diag?.companyId && ` company ${diag.companyId.slice(0, 8)}…`}
                 </p>
                 <Button
                   type="button"

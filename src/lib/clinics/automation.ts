@@ -268,7 +268,20 @@ export function automationFunnelConflicts(
   steps: AutomationStepOption[],
 ): string[] {
   const out: string[] = [];
-  const titleOf = (id: string) => steps.find((s) => s.id === id)?.title ?? id;
+  const stepById = new Map(steps.map((s) => [s.id, s]));
+
+  // Etapa configurada que NÃO está no painel que o app lê. É diagnóstico
+  // diferente (e mais grave) de "está no painel mas não conta como agendado":
+  // aqui a automação aponta para outro painel ou para uma coluna apagada, e
+  // nenhuma métrica do app vai ver esses cards. Caso real: Yamar, 2026-07-29.
+  if (config.scheduledStepId && steps.length > 0 && !stepById.has(config.scheduledStepId)) {
+    out.push(
+      `A automação move o card para uma etapa (${config.scheduledStepId}) que não existe no painel vinculado a esta clínica — provavelmente aponta para outro painel, ou a coluna foi apagada na Helena. Nenhuma métrica do app vê esses agendamentos.`,
+    );
+    return out; // os demais avisos sobre essa etapa seriam redundantes
+  }
+
+  const titleOf = (id: string) => stepById.get(id)?.title ?? id;
 
   // Só compara quando o mapeamento de leitura existe — array vazio/null significa
   // "clínica sem mapeamento", que cai no fallback por título e não é conflito.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -45,29 +45,54 @@ export function AutomationOverview({
     setItems(initialItems);
   }
 
-  // Polling do job em andamento. Também reencosta o tick (auto-kick) — se o
-  // encadeamento servidor-a-servidor se perder, o job não fica preso na fila.
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    if (!job || job.status === "done" || job.status === "error") return;
-    pollRef.current = setInterval(async () => {
-      const res = await getAutomationJob(job.id);
-      if (!res.ok) return;
-      setJob(res.job);
-      if (res.job.status === "done" || res.job.status === "error") {
-        const stats = res.job.stats;
-        toast.success("Varredura concluída", {
-          description: `${stats?.detected ?? 0} clínica(s) varridas · ${stats?.applied ?? 0} campo(s) preenchidos · ${stats?.incomplete ?? 0} com pendência`,
-        });
-        router.refresh();
-      } else if (res.job.status === "queued") {
-        await kickAutomationJob(job.id);
+  // Este painel é o MOTOR da varredura: roda um tick por vez até acabar,
+  // atualizando a barra a cada volta. O encadeamento servidor-a-servidor via
+  // `after()` foi removido porque não sobrevive à request abortada (ver
+  // app/api/automacao/process/route.ts) — o job parava em silêncio no 1º elo.
+  // O progresso tem checkpoint no banco, então sair da tela não perde nada:
+  // ao reabrir, o job inacabado é retomado daqui mesmo.
+  const drivingRef = useRef(false);
+
+  const drive = useCallback(
+    async (jobId: string) => {
+      if (drivingRef.current) return; // uma sequência por vez
+      drivingRef.current = true;
+      try {
+        for (;;) {
+          const tick = await kickAutomationJob(jobId);
+          const res = await getAutomationJob(jobId);
+          if (res.ok) setJob(res.job);
+
+          const acabou =
+            tick?.done === true || (res.ok && (res.job.status === "done" || res.job.status === "error"));
+          if (acabou) {
+            const stats = res.ok ? res.job.stats : null;
+            toast.success("Varredura concluída", {
+              description: `${stats?.detected ?? 0} clínica(s) varridas · ${stats?.applied ?? 0} campo(s) preenchidos · ${stats?.incomplete ?? 0} com pendência`,
+            });
+            router.refresh();
+            return;
+          }
+          if (!tick) {
+            // Tick não respondeu (rede/reinício do app). Para aqui em vez de
+            // insistir em laço: o botão volta a aparecer e retoma de onde parou.
+            toast.warning("A varredura foi interrompida", {
+              description: "O progresso está salvo. Clique novamente para retomar de onde parou.",
+            });
+            return;
+          }
+        }
+      } finally {
+        drivingRef.current = false;
       }
-    }, 3000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [job, router]);
+    },
+    [router],
+  );
+
+  // Retoma sozinho um job que ficou pela metade (ex.: aba fechada no meio).
+  useEffect(() => {
+    if (job && job.status !== "done" && job.status !== "error") void drive(job.id);
+  }, [job, drive]);
 
   function handleScan() {
     startScan(async () => {
@@ -78,8 +103,9 @@ export function AutomationOverview({
       }
       setJob(res.job);
       toast.success("Varredura iniciada", {
-        description: `${res.job.progress_total} clínica(s) na fila. Pode sair da tela — o progresso continua.`,
+        description: `${res.job.progress_total} clínica(s) na fila. O progresso é salvo a cada lote.`,
       });
+      void drive(res.job.id);
     });
   }
 

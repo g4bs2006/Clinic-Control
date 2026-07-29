@@ -11,9 +11,13 @@ import {
   automationFunnelConflicts,
   automationReadiness,
   missingAutomationFields,
+  AUTOMATION_FIELDS,
+  AUTOMATION_FIELD_LABEL,
+  AUTOMATION_FIELD_SOURCE,
   type AutomationCatalog,
   type AutomationConfig,
   type AutomationDetection,
+  type AutomationFieldName,
   type AutomationReadiness,
 } from "./automation";
 import {
@@ -24,7 +28,11 @@ import {
   type AutomationFullRow,
 } from "./automation-row";
 import { loadAutomationCatalog } from "./automation-catalog";
-import { projectAutomationConfig, listAutomacaoClinicasRows } from "./automation-projection";
+import {
+  projectAutomationConfig,
+  listAutomacaoClinicasRows,
+  type AutomacaoClinicasRow,
+} from "./automation-projection";
 
 // Auth: mesma política das demais actions de integração — basta usuário
 // autenticado (staff interno é confiável, ver a nota em integration-actions.ts).
@@ -215,6 +223,229 @@ export async function projectClinicAutomation(
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
+// ── Diagnóstico detalhado da clínica ────────────────────────────────────────
+
+export type AutomationFieldDiagnostic = {
+  field: AutomationFieldName;
+  label: string;
+  /** Valor cru como está no banco (uuid ou key do campo). */
+  stored: string | null;
+  /** Nome resolvido no catálogo da Helena. Null quando o id não existe mais lá. */
+  resolvedLabel: string | null;
+  /** Id gravado que não existe no catálogo — aponta para outro painel ou foi apagado. */
+  orphan: boolean;
+  /** O que a tabela do n8n tem hoje nesse mesmo campo. */
+  mirrored: string | null;
+  /** Espelho diferente do que está aqui (o n8n está lendo outra coisa). */
+  drifted: boolean;
+};
+
+export type AutomationDiagnostics = {
+  enabled: boolean;
+  fields: AutomationFieldDiagnostic[];
+  detectedAt: string | null;
+  warnings: string[];
+  conflicts: string[];
+  readiness: AutomationReadiness;
+  /** Estado da linha espelhada: existe? ativa? desde quando? */
+  mirror: {
+    exists: boolean;
+    nome: string | null;
+    ativo: boolean | null;
+    panelId: string | null;
+    statusObs: string | null;
+    updatedAt: string | null;
+    /** panel_id do espelho diferente do painel vinculado no app. */
+    panelDrifted: boolean;
+  };
+  panelId: string;
+  companyId: string | null;
+};
+
+/** Qual coluna do espelho corresponde a cada campo — para comparar lado a lado. */
+const MIRROR_COLUMN: Record<AutomationFieldName, keyof AutomacaoClinicasRow> = {
+  leadStepId: "step_id",
+  scheduledStepId: "agendado_step_id",
+  cancelledStepId: "cancelado_step_id",
+  iaCardTagId: "ia_card_tag_id",
+  scheduledContactTagId: "agendado_contact_tag_id",
+  scheduledAtFieldKey: "agendado_em_field_key",
+  scheduledForFieldKey: "agendado_para_field_key",
+  fbPanelTagId: "fb_panel_tag_id",
+  fbContactTagId: "fb_contact_tag_id",
+  igPanelTagId: "ig_panel_tag_id",
+  igContactTagId: "ig_contact_tag_id",
+  orgPanelTagId: "org_panel_tag_id",
+  orgContactTagId: "org_contact_tag_id",
+};
+
+/**
+ * Visão destrinchada da automação de uma clínica: para cada campo, o valor CRU
+ * gravado, o nome que ele tem na Helena hoje, se o id virou órfão (aponta para
+ * painel/coluna que não existe mais) e o que a tabela do n8n está lendo naquele
+ * mesmo campo. É o que permite ver de onde vem cada coisa sem abrir o banco.
+ */
+export async function getAutomationDiagnostics(
+  clinicId: string,
+): Promise<{ ok: true; diagnostics: AutomationDiagnostics } | { ok: false; error: string }> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("clinic_integrations")
+      .select(AUTOMATION_SELECT)
+      .eq("clinic_id", clinicId)
+      .single();
+    if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+    const row = data as unknown as AutomationFullRow;
+    if (!row.panel_id)
+      return {
+        ok: false as const,
+        error: "Painel ainda não vinculado — crie na Helena e reprocesse",
+      };
+
+    const token = decryptToken(row.helena_token_encrypted as string);
+    const catalog = await loadAutomationCatalog(token, row.panel_id);
+    const config = rowToAutomationConfig(row);
+
+    // Índice id/key → nome, juntando os quatro catálogos. Não há colisão prática
+    // entre eles (uuid vs key de campo), e olhar o catálogo certo por campo já é
+    // garantido por AUTOMATION_FIELD_SOURCE na UI.
+    const labelById = new Map<string, string>();
+    for (const s of catalog.steps) labelById.set(s.id, s.title);
+    for (const t of catalog.panelTags) labelById.set(t.id, t.name);
+    for (const t of catalog.contactTags) labelById.set(t.id, t.name);
+    for (const f of catalog.customFields) labelById.set(f.key, f.name);
+
+    const mirrorRows = await listAutomacaoClinicasRows().catch(() => []);
+    const mirrorRow = row.company_id
+      ? mirrorRows.find((r) => r.helena_company_id === row.company_id)
+      : undefined;
+
+    const fields: AutomationFieldDiagnostic[] = AUTOMATION_FIELDS.map((field) => {
+      const stored = config[field];
+      const mirrored = mirrorRow
+        ? ((mirrorRow[MIRROR_COLUMN[field]] as string | null) ?? null)
+        : null;
+      return {
+        field,
+        label: AUTOMATION_FIELD_LABEL[field],
+        stored,
+        resolvedLabel: stored ? (labelById.get(stored) ?? null) : null,
+        orphan: Boolean(stored) && !labelById.has(stored as string),
+        mirrored,
+        drifted: Boolean(mirrorRow) && (stored ?? null) !== mirrored,
+      };
+    });
+
+    return {
+      ok: true as const,
+      diagnostics: {
+        enabled: row.automation_enabled === true,
+        fields,
+        detectedAt: row.automation_detected_at ?? null,
+        warnings: row.automation_warnings ?? [],
+        conflicts: automationFunnelConflicts(
+          config,
+          {
+            scheduledStepIds: row.scheduled_step_ids ?? null,
+            leadStepIds: row.lead_step_ids ?? null,
+          },
+          catalog.steps,
+        ),
+        readiness: automationReadiness(config),
+        mirror: {
+          exists: Boolean(mirrorRow),
+          nome: mirrorRow?.nome ?? null,
+          ativo: mirrorRow?.ativo ?? null,
+          panelId: mirrorRow?.panel_id ?? null,
+          statusObs: mirrorRow?.status_obs ?? null,
+          updatedAt: mirrorRow?.updated_at ?? null,
+          panelDrifted: Boolean(
+            mirrorRow?.panel_id && row.panel_id && mirrorRow.panel_id !== row.panel_id,
+          ),
+        },
+        panelId: row.panel_id,
+        companyId: row.company_id ?? null,
+      },
+    };
+  } catch (e) {
+    return {
+      ok: false as const,
+      error: e instanceof Error ? e.message : "Falha ao diagnosticar a automação",
+    };
+  }
+}
+
+/**
+ * Refaz a busca de UM campo na Helena e devolve o resultado para o formulário —
+ * inclusive quando o campo já tem valor (é o caso de uso: o gravado está errado
+ * ou virou órfão). NÃO grava: quem confirma é o Salvar, igual ao "Detectar"
+ * geral. Se a heurística achar mais de uma candidata, não escolhe por você.
+ */
+export async function redetectAutomationField(
+  clinicId: string,
+  field: AutomationFieldName,
+): Promise<
+  | { ok: true; value: string; label: string; candidates: { id: string; label: string }[] }
+  | { ok: true; value: null; label: null; candidates: { id: string; label: string }[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { ok: false as const, error: "Não autenticado" };
+
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("clinic_integrations")
+      .select("helena_token_encrypted, panel_id")
+      .eq("clinic_id", clinicId)
+      .single();
+    if (error || !data) return { ok: false as const, error: "Integração não encontrada" };
+    if (!data.panel_id) return { ok: false as const, error: "Painel ainda não vinculado" };
+
+    const token = decryptToken(data.helena_token_encrypted as string);
+    const catalog = await loadAutomationCatalog(token, data.panel_id as string);
+    const detection = detectAutomation(catalog);
+    const candidates = detection.candidates[field] ?? [];
+
+    const value = detection.config[field];
+    if (!value) return { ok: true as const, value: null, label: null, candidates };
+
+    const source = AUTOMATION_FIELD_SOURCE[field];
+    const label =
+      source === "step"
+        ? (catalog.steps.find((s) => s.id === value)?.title ?? value)
+        : source === "customField"
+          ? (catalog.customFields.find((f) => f.key === value)?.name ?? value)
+          : source === "panelTag"
+            ? (catalog.panelTags.find((t) => t.id === value)?.name ?? value)
+            : (catalog.contactTags.find((t) => t.id === value)?.name ?? value);
+
+    return { ok: true as const, value, label, candidates };
+  } catch (e) {
+    return {
+      ok: false as const,
+      error: e instanceof Error ? e.message : "Falha ao redetectar o campo",
+    };
+  }
+}
+
+/**
+ * Reenvia a configuração salva para a tabela do n8n, sem alterar nada aqui.
+ * Serve para quando o espelho ficou para trás (falha de rede no salvamento, ou
+ * alguém editou a tabela do n8n por fora).
+ */
+export async function reprojectAutomation(
+  clinicId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false as const, error: "Não autenticado" };
+  return projectClinicAutomation(clinicId);
+}
+
 // ── Visão de carteira ───────────────────────────────────────────────────────
 
 export type AutomationOverviewItem = {
@@ -383,7 +614,8 @@ export async function startAutomationScan(
       .single();
     if (error || !job) return { ok: false as const, error: error?.message ?? "Falha ao criar job" };
 
-    await kickAutomationJob(job.id as string);
+    // Não dispara o primeiro tick aqui: quem roda a sequência é o painel, que
+    // precisa do job na tela antes de começar a avançar.
     return { ok: true as const, job: job as AutomationJob };
   } catch (e) {
     return {
@@ -409,24 +641,35 @@ export async function getAutomationJob(
 }
 
 /**
- * Dispara um tick do job. Mesmo padrão dos outros jobs: assinatura HMAC interna
- * + fetch de timeout curto (basta a request chegar). Se o encadeamento se
- * perder, o polling da UI reencosta chamando de novo.
+ * Roda UM tick do job e devolve o progresso. É o motor da varredura: o painel
+ * chama em sequência até `done`, mostrando o avanço a cada volta.
+ *
+ * Espera o tick terminar de propósito (~4s). A versão anterior abortava em 3s
+ * para "não bloquear", e era justamente isso que matava a corrente — sem
+ * resposta entregue, o `after()` do endpoint não roda (ver o comentário em
+ * app/api/automacao/process/route.ts). Bloquear alguns segundos com o progresso
+ * visível é melhor que um job que para em silêncio.
  */
-export async function kickAutomationJob(jobId: string): Promise<void> {
-  const sig = await signSessionToken(`automacao:${jobId}`, Date.now() + 10 * 60 * 1000);
+export async function kickAutomationJob(
+  jobId: string,
+): Promise<{ done: boolean; progress: number; total: number } | null> {
+  const sig = await signSessionToken(`automacao:${jobId}`, Date.now() + 30 * 60 * 1000);
   const h = await headers();
   const proto = h.get("x-forwarded-proto") ?? "https";
   const host = h.get("host");
-  if (!host) return;
+  if (!host) return null;
   try {
-    await fetch(`${proto}://${host}/api/automacao/process`, {
+    const res = await fetch(`${proto}://${host}/api/automacao/process`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jobId, sig }),
-      signal: AbortSignal.timeout(3_000),
+      // Teto generoso: só existe para não pendurar a action se o app não se
+      // alcançar. Um tick normal responde em ~4s.
+      signal: AbortSignal.timeout(90_000),
     });
+    if (!res.ok) return null;
+    return (await res.json()) as { done: boolean; progress: number; total: number };
   } catch {
-    /* coberto pelo auto-kick do polling */
+    return null; // a próxima volta do painel tenta de novo
   }
 }
