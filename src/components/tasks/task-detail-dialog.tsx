@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw, Pencil, Check, Plus, ArrowLeft, Building2, ExternalLink } from "lucide-react"
+import { Sparkles, Paperclip, Trash2, Send, Loader2, X, CheckCircle2, RotateCcw, Pencil, Check, Plus, ArrowLeft, Building2, ExternalLink, Pin, PinOff } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useConfirm } from "@/components/ui/confirm-dialog"
@@ -26,6 +26,7 @@ import {
   updateTaskStatus,
   deleteTask,
   snoozeTask,
+  pinTask,
   listSubtasks,
   createSubtasks,
   suggestSubtasks,
@@ -132,6 +133,8 @@ interface TaskDetailDialogProps {
   onDeleted?: (id: string) => void
   /** Reflete o adiamento no board na hora (some da vista se no futuro). */
   onSnoozed?: (id: string, until: string | null) => void
+  /** Reflete o fixar/soltar no board na hora (entra/sai do bloco "Em foco"). */
+  onPinned?: (id: string, pinnedAt: string | null) => void
   onChanged: () => void
   currentUserId?: string | null
   /** Renderiza como PÁGINA (2 colunas, sem o wrapper de diálogo) em vez de modal. */
@@ -140,7 +143,7 @@ interface TaskDetailDialogProps {
   backHref?: string
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onSnoozed, onChanged, currentUserId = null, asPage = false, backHref = "/tarefas" }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onSnoozed, onPinned, onChanged, currentUserId = null, asPage = false, backHref = "/tarefas" }: TaskDetailDialogProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
@@ -402,6 +405,36 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     } else {
       toast.success("Adiamento removido", { description: title })
     }
+  }
+
+  function applyPin(id: string, pinnedAt: string | null) {
+    const snapshot = task
+    setTask((t) => (t ? { ...t, pinned_at: pinnedAt } : t))
+    onPinned?.(id, pinnedAt)
+    startTransition(async () => {
+      const res = await pinTask(id, pinnedAt != null)
+      if (!res.ok) {
+        setTask(snapshot)
+        onPinned?.(id, snapshot?.pinned_at ?? null)
+        toast.error(res.error)
+        return
+      }
+      // Carimbo real do servidor (a ordem do bloco "Em foco" usa pinned_at).
+      setTask((t) => (t ? { ...t, pinned_at: res.pinnedAt } : t))
+      onPinned?.(id, res.pinnedAt)
+    })
+  }
+
+  function handlePin(pinned: boolean) {
+    if (!taskId) return
+    const id = taskId
+    const prev = task?.pinned_at ?? null
+    const title = task?.title
+    applyPin(id, pinned ? new Date().toISOString() : null)
+    toast.success(pinned ? "Fixada em foco" : "Removida do foco", {
+      description: title,
+      action: { label: "Desfazer", onClick: () => applyPin(id, prev) },
+    })
   }
 
   function addSubtask() {
@@ -1144,6 +1177,12 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs ${PRIORITY_PILL[task.priority]}`}>
                   Prioridade {TASK_PRIORITY_LABEL[task.priority].toLowerCase()}
                 </span>
+                {task.pinned_at && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/10 px-2.5 py-1 text-xs text-brand">
+                    <Pin className="size-3" />
+                    Em foco
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1192,6 +1231,18 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   Concluir tarefa
                 </Button>
               )}
+              <Button
+                type="button"
+                variant={task.pinned_at ? "secondary" : "outline"}
+                className={`w-full ${task.pinned_at ? "text-brand" : ""}`}
+                disabled={pending}
+                aria-pressed={task.pinned_at != null}
+                onClick={() => handlePin(task.pinned_at == null)}
+                title={task.pinned_at ? "Sair do bloco Em foco" : "Fixar no topo da lista (Em foco)"}
+              >
+                {task.pinned_at ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                {task.pinned_at ? "Soltar do foco" : "Fixar em foco"}
+              </Button>
               <div className="flex gap-2">
                 <SnoozeButton
                   today={today}
@@ -1308,6 +1359,19 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
             </Button>
           )}
           <div className="mt-2 flex gap-2 sm:mt-0">
+            <Button
+              type="button"
+              variant="outline"
+              className={`h-9 px-3 ${task.pinned_at ? "text-brand" : ""}`}
+              disabled={pending}
+              aria-pressed={task.pinned_at != null}
+              aria-label={task.pinned_at ? "Soltar do foco" : "Fixar em foco"}
+              onClick={() => handlePin(task.pinned_at == null)}
+              title={task.pinned_at ? "Sair do bloco Em foco" : "Fixar no topo da lista (Em foco)"}
+            >
+              {task.pinned_at ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+              <span className="hidden sm:inline">{task.pinned_at ? "Soltar" : "Fixar"}</span>
+            </Button>
             <SnoozeButton today={today} snoozedUntil={task.snoozed_until} onSnooze={handleSnooze} variant="button" disabled={pending} />
             <Button
               type="button"

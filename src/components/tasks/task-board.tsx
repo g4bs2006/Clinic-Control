@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3, ExternalLink } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3, ExternalLink, Pin, PinOff, Target } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -29,6 +29,7 @@ import {
   bulkUpdateTaskStatus,
   deleteTask,
   snoozeTask,
+  pinTask,
   listArchivedTasks,
   unarchiveTask,
   type TaskRow,
@@ -90,6 +91,7 @@ function TaskListItem({
   onChangeStatus,
   onRemove,
   onSnooze,
+  onPin,
   selectable = false,
   selected = false,
   onToggleSelect,
@@ -102,6 +104,7 @@ function TaskListItem({
   onChangeStatus: (id: string, status: TaskStatus) => void
   onRemove: (id: string) => void
   onSnooze: (id: string, until: string | null) => void
+  onPin: (id: string, pinned: boolean) => void
   selectable?: boolean
   selected?: boolean
   onToggleSelect?: (id: string, shiftKey: boolean) => void
@@ -109,10 +112,13 @@ function TaskListItem({
   const isDone = t.status === "concluida"
   const isSnoozed = t.snoozed_until != null && t.snoozed_until > today
   const isInProgress = t.status === "em_andamento"
+  const isPinned = t.pinned_at != null
   return (
     // Mobile: card com borda (edição de status via detalhe/sheet); desktop: linha densa.
     // Em andamento é sinalizado só pelo selo "em andamento" (sem faixa lateral).
     // `group` habilita o botão "Concluir" que só aparece no hover da linha (desktop).
+    // Fixada não precisa de tint próprio: a linha vive dentro do bloco "Em foco"
+    // (que já é destacado) e carrega o selo "em foco".
     <li className="group flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border/60 bg-card p-3 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:py-2.5">
       {selectable && (
         // onClick (não onCheckedChange) para capturar Shift e fazer seleção em
@@ -175,6 +181,12 @@ function TaskListItem({
             <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[0.62rem] font-semibold text-muted-foreground">
               <Clock className="size-2.5" />
               adiada
+            </span>
+          )}
+          {isPinned && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-brand">
+              <Pin className="size-2.5" />
+              em foco
             </span>
           )}
         </p>
@@ -240,6 +252,22 @@ function TaskListItem({
           {isInProgress ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
         </Button>
       )}
+
+      {/* Fixar em foco — sobe a tarefa pro bloco "Em foco" no topo da lista.
+          Sempre visível quando fixada (é estado); discreto quando não. */}
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="ghost"
+        disabled={pending}
+        title={isPinned ? "Soltar (sair do foco)" : "Fixar em foco"}
+        aria-label={isPinned ? `Soltar tarefa ${t.title}` : `Fixar tarefa ${t.title} em foco`}
+        aria-pressed={isPinned}
+        className={`size-9 sm:size-8 ${isPinned ? "text-brand hover:text-brand" : "text-muted-foreground/60 hover:text-brand"}`}
+        onClick={() => onPin(t.id, !isPinned)}
+      >
+        {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+      </Button>
 
       <SnoozeButton
         today={today}
@@ -417,6 +445,33 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     }
   }
 
+  // Aplica o fixar/soltar sem toast (usado pela ação e pelo "Desfazer").
+  function applyPin(id: string, pinnedAt: string | null) {
+    const snapshot = tasks
+    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, pinned_at: pinnedAt } : t)))
+    startTransition(async () => {
+      const res = await pinTask(id, pinnedAt != null)
+      if (!res.ok) {
+        setTasks(snapshot)
+        toast.error(res.error)
+        return
+      }
+      // Carimbo real do servidor (a ordem do bloco "Em foco" usa pinned_at).
+      setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, pinned_at: res.pinnedAt } : t)))
+    })
+  }
+
+  function pin(id: string, pinned: boolean) {
+    const current = tasks.find((t) => t.id === id)
+    const prev = current?.pinned_at ?? null
+    applyPin(id, pinned ? new Date().toISOString() : null)
+    // A tarefa muda de lugar na tela — o toast narra pra onde foi e deixa desfazer.
+    toast.success(pinned ? "Fixada em foco" : "Removida do foco", {
+      description: current?.title,
+      action: { label: "Desfazer", onClick: () => applyPin(id, prev) },
+    })
+  }
+
   async function remove(id: string) {
     const ok = await confirm({
       title: "Excluir tarefa?",
@@ -505,10 +560,13 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   const { today, endOfWeek } = spDateParts(new Date())
   const isSnoozedActive = (t: TaskRow) => t.snoozed_until != null && t.snoozed_until > today
   const snoozedCount = tasks.filter(isSnoozedActive).length
+  const isPinned = (t: TaskRow) => t.pinned_at != null
+  // Fixar é intenção explícita — vence o "esconder adiadas".
+  const hiddenBySnooze = (t: TaskRow) => isSnoozedActive(t) && !isPinned(t)
 
   const hideDone = (view === "list" || view === "board") && !showDone && statusFilter === ALL
   const filtered = tasks
-    .filter((t) => showSnoozed || !isSnoozedActive(t))
+    .filter((t) => showSnoozed || !hiddenBySnooze(t))
     .filter((t) => statusFilter === ALL || t.status === statusFilter)
     .filter((t) => !(hideDone && DONE_STATUSES.has(t.status)))
     .filter((t) => categoryFilter === ALL || t.category === categoryFilter)
@@ -524,15 +582,27 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       if (!b.due_date) return -1
       return a.due_date < b.due_date ? -1 : 1
     })
-  // Mantém a ordem visível disponível para o Shift+clique (seleção em intervalo).
-  orderedIdsRef.current = filtered.map((t) => t.id)
+  // ── "Em foco": as fixadas saem da lista principal e viram um bloco no topo ──
+  // Ordena pela fixação mais recente (acabei de fixar → topo do bloco).
+  const pinnedTasks = filtered
+    .filter(isPinned)
+    .sort((a, b) => (a.pinned_at! < b.pinned_at! ? 1 : -1))
+  const restTasks = filtered.filter((t) => !isPinned(t))
+  // Mantém a ordem visível disponível para o Shift+clique (seleção em intervalo)
+  // — inclui o bloco "Em foco", que é renderizado antes da lista.
+  orderedIdsRef.current = [...pinnedTasks, ...restTasks].map((t) => t.id)
 
   // ── Agenda "Minha semana": só as minhas tarefas abertas, agrupadas por prazo ──
   const myOpenTasks = tasks.filter(
-    (t) => t.assigned_to === currentUserId && !DONE_STATUSES.has(t.status) && (showSnoozed || !isSnoozedActive(t)),
+    (t) => t.assigned_to === currentUserId && !DONE_STATUSES.has(t.status) && (showSnoozed || !hiddenBySnooze(t)),
   )
+  // As fixadas também sobem para um bloco próprio aqui (mesma leitura da Lista).
+  const myPinned = myOpenTasks
+    .filter(isPinned)
+    .sort((a, b) => (a.pinned_at! < b.pinned_at! ? 1 : -1))
   const weekGroups = new Map<AgendaBucket, TaskRow[]>(AGENDA_ORDER.map((b) => [b, []]))
   for (const t of myOpenTasks) {
+    if (isPinned(t)) continue
     weekGroups.get(agendaBucket(t.due_date, today, endOfWeek))!.push(t)
   }
   for (const list of weekGroups.values()) {
@@ -540,6 +610,41 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       if (a.due_date && b.due_date && a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1
       return TASK_PRIORITY_RANK[b.priority] - TASK_PRIORITY_RANK[a.priority]
     })
+  }
+
+  // Bloco "Em foco" — o que está fixado, no topo da Lista e da Minha Semana.
+  // Fica visível mesmo que a tarefa esteja adiada; ao soltar, ela volta pro
+  // lugar normal na hora (otimista) e o bloco some quando esvazia.
+  function focusBlock(items: TaskRow[], selectable: boolean) {
+    if (!items.length) return null
+    return (
+      <div className="rounded-lg border border-brand/25 bg-brand/[0.04] p-2.5 sm:p-3">
+        <h3 className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand">
+          <Target className="size-3.5" />
+          Em foco
+          <span className="tabular-nums text-[0.68rem] font-normal text-muted-foreground/70">{items.length}</span>
+        </h3>
+        <ul className="flex flex-col gap-2 sm:gap-0 sm:divide-y sm:divide-border/40">
+          {items.map((t) => (
+            <TaskListItem
+              key={t.id}
+              t={t}
+              categoryLabel={categoryLabel}
+              pending={pending}
+              today={today}
+              onOpen={setOpenTaskId}
+              onChangeStatus={changeStatus}
+              onRemove={remove}
+              onSnooze={snooze}
+              onPin={pin}
+              selectable={selectable}
+              selected={selected.has(t.id)}
+              onToggleSelect={toggleSelect}
+            />
+          ))}
+        </ul>
+      </div>
+    )
   }
 
   return (
@@ -740,6 +845,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           </p>
         ) : (
           <div className="flex flex-col gap-5">
+            {focusBlock(myPinned, false)}
             {AGENDA_ORDER.map((bucket) => {
               const items = weekGroups.get(bucket)!
               if (!items.length) return null
@@ -763,6 +869,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                         onChangeStatus={changeStatus}
                         onRemove={remove}
                         onSnooze={snooze}
+                        onPin={pin}
                       />
                     ))}
                   </ul>
@@ -778,7 +885,9 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       ) : view === "board" ? (
         <KanbanBoard tasks={filtered} categoryLabel={categoryLabel} onOpen={setOpenTaskId} onStatusChange={changeStatus} />
       ) : (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-3">
+          {focusBlock(pinnedTasks, true)}
+
           {/* Cabeçalho de seleção + barra de ação em lote (desktop; no mobile a
               seleção múltipla sai de cena — ações item a item ou pelo detalhe) */}
           <div className="hidden flex-wrap items-center gap-3 border-b border-border/40 pb-2 sm:flex">
@@ -809,7 +918,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           </div>
 
           <ul className="flex flex-col gap-2 sm:gap-0 sm:divide-y sm:divide-border/40">
-            {filtered.map((t) => (
+            {restTasks.map((t) => (
               <TaskListItem
                 key={t.id}
                 t={t}
@@ -820,6 +929,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                 onChangeStatus={changeStatus}
                 onRemove={remove}
                 onSnooze={snooze}
+                onPin={pin}
                 selectable
                 selected={selected.has(t.id)}
                 onToggleSelect={toggleSelect}
@@ -893,6 +1003,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         onStatusChange={changeStatus}
         onDeleted={(id) => setTasks((ts) => ts.filter((t) => t.id !== id))}
         onSnoozed={(id, until) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, snoozed_until: until } : t)))}
+        onPinned={(id, pinnedAt) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, pinned_at: pinnedAt } : t)))}
         onChanged={refresh}
         currentUserId={currentUserId}
       />

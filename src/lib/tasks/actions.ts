@@ -26,13 +26,15 @@ export type TaskRow = {
   parent_task_id: string | null;
   recurrence_id: string | null;
   snoozed_until: string | null;
+  /** Quando foi fixada ("em foco"); null = não fixada. */
+  pinned_at: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
 };
 
 const TASK_SELECT =
-  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, recurrence_id, snoozed_until, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
+  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, recurrence_id, snoozed_until, pinned_at, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
 
 export type TaskSuggestionRow = {
   id: string;
@@ -96,6 +98,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     parent_task_id: row.parent_task_id as string | null,
     recurrence_id: (row.recurrence_id as string | null) ?? null,
     snoozed_until: (row.snoozed_until as string | null) ?? null,
+    pinned_at: (row.pinned_at as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     completed_at: row.completed_at as string | null,
@@ -470,6 +473,25 @@ export async function snoozeTask(
   const { error } = await supabase.from("tasks").update({ snoozed_until: until }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * Fixa ("em foco") ou solta uma tarefa. As fixadas sobem para o bloco "Em foco"
+ * no topo da Lista/Minha Semana e ficam visíveis mesmo adiadas. Eixo próprio,
+ * sem relação com prioridade. Sem revalidatePath: a lista atualiza de forma
+ * otimista no cliente (mesmo motivo de updateTaskStatus/snoozeTask).
+ */
+export async function pinTask(
+  id: string,
+  pinned: boolean,
+): Promise<{ ok: true; pinnedAt: string | null } | { ok: false; error: string }> {
+  const supabase = await requireUser();
+  if (!supabase) return { ok: false, error: "Não autenticado" };
+
+  const pinnedAt = pinned ? new Date().toISOString() : null;
+  const { error } = await supabase.from("tasks").update({ pinned_at: pinnedAt }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, pinnedAt };
 }
 
 export async function deleteTask(id: string): Promise<{ ok: true } | { ok: false; error: string }> {

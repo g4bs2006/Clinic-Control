@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { Pin } from "lucide-react"
 import type { TaskRow } from "@/lib/tasks/actions"
 import {
   TASK_STATUSES,
@@ -44,6 +45,11 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
 
   const byStatus = new Map<TaskStatus, TaskRow[]>(TASK_STATUSES.map((s) => [s, []]))
   for (const t of tasks) byStatus.get(t.status)?.push(t)
+  // As fixadas ("em foco") vão para o topo da coluna — o board não tem bloco
+  // próprio como a Lista, então o destaque aqui é a ordem + o pino no card.
+  for (const items of byStatus.values()) {
+    items.sort((a, b) => (a.pinned_at ? 0 : 1) - (b.pinned_at ? 0 : 1))
+  }
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -99,6 +105,11 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
                     <div className="flex items-start gap-1.5">
                       <span className={`mt-1 size-1.5 shrink-0 rounded-full ${PRIORITY_DOT[t.priority]}`} />
                       <p className="text-sm font-medium leading-snug">{t.title}</p>
+                      {t.pinned_at && (
+                        <span title="Em foco" className="mt-0.5 shrink-0 text-brand">
+                          <Pin className="size-3" />
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-1 text-[0.65rem] text-muted-foreground">
                       <span className="rounded bg-accent/60 px-1 py-0.5">{categoryLabel[t.category] ?? t.category}</span>
