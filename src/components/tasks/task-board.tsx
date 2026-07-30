@@ -1,10 +1,10 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useRef, useState, useSyncExternalStore, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3, ExternalLink, Pin, PinOff, Target } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3, ExternalLink, Pin, PinOff, Target, Search, X, FilterX } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CreateTaskDialog } from "./create-task-dialog"
@@ -23,7 +24,22 @@ import { TaskDetailDialog } from "./task-detail-dialog"
 import { KanbanBoard } from "./kanban-board"
 import { TaskDashboard } from "./task-dashboard"
 import { SnoozeButton, fmtSnoozeDate } from "./snooze-button"
-import type { ClinicOption, ProfileOption } from "./task-fields"
+import { profileLabel, type ClinicOption, type ProfileOption } from "./task-fields"
+import {
+  ALL,
+  NONE,
+  DEFAULT_LIST_FILTERS,
+  DUE_LABEL,
+  SOURCE_LABEL,
+  MARKER_LABEL,
+  activeFilterCount,
+  matchesFilters,
+  parseStoredFilters,
+  type DueFilter,
+  type ListFilters,
+  type MarkerFilter,
+  type SourceFilter,
+} from "@/lib/tasks/filters"
 import {
   updateTaskStatus,
   bulkUpdateTaskStatus,
@@ -48,7 +64,44 @@ import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 import type { SuggestionJobRow } from "@/lib/tasks/generate-actions"
 import { agendaBucket, spDateParts, AGENDA_ORDER, AGENDA_LABEL, type AgendaBucket } from "@/lib/tasks/agenda"
 
-const ALL = "__all__"
+// ── Filtros lembrados entre visitas ─────────────────────────────────────────
+// Mesma ideia do estado da sidebar (`cc-sidebar-pinned`): o valor vive fora do
+// React e é lido por useSyncExternalStore, para hidratar sem setState em effect.
+// A memória é a verdade e o localStorage é só o backup — em modo privativo o
+// filtro continua funcionando, só não lembra na próxima visita.
+const FILTERS_STORAGE_KEY = "cc-tarefas-filtros"
+const FILTERS_EVENT = "cc-tarefas-filtros-change"
+
+let filtersStore: ListFilters | null = null
+
+function readStoredFilters(): ListFilters {
+  if (filtersStore === null) {
+    let raw: string | null = null
+    try {
+      raw = window.localStorage.getItem(FILTERS_STORAGE_KEY)
+    } catch {
+      // Sem acesso ao storage: começa no padrão.
+    }
+    filtersStore = parseStoredFilters(raw)
+  }
+  return filtersStore
+}
+
+function writeStoredFilters(next: ListFilters) {
+  // A busca é de sessão (filtro de texto velho ao voltar na página parece bug).
+  filtersStore = { ...next, query: "" }
+  try {
+    window.localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filtersStore))
+  } catch {
+    // Quota/modo privativo: segue só em memória.
+  }
+  window.dispatchEvent(new Event(FILTERS_EVENT))
+}
+
+function subscribeFilters(onChange: () => void) {
+  window.addEventListener(FILTERS_EVENT, onChange)
+  return () => window.removeEventListener(FILTERS_EVENT, onChange)
+}
 
 const PRIORITY_DOT: Record<TaskPriority, string> = {
   urgente: "bg-red-400",
@@ -332,9 +385,28 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     setSelected(new Set())
     setAnchorId(null)
   }
-  const [statusFilter, setStatusFilter] = useState<string>(ALL)
-  const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
-  const [priorityFilter, setPriorityFilter] = useState<string>(ALL)
+  // Todos os filtros num objeto só — simplifica persistir e limpar de uma vez.
+  // A lógica de casamento vive em lib/tasks/filters.ts (pura, com teste). Os
+  // selects vêm do store persistido; a busca é estado normal (não é lembrada).
+  // No SSR o snapshot é o padrão, então a primeira pintura vem sem filtro e o
+  // cliente aplica na hidratação — mesmo trade-off já aceito no "esconder adiadas".
+  const storedFilters = useSyncExternalStore(subscribeFilters, readStoredFilters, () => DEFAULT_LIST_FILTERS)
+  const [query, setQuery] = useState("")
+  const filters: ListFilters = { ...storedFilters, query }
+
+  function setFilter<K extends keyof ListFilters>(key: K, value: ListFilters[K]) {
+    if (key === "query") {
+      setQuery(value as string)
+      return
+    }
+    writeStoredFilters({ ...filters, [key]: value })
+  }
+
+  function clearFilters() {
+    setQuery("")
+    writeStoredFilters(DEFAULT_LIST_FILTERS)
+  }
+
   const [view, setView] = useState<"list" | "board" | "week" | "panorama">("list")
   const [showDone, setShowDone] = useState(false)
   const [showSnoozed, setShowSnoozed] = useState(false)
@@ -564,13 +636,14 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   // Fixar é intenção explícita — vence o "esconder adiadas".
   const hiddenBySnooze = (t: TaskRow) => isSnoozedActive(t) && !isPinned(t)
 
-  const hideDone = (view === "list" || view === "board") && !showDone && statusFilter === ALL
+  const activeFilters = activeFilterCount(filters)
+  // A busca tem campo próprio na barra, então o "(N)" do botão conta só o painel.
+  const activePanelFilters = activeFilterCount({ ...filters, query: "" })
+  const hideDone = (view === "list" || view === "board") && !showDone && filters.status === ALL
   const filtered = tasks
     .filter((t) => showSnoozed || !hiddenBySnooze(t))
-    .filter((t) => statusFilter === ALL || t.status === statusFilter)
     .filter((t) => !(hideDone && DONE_STATUSES.has(t.status)))
-    .filter((t) => categoryFilter === ALL || t.category === categoryFilter)
-    .filter((t) => priorityFilter === ALL || t.priority === priorityFilter)
+    .filter((t) => matchesFilters(t, filters, today, endOfWeek))
     .sort((a, b) => {
       const doneRank = (s: TaskStatus) => (DONE_STATUSES.has(s) ? 1 : 0)
       const doneDiff = doneRank(a.status) - doneRank(b.status)
@@ -612,6 +685,22 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     })
   }
 
+  // Um campo do painel de filtros: rótulo miúdo em cima, controle embaixo.
+  // O mesmo gatilho serve aos 8 selects (elemento React é imutável, reusar é ok).
+  const filterTrigger = (
+    <SelectTrigger className="h-9 w-full text-sm sm:h-8">
+      <SelectValue />
+    </SelectTrigger>
+  )
+  function filterField(label: string, control: React.ReactNode) {
+    return (
+      <div className="flex flex-col gap-1">
+        <span className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+        {control}
+      </div>
+    )
+  }
+
   // Bloco "Em foco" — o que está fixado, no topo da Lista e da Minha Semana.
   // Fica visível mesmo que a tarefa esteja adiada; ao soltar, ela volta pro
   // lugar normal na hora (otimista) e o bloco some quando esvazia.
@@ -647,83 +736,54 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     )
   }
 
+  // Busca e painel de filtros só fazem sentido na Lista/Board (a Semana é a
+  // agenda pessoal e o Panorama tem recortes próprios).
+  const showFilterBar = view === "list" || view === "board"
+
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        {/* Toggle de filtros — só mobile (no desktop os filtros ficam inline) */}
-        {view !== "week" && view !== "panorama" && (
+        {/* Busca livre — sempre visível: é o filtro mais usado no dia a dia */}
+        {showFilterBar && (
+          <div className="relative w-full sm:w-60">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={filters.query}
+              onChange={(e) => setFilter("query", e.target.value)}
+              placeholder="Buscar tarefa, clínica, responsável…"
+              aria-label="Buscar tarefas"
+              className="h-9 pl-8 pr-8 text-sm sm:h-8"
+            />
+            {filters.query && (
+              <button
+                type="button"
+                onClick={() => setFilter("query", "")}
+                aria-label="Limpar busca"
+                className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Um único gatilho para o painel (antes os selects ficavam inline no
+            desktop): com 8 recortes, inline estourava a barra. */}
+        {showFilterBar && (
           <Button
             type="button"
             size="sm"
-            variant={filtersOpen ? "secondary" : "outline"}
-            className="h-9 sm:hidden"
+            variant={filtersOpen || activePanelFilters > 0 ? "secondary" : "outline"}
+            className="h-9 sm:h-8"
+            aria-expanded={filtersOpen}
             onClick={() => setFiltersOpen((v) => !v)}
+            title="Filtrar por status, clínica, responsável, prazo…"
           >
             <SlidersHorizontal className="size-3.5" />
             Filtros
-            {(statusFilter !== ALL || categoryFilter !== ALL || priorityFilter !== ALL) &&
-              ` (${[statusFilter, categoryFilter, priorityFilter].filter((v) => v !== ALL).length})`}
+            {activePanelFilters > 0 && ` (${activePanelFilters})`}
           </Button>
-        )}
-
-        {/* sm:contents: no desktop o wrapper some e os filtros fluem como antes */}
-        <div className={filtersOpen ? "flex w-full flex-col gap-2 sm:contents" : "hidden sm:contents"}>
-        {view !== "week" && view !== "panorama" && (
-          <>
-            <Select
-              value={statusFilter}
-              items={{ [ALL]: "Todos os status", ...Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]])) }}
-              onValueChange={(v) => setStatusFilter(v ?? ALL)}
-            >
-              <SelectTrigger className="h-9 flex-1 text-sm min-w-[9rem] sm:h-8 sm:flex-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todos os status</SelectItem>
-                {TASK_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {TASK_STATUS_LABEL[s]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={categoryFilter}
-              items={{ [ALL]: "Todas as categorias", ...Object.fromEntries(filterCategories.map((c) => [c.slug, c.label])) }}
-              onValueChange={(v) => setCategoryFilter(v ?? ALL)}
-            >
-              <SelectTrigger className="h-9 flex-1 text-sm min-w-[9rem] sm:h-8 sm:flex-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todas as categorias</SelectItem>
-                {filterCategories.map((c) => (
-                  <SelectItem key={c.slug} value={c.slug}>
-                    {c.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={priorityFilter}
-              items={{ [ALL]: "Todas as prioridades", ...Object.fromEntries(TASK_PRIORITIES.map((p) => [p, TASK_PRIORITY_LABEL[p]])) }}
-              onValueChange={(v) => setPriorityFilter(v ?? ALL)}
-            >
-              <SelectTrigger className="h-9 flex-1 text-sm min-w-[9rem] sm:h-8 sm:flex-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todas as prioridades</SelectItem>
-                {TASK_PRIORITIES.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {TASK_PRIORITY_LABEL[p]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </>
         )}
 
         {(view === "list" || view === "board") && (
@@ -764,7 +824,6 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
             {archived !== null ? "Ocultar arquivadas" : "Arquivadas"}
           </Button>
         )}
-        </div>
 
         <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
           <Button
@@ -828,6 +887,184 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         />
       </div>
 
+      {/* Painel de filtros — recolhido por padrão, empilha no mobile. Os valores
+          ficam no localStorage, então voltar na página mantém o recorte. */}
+      {showFilterBar && filtersOpen && (
+        <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/60 bg-accent/10 p-3 sm:grid-cols-2 lg:grid-cols-4">
+          {filterField(
+            "Status",
+            <Select
+              value={filters.status}
+              items={{ [ALL]: "Todos", ...Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]])) }}
+              onValueChange={(v) => setFilter("status", v ?? ALL)}
+            >
+              {filterTrigger}
+              <SelectContent>
+                <SelectItem value={ALL}>Todos</SelectItem>
+                {TASK_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {TASK_STATUS_LABEL[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>,
+          )}
+
+          {filterField(
+            "Categoria",
+            <Select
+              value={filters.category}
+              items={{ [ALL]: "Todas", ...Object.fromEntries(filterCategories.map((c) => [c.slug, c.label])) }}
+              onValueChange={(v) => setFilter("category", v ?? ALL)}
+            >
+              {filterTrigger}
+              <SelectContent>
+                <SelectItem value={ALL}>Todas</SelectItem>
+                {filterCategories.map((c) => (
+                  <SelectItem key={c.slug} value={c.slug}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>,
+          )}
+
+          {filterField(
+            "Prioridade",
+            <Select
+              value={filters.priority}
+              items={{ [ALL]: "Todas", ...Object.fromEntries(TASK_PRIORITIES.map((p) => [p, TASK_PRIORITY_LABEL[p]])) }}
+              onValueChange={(v) => setFilter("priority", v ?? ALL)}
+            >
+              {filterTrigger}
+              <SelectContent>
+                <SelectItem value={ALL}>Todas</SelectItem>
+                {TASK_PRIORITIES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {TASK_PRIORITY_LABEL[p]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>,
+          )}
+
+          {filterField(
+            "Clínica",
+            <Select
+              value={filters.clinic}
+              items={{
+                [ALL]: "Todas",
+                [NONE]: "Sem clínica (interna)",
+                ...Object.fromEntries(clinics.map((c) => [c.id, c.name])),
+              }}
+              onValueChange={(v) => setFilter("clinic", v ?? ALL)}
+            >
+              {filterTrigger}
+              <SelectContent>
+                <SelectItem value={ALL}>Todas</SelectItem>
+                <SelectItem value={NONE}>Sem clínica (interna)</SelectItem>
+                {clinics.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>,
+          )}
+
+          {filterField(
+            "Responsável",
+            <Select
+              value={filters.assignee}
+              items={{
+                [ALL]: "Qualquer um",
+                [NONE]: "Sem responsável",
+                ...Object.fromEntries(profiles.map((p) => [p.id, profileLabel(p)])),
+              }}
+              onValueChange={(v) => setFilter("assignee", v ?? ALL)}
+            >
+              {filterTrigger}
+              <SelectContent>
+                <SelectItem value={ALL}>Qualquer um</SelectItem>
+                <SelectItem value={NONE}>Sem responsável</SelectItem>
+                {profiles.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {profileLabel(p)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>,
+          )}
+
+          {filterField(
+            "Prazo",
+            <Select
+              value={filters.due}
+              items={DUE_LABEL}
+              onValueChange={(v) => setFilter("due", (v as DueFilter | null) ?? "all")}
+            >
+              {filterTrigger}
+              <SelectContent>
+                {(Object.keys(DUE_LABEL) as DueFilter[]).map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {DUE_LABEL[d]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>,
+          )}
+
+          {filterField(
+            "Origem",
+            <Select
+              value={filters.source}
+              items={SOURCE_LABEL}
+              onValueChange={(v) => setFilter("source", (v as SourceFilter | null) ?? "all")}
+            >
+              {filterTrigger}
+              <SelectContent>
+                {(Object.keys(SOURCE_LABEL) as SourceFilter[]).map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {SOURCE_LABEL[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>,
+          )}
+
+          {filterField(
+            "Tipo",
+            <Select
+              value={filters.marker}
+              items={MARKER_LABEL}
+              onValueChange={(v) => setFilter("marker", (v as MarkerFilter | null) ?? "all")}
+            >
+              {filterTrigger}
+              <SelectContent>
+                {(Object.keys(MARKER_LABEL) as MarkerFilter[]).map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {MARKER_LABEL[m]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>,
+          )}
+
+          {activeFilters > 0 && (
+            <div className="flex items-center justify-between gap-2 sm:col-span-2 lg:col-span-4">
+              <p className="text-xs text-muted-foreground">
+                {filtered.length} de {tasks.length} tarefa{tasks.length !== 1 ? "s" : ""} no recorte atual
+              </p>
+              <Button type="button" size="sm" variant="ghost" onClick={clearFilters}>
+                <FilterX className="size-3.5" />
+                Limpar filtros
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+      </div>
+
       {view === "panorama" ? (
         <TaskDashboard
           tasks={tasks}
@@ -879,9 +1116,19 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           </div>
         )
       ) : filtered.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          Nenhuma tarefa encontrada para esse filtro.
-        </p>
+        <div className="flex flex-col items-center gap-2 py-8">
+          <p className="text-center text-sm text-muted-foreground">
+            {activeFilters > 0
+              ? `Nenhuma tarefa no recorte atual (${tasks.length} no total).`
+              : "Nenhuma tarefa por aqui."}
+          </p>
+          {activeFilters > 0 && (
+            <Button type="button" size="sm" variant="outline" onClick={clearFilters}>
+              <FilterX className="size-3.5" />
+              Limpar filtros
+            </Button>
+          )}
+        </div>
       ) : view === "board" ? (
         <KanbanBoard tasks={filtered} categoryLabel={categoryLabel} onOpen={setOpenTaskId} onStatusChange={changeStatus} />
       ) : (
