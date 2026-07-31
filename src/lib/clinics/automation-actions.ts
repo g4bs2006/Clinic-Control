@@ -294,6 +294,7 @@ const MIRROR_COLUMN: Record<AutomationFieldName, keyof AutomacaoClinicasRow> = {
   scheduledContactTagId: "agendado_contact_tag_id",
   scheduledAtFieldKey: "agendado_em_field_key",
   scheduledForFieldKey: "agendado_para_field_key",
+  campaignFieldKey: "campanha_field_key",
   fbPanelTagId: "fb_panel_tag_id",
   fbContactTagId: "fb_contact_tag_id",
   igPanelTagId: "ig_panel_tag_id",

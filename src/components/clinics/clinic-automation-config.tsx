@@ -34,6 +34,7 @@ import {
   type AutomationDiagnostics,
 } from "@/lib/clinics/automation-actions";
 import {
+  AUTOMATION_FIELDS,
   AUTOMATION_FIELD_LABEL,
   AUTOMATION_FIELD_SOURCE,
   type AutomationCatalog,
@@ -53,9 +54,9 @@ const GROUPS: { title: string; hint: string; fields: AutomationFieldName[] }[] =
     fields: ["leadStepId", "scheduledStepId", "cancelledStepId"],
   },
   {
-    title: "Campos de data",
-    hint: "onde a automação grava quando agendou e para quando",
-    fields: ["scheduledAtFieldKey", "scheduledForFieldKey"],
+    title: "Campos personalizados",
+    hint: "onde a automação grava quando agendou, para quando e de qual campanha veio",
+    fields: ["scheduledAtFieldKey", "scheduledForFieldKey", "campaignFieldKey"],
   },
   {
     title: "Etiquetas de agendamento",
@@ -406,8 +407,8 @@ export function ClinicAutomationConfig({
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
                   {missing.length === 0
-                    ? "Todos os 13 campos definidos."
-                    : `${missing.length} de 13 campos sem definição.`}
+                    ? `Todos os ${AUTOMATION_FIELDS.length} campos definidos.`
+                    : `${missing.length} de ${AUTOMATION_FIELDS.length} campos sem definição.`}
                 </span>
                 <button
                   type="button"

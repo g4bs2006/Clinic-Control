@@ -14,7 +14,7 @@ export type AutomationStepOption = { id: string; title: string; position: number
 export type AutomationTagOption = { id: string; name: string };
 export type AutomationFieldOption = { key: string; name: string };
 
-/** Os 13 campos que a automação consome, todos opcionais até serem resolvidos. */
+/** Os 14 campos que a automação consome, todos opcionais até serem resolvidos. */
 export type AutomationConfig = {
   leadStepId: string | null;
   scheduledStepId: string | null;
@@ -23,6 +23,7 @@ export type AutomationConfig = {
   scheduledContactTagId: string | null;
   scheduledAtFieldKey: string | null;
   scheduledForFieldKey: string | null;
+  campaignFieldKey: string | null;
   fbPanelTagId: string | null;
   fbContactTagId: string | null;
   igPanelTagId: string | null;
@@ -41,6 +42,7 @@ export const AUTOMATION_FIELDS: AutomationFieldName[] = [
   "scheduledContactTagId",
   "scheduledAtFieldKey",
   "scheduledForFieldKey",
+  "campaignFieldKey",
   "fbPanelTagId",
   "fbContactTagId",
   "igPanelTagId",
@@ -58,6 +60,7 @@ export const AUTOMATION_FIELD_LABEL: Record<AutomationFieldName, string> = {
   scheduledContactTagId: "Etiqueta de contato “Agendou IA”",
   scheduledAtFieldKey: "Campo “Agendado em”",
   scheduledForFieldKey: "Campo “Agendado para”",
+  campaignFieldKey: "Campo “Campanha”",
   fbPanelTagId: "Etiqueta de card Facebook",
   fbContactTagId: "Etiqueta de contato Facebook",
   igPanelTagId: "Etiqueta de card Instagram",
@@ -78,6 +81,7 @@ export const AUTOMATION_FIELD_SOURCE: Record<
   scheduledContactTagId: "contactTag",
   scheduledAtFieldKey: "customField",
   scheduledForFieldKey: "customField",
+  campaignFieldKey: "customField",
   fbPanelTagId: "panelTag",
   fbContactTagId: "contactTag",
   igPanelTagId: "panelTag",
@@ -125,6 +129,7 @@ export const EMPTY_AUTOMATION_CONFIG: AutomationConfig = {
   scheduledContactTagId: null,
   scheduledAtFieldKey: null,
   scheduledForFieldKey: null,
+  campaignFieldKey: null,
   fbPanelTagId: null,
   fbContactTagId: null,
   igPanelTagId: null,
@@ -187,6 +192,7 @@ export function detectAutomation(catalog: AutomationCatalog): AutomationDetectio
 
   resolve("scheduledAtFieldKey", fieldsContaining("agendado em"));
   resolve("scheduledForFieldKey", fieldsContaining("agendado para"));
+  resolve("campaignFieldKey", fieldsContaining("campanha"));
 
   resolve("iaCardTagId", tagsWhere(catalog.panelTags, (n) => n === "ia"));
   resolve(

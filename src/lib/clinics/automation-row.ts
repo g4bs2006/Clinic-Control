@@ -15,6 +15,7 @@ export type AutomationIntegrationRow = {
   automation_scheduled_contact_tag_id?: string | null;
   automation_scheduled_at_field_key?: string | null;
   automation_scheduled_for_field_key?: string | null;
+  automation_campaign_field_key?: string | null;
   automation_fb_panel_tag_id?: string | null;
   automation_fb_contact_tag_id?: string | null;
   automation_ig_panel_tag_id?: string | null;
@@ -49,6 +50,7 @@ export function rowToAutomationConfig(row: AutomationIntegrationRow): Automation
     scheduledContactTagId: row.automation_scheduled_contact_tag_id ?? null,
     scheduledAtFieldKey: row.automation_scheduled_at_field_key ?? null,
     scheduledForFieldKey: row.automation_scheduled_for_field_key ?? null,
+    campaignFieldKey: row.automation_campaign_field_key ?? null,
     fbPanelTagId: row.automation_fb_panel_tag_id ?? null,
     fbContactTagId: row.automation_fb_contact_tag_id ?? null,
     igPanelTagId: row.automation_ig_panel_tag_id ?? null,
@@ -67,6 +69,7 @@ export function automationConfigToRow(config: AutomationConfig) {
     automation_scheduled_contact_tag_id: config.scheduledContactTagId,
     automation_scheduled_at_field_key: config.scheduledAtFieldKey,
     automation_scheduled_for_field_key: config.scheduledForFieldKey,
+    automation_campaign_field_key: config.campaignFieldKey,
     automation_fb_panel_tag_id: config.fbPanelTagId,
     automation_fb_contact_tag_id: config.fbContactTagId,
     automation_ig_panel_tag_id: config.igPanelTagId,
@@ -83,6 +86,7 @@ export const AUTOMATION_SELECT =
   "automation_lead_step_id, automation_scheduled_step_id, automation_cancelled_step_id, " +
   "automation_ia_card_tag_id, automation_scheduled_contact_tag_id, " +
   "automation_scheduled_at_field_key, automation_scheduled_for_field_key, " +
+  "automation_campaign_field_key, " +
   "automation_fb_panel_tag_id, automation_fb_contact_tag_id, " +
   "automation_ig_panel_tag_id, automation_ig_contact_tag_id, " +
   "automation_org_panel_tag_id, automation_org_contact_tag_id";
@@ -93,6 +97,7 @@ export const AUTOMATION_CONFIG_SELECT =
   "automation_lead_step_id, automation_scheduled_step_id, automation_cancelled_step_id, " +
   "automation_ia_card_tag_id, automation_scheduled_contact_tag_id, " +
   "automation_scheduled_at_field_key, automation_scheduled_for_field_key, " +
+  "automation_campaign_field_key, " +
   "automation_fb_panel_tag_id, automation_fb_contact_tag_id, " +
   "automation_ig_panel_tag_id, automation_ig_contact_tag_id, " +
   "automation_org_panel_tag_id, automation_org_contact_tag_id";

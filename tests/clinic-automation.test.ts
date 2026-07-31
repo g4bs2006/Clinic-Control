@@ -27,6 +27,7 @@ function catalog(over: Partial<AutomationCatalog> = {}): AutomationCatalog {
     customFields: [
       { key: "agendado_em", name: "Agendado em" },
       { key: "agendado_para", name: "Agendado para" },
+      { key: "campanha", name: "Campanha" },
     ],
     panelTags: [
       { id: "t-ia", name: "IA" },
@@ -53,12 +54,13 @@ describe("normalizeName", () => {
 });
 
 describe("detectAutomation", () => {
-  it("resolve os 13 campos num catálogo completo, sem avisos", () => {
+  it("resolve os 14 campos num catálogo completo, sem avisos", () => {
     const { config, warnings } = detectAutomation(catalog());
     expect(warnings).toEqual([]);
     expect(missingAutomationFields(config)).toEqual([]);
     expect(config.scheduledStepId).toBe("s-ag");
     expect(config.scheduledAtFieldKey).toBe("agendado_em");
+    expect(config.campaignFieldKey).toBe("campanha");
     expect(config.orgPanelTagId).toBe("t-org"); // casou apesar do acento
     expect(config.orgContactTagId).toBe("c-org"); // casou sem o acento
   });
@@ -102,6 +104,19 @@ describe("detectAutomation", () => {
     expect(config.scheduledAtFieldKey).toBe("k1");
   });
 
+  // Contas reais (31/07): a chave sai `campanha` ou `campanha-`, esta última
+  // quando o nome foi cadastrado com dois-pontos — mesmo padrão de `agendado-em-`.
+  it("Campanha casa por CONTÉM, com ou sem dois-pontos", () => {
+    expect(
+      detectAutomation(catalog({ customFields: [{ key: "campanha-", name: "Campanha:" }] }))
+        .config.campaignFieldKey,
+    ).toBe("campanha-");
+    expect(
+      detectAutomation(catalog({ customFields: [{ key: "campanha", name: "Campanha" }] })).config
+        .campaignFieldKey,
+    ).toBe("campanha");
+  });
+
   it("catálogo vazio gera aviso para cada campo e nada resolvido", () => {
     const { config, warnings } = detectAutomation({
       steps: [],
@@ -110,7 +125,7 @@ describe("detectAutomation", () => {
       contactTags: [],
     });
     expect(config).toEqual(EMPTY_AUTOMATION_CONFIG);
-    expect(warnings).toHaveLength(13);
+    expect(warnings).toHaveLength(14);
     expect(automationReadiness(config)).toBe("vazia");
   });
 });
@@ -136,7 +151,7 @@ describe("warningsForEmptyFields", () => {
     });
     const config = { ...EMPTY_AUTOMATION_CONFIG, scheduledStepId: "manual" };
     const msgs = warningsForEmptyFields(detection.warnings, config);
-    expect(msgs).toHaveLength(12);
+    expect(msgs).toHaveLength(13);
     expect(msgs.some((m) => m.includes("Etapa Agendados"))).toBe(false);
   });
 });

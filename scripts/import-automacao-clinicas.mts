@@ -47,6 +47,7 @@ const FIELD_MAP: Record<string, string> = {
   agendado_contact_tag_id: "automation_scheduled_contact_tag_id",
   agendado_em_field_key: "automation_scheduled_at_field_key",
   agendado_para_field_key: "automation_scheduled_for_field_key",
+  campanha_field_key: "automation_campaign_field_key",
   fb_panel_tag_id: "automation_fb_panel_tag_id",
   fb_contact_tag_id: "automation_fb_contact_tag_id",
   ig_panel_tag_id: "automation_ig_panel_tag_id",

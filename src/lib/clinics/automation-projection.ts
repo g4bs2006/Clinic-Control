@@ -55,6 +55,7 @@ function buildRow(input: ProjectionInput) {
     agendado_contact_tag_id: c.scheduledContactTagId,
     agendado_em_field_key: c.scheduledAtFieldKey,
     agendado_para_field_key: c.scheduledForFieldKey,
+    campanha_field_key: c.campaignFieldKey,
     fb_tag_nome: ORIGIN_LABEL.fb,
     fb_panel_tag_id: c.fbPanelTagId,
     fb_contact_tag_id: c.fbContactTagId,
@@ -127,6 +128,7 @@ export type AutomacaoClinicasRow = {
   agendado_contact_tag_id: string | null;
   agendado_em_field_key: string | null;
   agendado_para_field_key: string | null;
+  campanha_field_key: string | null;
   fb_panel_tag_id: string | null;
   fb_contact_tag_id: string | null;
   ig_panel_tag_id: string | null;
@@ -146,7 +148,7 @@ export async function listAutomacaoClinicasRows(): Promise<AutomacaoClinicasRow[
   const { data, error } = await pub
     .from("automacao_clinicas")
     .select(
-      "id, helena_company_id, nome, panel_id, ativo, step_id, agendado_step_id, cancelado_step_id, ia_card_tag_id, agendado_contact_tag_id, agendado_em_field_key, agendado_para_field_key, fb_panel_tag_id, fb_contact_tag_id, ig_panel_tag_id, ig_contact_tag_id, org_panel_tag_id, org_contact_tag_id, status_obs, updated_at",
+      "id, helena_company_id, nome, panel_id, ativo, step_id, agendado_step_id, cancelado_step_id, ia_card_tag_id, agendado_contact_tag_id, agendado_em_field_key, agendado_para_field_key, campanha_field_key, fb_panel_tag_id, fb_contact_tag_id, ig_panel_tag_id, ig_contact_tag_id, org_panel_tag_id, org_contact_tag_id, status_obs, updated_at",
     );
   if (error) throw new Error(error.message);
   return (data ?? []) as AutomacaoClinicasRow[];
