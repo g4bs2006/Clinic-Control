@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Geist } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { PwaRegister } from "@/components/pwa-register";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+// Mono é a face utilitária: rótulos, chaves e contagens — a cara do conteúdo
+// deste app (uuids, `campanha-`, "12/29"). Entrou na tela de login.
+const geistMono = Geist_Mono({subsets:['latin'],variable:'--font-geist-mono'});
 
 export const metadata: Metadata = {
   title: "Gestão de Clínicas — Contact.IA",
@@ -38,7 +41,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={cn("dark", "font-sans", geist.variable)}>
+    <html lang="pt-BR" className={cn("dark", "font-sans", geist.variable, geistMono.variable)}>
       <body className="min-h-screen bg-background text-foreground antialiased">
         {children}
         <Toaster />
