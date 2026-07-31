@@ -4,7 +4,10 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { signSessionToken, verifySessionToken } from "./token";
 import { SESSION_COOKIE_NAME as SESSION_COOKIE } from "./cookie-name";
 
-const SESSION_DAYS = 30;
+/** Validade do cookie de sessão. Exportada porque a tela de login mostra o
+ *  valor na faixa de status — repetir o número lá viraria mentira no dia em
+ *  que este mudasse. */
+export const SESSION_DAYS = 30;
 
 export type SessionUser = {
   id: string;

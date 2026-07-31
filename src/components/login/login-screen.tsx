@@ -1,135 +1,144 @@
 "use client";
 
-import { useState } from "react";
-import { Activity, AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
 import { signIn } from "@/lib/auth/actions";
 
 /**
- * Tela de login.
+ * Tela de login: uma placa de instrumento.
  *
- * A ideia: o app inteiro existe para mover um card de "Leads" para
- * "Agendados" (a taxa de agendamento é a métrica central da carteira). Então
- * a tela ENCENA isso — o card de login fica na coluna Leads e atravessa para
- * Agendados enquanto o servidor confere a senha, com a coluna de destino
- * acendendo junto. O vocabulário do board é o mesmo que a equipe lê o dia
- * inteiro, então a metáfora se explica sozinha para quem usa.
+ * A hierarquia da página é a de uma placa de equipamento — fabricante
+ * (Contact.IA), modelo (Clinic Control), controles (os campos) e faixa de
+ * estado na base. Nenhum desses elementos é enfeite: cada um diz uma coisa
+ * verdadeira, e a faixa mostra dado de verdade (em qual implantação você está,
+ * quanto dura a sessão, que horas são no servidor).
  *
- * O board só aparece a partir de 1280px: abaixo disso as colunas ficariam
- * estreitas demais para os campos, e a tela vira um card centrado — a
- * travessia então é uma subida curta (mesma intenção, escala menor).
+ * Sem card, sem sombra, sem gradiente. O único acento colorido é a seta do
+ * botão e o traço que responde ao foco — num visual assim a precisão do
+ * espaçamento e da escala é que carrega a personalidade, então qualquer
+ * decoração a mais tira em vez de somar.
  *
- * `pending` é estado local no submit, não useFormStatus: `signIn` é uma
- * Server Action que termina em redirect (sucesso vai para "/", falha volta
- * para /login?error=…), então a página é sempre substituída e o estado se
- * reinicia sozinho na navegação.
+ * O traço sob o wordmark é a única peça móvel: ele desenha na entrada e vira
+ * a barra de progresso enquanto o servidor confere a senha.
+ *
+ * `pending` é estado local no submit, não useFormStatus: `signIn` termina em
+ * redirect (sucesso vai para "/", falha volta para /login?error=…), então a
+ * página é sempre substituída e o estado se reinicia na navegação.
  */
-
-// Duas colunas, não o funil inteiro: a tese do produto é a travessia de Leads
-// para Agendados. "Fechados" só acrescentaria uma coluna vazia à composição.
-const COLUMNS = ["Leads", "Agendados"];
-
-// Traço de ECG do divisor — a marca do app (ícone Activity) desenhada por
-// extenso. pathLength=100 no SVG deixa o dasharray independente destes números.
-const PULSE =
-  "M0 10 H52 l5 -7 l5 14 l5 -11 l4 4 H132 l6 -5 l4 9 l5 -4 H206 l5 -8 l5 15 l5 -7 H300";
-
-export function LoginScreen({ error }: { error: "locked" | "invalid" | null }) {
+export function LoginScreen({
+  error,
+  deploy,
+  sessionDays,
+}: {
+  error: "locked" | "invalid" | null;
+  deploy: string | null;
+  sessionDays: number;
+}) {
   const [pending, setPending] = useState(false);
+  const clock = useServerClock();
   const state = pending ? "pending" : error ? "error" : "idle";
 
   return (
-    <main className="login-root">
-      <div className="login-grid" data-state={state}>
-        {COLUMNS.map((name, i) => (
-          <div key={name} className="login-col" aria-hidden="true">
-            <span className="login-col-label">{name}</span>
-            {/* Slot vago em Agendados: diz para onde o card vai antes de ele ir. */}
-            {i === 1 && <span className="login-slot" />}
-          </div>
-        ))}
+    <main className="login" data-state={state}>
+      <div className="login-plate">
+        <p className="login-maker">Contact.IA</p>
 
-        <form action={signIn} onSubmit={() => setPending(true)} className="login-card">
-          <div className="flex items-center gap-3">
-            <span className="login-mark">
-              <Activity className="size-[1.15rem]" strokeWidth={2.25} />
+        {/* As duas linhas são justificadas à MESMA largura (ver .login-name no
+            CSS), o que exige as letras como elementos próprios. O bloco vira um
+            retângulo de tipo em vez de duas palavras com a direita irregular. */}
+        <h1 className="login-name">
+          {["Clinic", "Control"].map((word) => (
+            <span key={word} className="login-line">
+              {[...word].map((letter, i) => (
+                <span key={`${word}-${i}`}>{letter}</span>
+              ))}
             </span>
-            <span className="flex flex-col gap-0.5">
-              <span className="login-wordmark">Clinic Control</span>
-              <span className="login-sub">Contact.IA · carteira de clínicas</span>
-            </span>
+          ))}
+        </h1>
+
+        {/* Desenha na entrada; vira barra de progresso no submit. */}
+        <div className="login-rule" />
+
+        <form action={signIn} onSubmit={() => setPending(true)} className="login-form">
+          <div className="login-field" data-invalid={error ? "" : undefined}>
+            <label className="login-label" htmlFor="email">
+              E-mail
+            </label>
+            <input
+              className="login-input"
+              id="email"
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              autoFocus
+              disabled={pending}
+            />
           </div>
 
-          <svg
-            className="login-pulse my-5"
-            viewBox="0 0 300 20"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <defs>
-              <linearGradient id="login-pulse-grad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#7C3AED" />
-                <stop offset="50%" stopColor="#C026D3" />
-                <stop offset="100%" stopColor="#DC2626" />
-              </linearGradient>
-            </defs>
-            <path className="login-pulse-base" d={PULSE} pathLength={100} />
-            <path className="login-pulse-live" d={PULSE} pathLength={100} />
-          </svg>
-
-          <div className="space-y-3.5">
-            <div className="login-field">
-              <label className="login-label" htmlFor="email">
-                E-mail
-              </label>
-              <input
-                className="login-input"
-                id="email"
-                name="email"
-                type="email"
-                placeholder="voce@contactia.com.br"
-                required
-                autoComplete="email"
-                autoFocus
-                disabled={pending}
-              />
-            </div>
-
-            <div className="login-field">
-              <label className="login-label" htmlFor="password">
-                Senha
-              </label>
-              <input
-                className="login-input"
-                id="password"
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-                disabled={pending}
-              />
-            </div>
+          <div className="login-field" data-invalid={error ? "" : undefined}>
+            <label className="login-label" htmlFor="password">
+              Senha
+            </label>
+            <input
+              className="login-input"
+              id="password"
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              disabled={pending}
+            />
           </div>
 
           {error && (
-            <p className="login-error mt-4" role="alert">
-              <AlertTriangle className="mt-px size-3.5 shrink-0" />
+            <p className="login-error" role="alert">
               {error === "locked"
                 ? "Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo."
                 : "E-mail ou senha não conferem."}
             </p>
           )}
 
-          <button className="login-submit mt-5" type="submit" disabled={pending}>
-            {pending ? "Entrando…" : "Entrar"}
+          <button className="login-submit" type="submit" disabled={pending}>
+            {pending ? "Entrando" : "Entrar"}
+            <span className="login-arrow" aria-hidden="true">
+              →
+            </span>
           </button>
-
-          <p className="login-note mt-4">
-            Esqueceu a senha? Peça uma redefinição ao gestor — o acesso é criado e
-            reposto por lá.
-          </p>
         </form>
+
+        <p className="login-help">
+          Esqueceu a senha? Peça uma redefinição ao gestor — o acesso é criado e
+          reposto por lá.
+        </p>
       </div>
+
+      <footer className="login-strip">
+        {deploy && <span>{deploy}</span>}
+        <span>Sessão de {sessionDays} dias</span>
+        <span className="login-clock">{clock ?? "--:--:--"}</span>
+      </footer>
     </main>
   );
+}
+
+/**
+ * Relógio de parede em BRT, o único movimento contínuo da tela. Começa nulo e
+ * só liga depois da montagem: renderizar a hora no servidor daria divergência
+ * de hidratação garantida, já que o relógio anda entre o HTML e o cliente.
+ */
+function useServerClock() {
+  const [now, setNow] = useState<string | null>(null);
+  useEffect(() => {
+    const tick = () =>
+      setNow(
+        new Date().toLocaleTimeString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          hour12: false,
+        }),
+      );
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
 }
