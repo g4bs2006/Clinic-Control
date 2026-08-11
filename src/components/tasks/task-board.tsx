@@ -1249,7 +1249,6 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         onClose={() => setOpenTaskId(null)}
         onStatusChange={changeStatus}
         onDeleted={(id) => setTasks((ts) => ts.filter((t) => t.id !== id))}
-        onSnoozed={(id, until) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, snoozed_until: until } : t)))}
         onPinned={(id, pinnedAt) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, pinned_at: pinnedAt } : t)))}
         onChanged={refresh}
         currentUserId={currentUserId}

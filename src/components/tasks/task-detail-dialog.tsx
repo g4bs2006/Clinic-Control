@@ -16,8 +16,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
-import { SnoozeButton, fmtSnoozeDate } from "./snooze-button"
-import { spDateParts } from "@/lib/tasks/agenda"
 import { createClient } from "@/lib/supabase/client"
 import { imageFilesFromClipboard } from "@/lib/paste-images"
 import {
@@ -25,7 +23,6 @@ import {
   updateTask,
   updateTaskStatus,
   deleteTask,
-  snoozeTask,
   pinTask,
   listSubtasks,
   createSubtasks,
@@ -131,8 +128,6 @@ interface TaskDetailDialogProps {
   onStatusChange?: (id: string, status: TaskStatus) => void
   /** Remove a tarefa do board na hora ao excluir (otimista, sem refetch). */
   onDeleted?: (id: string) => void
-  /** Reflete o adiamento no board na hora (some da vista se no futuro). */
-  onSnoozed?: (id: string, until: string | null) => void
   /** Reflete o fixar/soltar no board na hora (entra/sai do bloco "Em foco"). */
   onPinned?: (id: string, pinnedAt: string | null) => void
   onChanged: () => void
@@ -143,7 +138,7 @@ interface TaskDetailDialogProps {
   backHref?: string
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onSnoozed, onPinned, onChanged, currentUserId = null, asPage = false, backHref = "/tarefas" }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onPinned, onChanged, currentUserId = null, asPage = false, backHref = "/tarefas" }: TaskDetailDialogProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
@@ -181,7 +176,6 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   // Marca que houve alteração; o board só é re-sincronizado ao fechar (uma vez),
   // em vez de um refetch de página inteira a cada micro-edição.
   const changedRef = useRef(false)
-  const today = spDateParts(new Date()).today
   const doneSubtasks = subtasks.filter((s) => s.status === "concluida").length
   const profileNames = profiles.map((p) => p.name).filter((n): n is string => !!n)
 
@@ -376,35 +370,6 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       const pendIds = new Set(pend.map((p) => p.id))
       setPendingSubtasks((prev) => prev.filter((p) => !pendIds.has(p.id)))
     })
-  }
-
-  function applySnooze(id: string, until: string | null) {
-    const snapshot = task
-    setTask((t) => (t ? { ...t, snoozed_until: until } : t))
-    onSnoozed?.(id, until)
-    startTransition(async () => {
-      const res = await snoozeTask(id, until)
-      if (!res.ok) {
-        setTask(snapshot)
-        toast.error(res.error)
-      }
-    })
-  }
-
-  function handleSnooze(until: string | null) {
-    if (!taskId) return
-    const id = taskId
-    const prev = task?.snoozed_until ?? null
-    const title = task?.title
-    applySnooze(id, until)
-    if (until) {
-      toast.success(`Adiada para ${fmtSnoozeDate(until, today)}`, {
-        description: title,
-        action: { label: "Desfazer", onClick: () => applySnooze(id, prev) },
-      })
-    } else {
-      toast.success("Adiamento removido", { description: title })
-    }
   }
 
   function applyPin(id: string, pinnedAt: string | null) {
@@ -1243,27 +1208,17 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 {task.pinned_at ? <PinOff className="size-4" /> : <Pin className="size-4" />}
                 {task.pinned_at ? "Soltar do foco" : "Fixar em foco"}
               </Button>
-              <div className="flex gap-2">
-                <SnoozeButton
-                  today={today}
-                  snoozedUntil={task.snoozed_until}
-                  onSnooze={handleSnooze}
-                  variant="button"
-                  disabled={pending}
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="flex-1 text-red-400 hover:bg-red-500/10 hover:text-red-500"
-                  disabled={pending}
-                  onClick={remove}
-                  title="Excluir tarefa"
-                >
-                  <Trash2 className="size-4" />
-                  Excluir
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full text-red-400 hover:bg-red-500/10 hover:text-red-500"
+                disabled={pending}
+                onClick={remove}
+                title="Excluir tarefa"
+              >
+                <Trash2 className="size-4" />
+                Excluir
+              </Button>
             </div>
           </aside>
 
@@ -1372,7 +1327,6 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
               {task.pinned_at ? <PinOff className="size-4" /> : <Pin className="size-4" />}
               <span className="hidden sm:inline">{task.pinned_at ? "Soltar" : "Fixar"}</span>
             </Button>
-            <SnoozeButton today={today} snoozedUntil={task.snoozed_until} onSnooze={handleSnooze} variant="button" disabled={pending} />
             <Button
               type="button"
               variant="ghost"
