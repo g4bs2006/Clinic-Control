@@ -21,6 +21,8 @@ import { listPartnerContacts } from "@/lib/clinics/partner-contacts-actions"
 import { automationIsConfigurable } from "@/lib/clinics/automation-actions"
 import { ClinicAutomationConfig } from "@/components/clinics/clinic-automation-config"
 import { ClinicN8nUrl } from "@/components/clinics/clinic-n8n-url"
+import { getAniversariantesSetup } from "@/lib/clinics/aniversariantes-actions"
+import { ClinicAniversariantes } from "@/components/clinics/clinic-aniversariantes"
 
 export const dynamic = "force-dynamic"
 
@@ -53,6 +55,7 @@ export default async function ClinicCadastroPage({
     fileNotes,
     partnerContacts,
     automationOk,
+    aniversariantesSetup,
   ] = await Promise.all([
     listUserProfiles(),
     listProvisioning(id),
@@ -63,6 +66,7 @@ export default async function ClinicCadastroPage({
     listPartnerContacts(),
     // Só o banco: entra na mesma rodada de fetch, sem chamar a Helena.
     automationIsConfigurable(id),
+    getAniversariantesSetup(id, clinic.system ?? null),
   ])
   const strategistContacts = partnerContacts.filter((c) => c.role === "strategist")
   const trafficManagerContacts = partnerContacts.filter((c) => c.role === "traffic_manager")
@@ -150,6 +154,16 @@ export default async function ClinicCadastroPage({
             label="Abrir configuração (consulta a Helena)"
             n8nUrl={clinic.n8n_url ?? null}
           />
+        </Panel>
+      )}
+
+      {/* ── Aniversariantes (mensagens automáticas de aniversário) ── */}
+      {aniversariantesSetup.ok && aniversariantesSetup.supported && (
+        <Panel
+          title="Aniversariantes"
+          subtitle="mensagens automáticas de aniversário · app à parte, reaproveita credenciais já cadastradas aqui"
+        >
+          <ClinicAniversariantes clinicId={id} clinicName={clinic.name} setup={aniversariantesSetup} />
         </Panel>
       )}
 
