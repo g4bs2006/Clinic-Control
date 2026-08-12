@@ -12,11 +12,8 @@ import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import {
-  provisionAniversariantes,
-  type AniversariantesSetup,
-  type SistemaProntuario,
-} from "@/lib/clinics/aniversariantes-actions";
+import { provisionAniversariantes } from "@/lib/clinics/aniversariantes-actions";
+import type { AniversariantesSetup, SistemaProntuario } from "@/lib/clinics/aniversariantes-types";
 
 // Projeto Vercel do Aniversariantes (ver Aniversariantes/README.md § Deploy).
 const ANIVERSARIANTES_BASE_URL = "https://aniversariantes-murex.vercel.app";
