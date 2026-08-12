@@ -109,10 +109,11 @@ function ProvisionForm({
   const [helenaToken, setHelenaToken] = useState(clinica ? "" : suggestion.helenaToken ?? "");
   const [helenaFrom, setHelenaFrom] = useState(clinica?.helena_from ?? suggestion.helenaFrom ?? "");
   const [eclinicaToken, setEclinicaToken] = useState("");
-  const [clinicorpUsuarioApi, setClinicorpUsuarioApi] = useState(clinica?.clinicorp_usuario_api ?? "");
   const [clinicorpTokenApi, setClinicorpTokenApi] = useState(clinica ? "" : suggestion.clinicorpTokenApi ?? "");
-  const [clinicorpSubscriberId, setClinicorpSubscriberId] = useState(
-    clinica ? "" : suggestion.clinicorpSubscriberId ?? "",
+  // Usuário API (Basic Auth) e Subscriber ID são o mesmo valor na prática —
+  // um campo só, usado pros dois na hora de gravar (ver aniversariantes-actions.ts).
+  const [clinicorpIdentifier, setClinicorpIdentifier] = useState(
+    clinica?.clinicorp_usuario_api ?? (clinica ? "" : suggestion.clinicorpSubscriberId ?? ""),
   );
   const [pending, startTransition] = useTransition();
 
@@ -126,9 +127,9 @@ function ProvisionForm({
         helenaToken,
         helenaFrom,
         eclinicaToken,
-        clinicorpUsuarioApi,
+        clinicorpUsuarioApi: clinicorpIdentifier,
+        clinicorpSubscriberId: clinicorpIdentifier,
         clinicorpTokenApi,
-        clinicorpSubscriberId,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -175,16 +176,6 @@ function ProvisionForm({
         {isClinicorp ? (
           <>
             <div className="space-y-1">
-              <Label htmlFor="an-cp-usuario">Usuário API (Basic Auth) *</Label>
-              <Input
-                id="an-cp-usuario"
-                value={clinicorpUsuarioApi}
-                onChange={(e) => setClinicorpUsuarioApi(e.target.value)}
-                placeholder="Sem fonte no Clinic Control — digitar"
-                required
-              />
-            </div>
-            <div className="space-y-1">
               <Label htmlFor="an-cp-token">
                 Token API * {suggestion.clinicorpTokenApi && !clinica && "(do formulário)"}
               </Label>
@@ -195,14 +186,15 @@ function ProvisionForm({
                 required
               />
             </div>
-            <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor="an-cp-subscriber">
-                Subscriber ID * {suggestion.clinicorpSubscriberId && !clinica && "(do formulário)"}
+            <div className="space-y-1">
+              <Label htmlFor="an-cp-identifier">
+                Usuário API / Subscriber ID *{" "}
+                {suggestion.clinicorpSubscriberId && !clinica && "(do formulário)"}
               </Label>
               <Input
-                id="an-cp-subscriber"
-                value={clinicorpSubscriberId}
-                onChange={(e) => setClinicorpSubscriberId(e.target.value)}
+                id="an-cp-identifier"
+                value={clinicorpIdentifier}
+                onChange={(e) => setClinicorpIdentifier(e.target.value)}
                 required
               />
             </div>
