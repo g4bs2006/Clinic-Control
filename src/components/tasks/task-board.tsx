@@ -678,8 +678,10 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   const isSnoozedActive = (t: TaskRow) => t.snoozed_until != null && t.snoozed_until > today
   const snoozedCount = tasks.filter(isSnoozedActive).length
   const isPinned = (t: TaskRow) => t.pinned_at != null
-  // Fixar é intenção explícita — vence o "esconder adiadas".
-  const hiddenBySnooze = (t: TaskRow) => isSnoozedActive(t) && !isPinned(t)
+  // Adiar vence Fixar: "adiar" é "não quero ver isso agora", ponto final — uma
+  // tarefa fixada e adiada some da vista (inclusive do bloco "Em foco") até a
+  // data voltar, exatamente como qualquer outra tarefa adiada.
+  const hiddenBySnooze = (t: TaskRow) => isSnoozedActive(t)
 
   const activeFilters = activeFilterCount(filters)
   // A busca tem campo próprio na barra, então o "(N)" do botão conta só o painel.
@@ -753,8 +755,9 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   }
 
   // Bloco "Em foco" — o que está fixado, no topo da Lista e da Minha Semana.
-  // Fica visível mesmo que a tarefa esteja adiada; ao soltar, ela volta pro
-  // lugar normal na hora (otimista) e o bloco some quando esvazia.
+  // Some se a tarefa for adiada (adiar vence fixar — ver hiddenBySnooze); ao
+  // soltar o foco, ela volta pro lugar normal na hora (otimista) e o bloco
+  // some quando esvazia.
   function focusBlock(items: TaskRow[], selectable: boolean) {
     if (!items.length) return null
     return (
