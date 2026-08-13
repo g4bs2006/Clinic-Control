@@ -193,14 +193,18 @@ export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
  * recentes primeiro. Ficam fora das listagens normais (archived_at not null),
  * mas seguem no banco; esta função é o que alimenta a visão de histórico.
  *
+ * `clinicId` recorta pra uma clínica só (painel embutido na page dela — mesma
+ * ideia do `listClinicTasks`, sem escopo de carteira: a rota da clínica já
+ * garante acesso). Sem `clinicId` (aba "Histórico" da página /tarefas geral),
+ * cai no escopo de carteira normal, mostrando todas as clínicas do usuário.
+ *
  * O limite é alto de propósito: esta é a "biblioteca" de processos resolvidos
  * da clínica (alguém busca aqui meses depois para ver como uma tarefa foi
  * fechada), não um cache de "descartar por engano" — não pode cortar o
  * histórico como se fosse uma lixeira de poucos dias.
  */
-export async function listArchivedTasks(limit = 1000): Promise<TaskRow[]> {
+export async function listArchivedTasks(limit = 1000, clinicId?: string): Promise<TaskRow[]> {
   const supabase = await createClient();
-  const { filter, clinicIds } = await carteiraScope();
 
   let query = supabase
     .from("tasks")
@@ -208,11 +212,16 @@ export async function listArchivedTasks(limit = 1000): Promise<TaskRow[]> {
     .is("parent_task_id", null)
     .not("archived_at", "is", null);
 
-  if (clinicIds !== null) {
-    const devId = filter as string;
-    query = clinicIds.length
-      ? query.or(`assigned_to.eq.${devId},clinic_id.in.(${clinicIds.join(",")})`)
-      : query.eq("assigned_to", devId);
+  if (clinicId) {
+    query = query.eq("clinic_id", clinicId);
+  } else {
+    const { filter, clinicIds } = await carteiraScope();
+    if (clinicIds !== null) {
+      const devId = filter as string;
+      query = clinicIds.length
+        ? query.or(`assigned_to.eq.${devId},clinic_id.in.(${clinicIds.join(",")})`)
+        : query.eq("assigned_to", devId);
+    }
   }
 
   const { data, error } = await query
