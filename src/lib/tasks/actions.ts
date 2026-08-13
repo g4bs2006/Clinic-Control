@@ -192,8 +192,13 @@ export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
  * Tarefas arquivadas (histórico) — mesmo escopo de carteira das ativas, mais
  * recentes primeiro. Ficam fora das listagens normais (archived_at not null),
  * mas seguem no banco; esta função é o que alimenta a visão de histórico.
+ *
+ * O limite é alto de propósito: esta é a "biblioteca" de processos resolvidos
+ * da clínica (alguém busca aqui meses depois para ver como uma tarefa foi
+ * fechada), não um cache de "descartar por engano" — não pode cortar o
+ * histórico como se fosse uma lixeira de poucos dias.
  */
-export async function listArchivedTasks(limit = 100): Promise<TaskRow[]> {
+export async function listArchivedTasks(limit = 1000): Promise<TaskRow[]> {
   const supabase = await createClient();
   const { filter, clinicIds } = await carteiraScope();
 

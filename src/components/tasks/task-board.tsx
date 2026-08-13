@@ -103,6 +103,34 @@ function subscribeFilters(onChange: () => void) {
   return () => window.removeEventListener(FILTERS_EVENT, onChange)
 }
 
+// "Mostrar concluídas" — mesma ideia acima, chave própria (não é um recorte de
+// busca, é um toggle de visão). Sem persistir, o toggle voltava a esconder as
+// concluídas a cada visita à página, o que fazia parecer que elas tinham sumido.
+const SHOW_DONE_STORAGE_KEY = "cc-tarefas-mostrar-concluidas"
+const SHOW_DONE_EVENT = "cc-tarefas-mostrar-concluidas-change"
+
+function readStoredShowDone(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_DONE_STORAGE_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+function writeStoredShowDone(value: boolean) {
+  try {
+    window.localStorage.setItem(SHOW_DONE_STORAGE_KEY, value ? "1" : "0")
+  } catch {
+    // Quota/modo privativo: segue só em memória (não persiste, mas não quebra).
+  }
+  window.dispatchEvent(new Event(SHOW_DONE_EVENT))
+}
+
+function subscribeShowDone(onChange: () => void) {
+  window.addEventListener(SHOW_DONE_EVENT, onChange)
+  return () => window.removeEventListener(SHOW_DONE_EVENT, onChange)
+}
+
 const PRIORITY_DOT: Record<TaskPriority, string> = {
   urgente: "bg-red-400",
   alta: "bg-orange-400",
@@ -407,28 +435,42 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     writeStoredFilters(DEFAULT_LIST_FILTERS)
   }
 
-  const [view, setView] = useState<"list" | "board" | "week" | "panorama">("list")
-  const [showDone, setShowDone] = useState(false)
+  const [view, setView] = useState<"list" | "board" | "week" | "panorama" | "historico">("list")
+  // Persistido (ver subscribeShowDone acima) — sem isso, o toggle resetava a
+  // cada visita e as concluídas pareciam ter sumido de vez.
+  const showDone = useSyncExternalStore(subscribeShowDone, readStoredShowDone, () => false)
+  const setShowDone = (next: boolean | ((prev: boolean) => boolean)) =>
+    writeStoredShowDone(typeof next === "function" ? next(showDone) : next)
   const [showSnoozed, setShowSnoozed] = useState(false)
   // Mobile: filtros recolhidos num botão "Filtros" (no desktop ficam sempre visíveis).
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
-  // Histórico de arquivadas — carregado sob demanda (null = oculto).
+  // Histórico (view "Histórico") — carregado ao entrar na aba, não é mais um
+  // toggle manual: é a biblioteca de processos resolvidos, então deve aparecer
+  // sozinha assim que o usuário pede pra ver, sem um clique extra em "Arquivadas".
   const [archived, setArchived] = useState<TaskRow[] | null>(null)
   const [archivedPending, startArchivedTransition] = useTransition()
-
-  function toggleArchived() {
-    if (archived !== null) {
+  const archivedLoadedRef = useRef(false)
+  // Resync durante o render (mesmo padrão do `prevInitial` acima) em vez de
+  // useEffect: entra na aba Histórico → dispara a carga; sai dela → descarrega,
+  // para a próxima entrada trazer tarefas recém-arquivadas nesse meio-tempo.
+  const prevViewRef = useRef(view)
+  if (prevViewRef.current !== view) {
+    prevViewRef.current = view
+    if (view !== "historico") {
+      archivedLoadedRef.current = false
       setArchived(null)
-      return
+    } else if (!archivedLoadedRef.current) {
+      archivedLoadedRef.current = true
+      startArchivedTransition(async () => {
+        try {
+          setArchived(await listArchivedTasks())
+        } catch {
+          archivedLoadedRef.current = false
+          toast.error("Falha ao carregar histórico.")
+        }
+      })
     }
-    startArchivedTransition(async () => {
-      try {
-        setArchived(await listArchivedTasks())
-      } catch {
-        toast.error("Falha ao carregar arquivadas.")
-      }
-    })
   }
 
   function restore(id: string) {
@@ -655,6 +697,12 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       if (!b.due_date) return -1
       return a.due_date < b.due_date ? -1 : 1
     })
+  // Histórico: mesma busca/filtros da Lista, aplicados sobre o arquivo em vez
+  // das tarefas ativas — é a mesma barra, só que aponta pra outra fonte.
+  const archivedFiltered = (archived ?? [])
+    .filter((t) => matchesFilters(t, filters, today, endOfWeek))
+    .sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""))
+
   // ── "Em foco": as fixadas saem da lista principal e viram um bloco no topo ──
   // Ordena pela fixação mais recente (acabei de fixar → topo do bloco).
   const pinnedTasks = filtered
@@ -736,9 +784,10 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     )
   }
 
-  // Busca e painel de filtros só fazem sentido na Lista/Board (a Semana é a
-  // agenda pessoal e o Panorama tem recortes próprios).
-  const showFilterBar = view === "list" || view === "board"
+  // Busca e painel de filtros também valem no Histórico (achar uma tarefa
+  // resolvida meses atrás é o motivo da aba existir). A Semana é a agenda
+  // pessoal e o Panorama tem recortes próprios — nenhum dos dois usa busca.
+  const showFilterBar = view === "list" || view === "board" || view === "historico"
 
   return (
     <div className="flex flex-col gap-6">
@@ -811,20 +860,6 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           </Button>
         )}
 
-        {view === "list" && (
-          <Button
-            type="button"
-            size="sm"
-            variant={archived !== null ? "secondary" : "outline"}
-            disabled={archivedPending}
-            onClick={toggleArchived}
-            title="Histórico de tarefas arquivadas"
-          >
-            <Archive className="size-3.5" />
-            {archived !== null ? "Ocultar arquivadas" : "Arquivadas"}
-          </Button>
-        )}
-
         <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
           <Button
             type="button"
@@ -865,6 +900,16 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
             onClick={() => setView("panorama")}
           >
             <BarChart3 className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={view === "historico" ? "secondary" : "ghost"}
+            title="Ver histórico (tarefas concluídas/canceladas arquivadas)"
+            className="size-9 sm:size-7"
+            onClick={() => setView("historico")}
+          >
+            <Archive className="size-3.5" />
           </Button>
         </div>
 
@@ -1053,7 +1098,9 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           {activeFilters > 0 && (
             <div className="flex items-center justify-between gap-2 sm:col-span-2 lg:col-span-4">
               <p className="text-xs text-muted-foreground">
-                {filtered.length} de {tasks.length} tarefa{tasks.length !== 1 ? "s" : ""} no recorte atual
+                {view === "historico"
+                  ? `${archivedFiltered.length} de ${archived?.length ?? 0} tarefa${(archived?.length ?? 0) !== 1 ? "s" : ""} no recorte atual`
+                  : `${filtered.length} de ${tasks.length} tarefa${tasks.length !== 1 ? "s" : ""} no recorte atual`}
               </p>
               <Button type="button" size="sm" variant="ghost" onClick={clearFilters}>
                 <FilterX className="size-3.5" />
@@ -1075,6 +1122,67 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           currentUserId={currentUserId}
           onOpenTask={setOpenTaskId}
         />
+      ) : view === "historico" ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            Biblioteca de tarefas concluídas e canceladas — seguem no banco (nada é apagado); use a busca e os
+            filtros acima para achar como um processo antigo foi resolvido.
+          </p>
+          {archivedPending && archived === null ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Carregando histórico…</p>
+          ) : archivedFiltered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {(archived?.length ?? 0) > 0
+                ? "Nenhuma tarefa no recorte atual."
+                : "Nenhuma tarefa arquivada ainda."}
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border/40">
+              {archivedFiltered.map((t) => (
+                <li key={t.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => setOpenTaskId(t.id)}
+                      className="block truncate text-left text-sm text-muted-foreground line-through hover:text-foreground"
+                    >
+                      {t.title}
+                    </button>
+                    <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground/70">
+                      <span className="rounded bg-accent/50 px-1.5 py-0.5">{categoryLabel[t.category] ?? t.category}</span>
+                      {t.clinic_id && t.clinic_name && (
+                        <>
+                          ·{" "}
+                          <Link href={`/clinicas/${t.clinic_id}`} className="hover:text-foreground transition-colors">
+                            {t.clinic_name}
+                          </Link>
+                        </>
+                      )}
+                      {t.assigned_to_name && <>· {t.assigned_to_name}</>}
+                      {t.completed_at && (
+                        <>
+                          ·{" "}
+                          {t.status === "cancelada" ? "cancelada" : "concluída"} em{" "}
+                          {new Date(t.completed_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={archivedPending}
+                    onClick={() => restore(t.id)}
+                  >
+                    <RotateCcw className="size-3.5" />
+                    Restaurar
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       ) : view === "week" ? (
         myOpenTasks.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
@@ -1186,51 +1294,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         </div>
       )}
 
-      {view === "list" && archived !== null && (
-        <div className="rounded-lg border border-border/60 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Arquivadas {archived.length > 0 && `(${archived.length})`}
-            <span className="ml-2 font-normal normal-case tracking-normal text-muted-foreground/60">
-              histórico — seguem no banco; restaure para reativar
-            </span>
-          </p>
-          {archived.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nenhuma tarefa arquivada.</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-border/40">
-              {archived.map((t) => (
-                <li key={t.id} className="flex items-center gap-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => setOpenTaskId(t.id)}
-                      className="block truncate text-left text-sm text-muted-foreground line-through hover:text-foreground"
-                    >
-                      {t.title}
-                    </button>
-                    <span className="text-xs text-muted-foreground/70">
-                      {categoryLabel[t.category] ?? t.category}
-                      {t.clinic_name ? ` · ${t.clinic_name}` : ""}
-                    </span>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={archivedPending}
-                    onClick={() => restore(t.id)}
-                  >
-                    <RotateCcw className="size-3.5" />
-                    Restaurar
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {suggestions.length > 0 && view !== "panorama" && (
+      {suggestions.length > 0 && view !== "panorama" && view !== "historico" && (
         <TaskSuggestions
           suggestions={suggestions}
           clinics={clinics}
