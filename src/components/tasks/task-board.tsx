@@ -464,7 +464,10 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       archivedLoadedRef.current = true
       startArchivedTransition(async () => {
         try {
-          setArchived(await listArchivedTasks())
+          // Painel embutido na página de uma clínica (defaultClinicId setado):
+          // histórico recorta pra ela só, senão viraria o histórico de todas
+          // as clínicas da carteira e pareceria ter ido parar em /tarefas.
+          setArchived(await listArchivedTasks(1000, defaultClinicId ?? undefined))
         } catch {
           archivedLoadedRef.current = false
           toast.error("Falha ao carregar histórico.")
