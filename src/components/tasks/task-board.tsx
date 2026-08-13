@@ -451,29 +451,32 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   const [archived, setArchived] = useState<TaskRow[] | null>(null)
   const [archivedPending, startArchivedTransition] = useTransition()
   const archivedLoadedRef = useRef(false)
+
+  function loadArchived() {
+    archivedLoadedRef.current = true
+    startArchivedTransition(async () => {
+      try {
+        // Painel embutido na página de uma clínica (defaultClinicId setado):
+        // histórico recorta pra ela só, senão viraria o histórico de todas
+        // as clínicas da carteira e pareceria ter ido parar em /tarefas.
+        setArchived(await listArchivedTasks(1000, defaultClinicId ?? undefined))
+      } catch {
+        archivedLoadedRef.current = false
+        toast.error("Falha ao carregar histórico.")
+      }
+    })
+  }
+
   // Resync durante o render (mesmo padrão do `prevInitial` acima) em vez de
-  // useEffect: entra na aba Histórico → dispara a carga; sai dela → descarrega,
-  // para a próxima entrada trazer tarefas recém-arquivadas nesse meio-tempo.
+  // useEffect: só busca na primeira vez que a aba é aberta. Fica em cache nas
+  // trocas seguintes de view (arquivamento é um job diário — não some/aparece
+  // tarefa nova no meio de uma sessão) — troca de view volta a ser instantânea,
+  // igual às outras. O botão "Atualizar" cobre o caso raro de precisar do dado
+  // mais fresco (ex.: aba aberta há muito tempo).
   const prevViewRef = useRef(view)
   if (prevViewRef.current !== view) {
     prevViewRef.current = view
-    if (view !== "historico") {
-      archivedLoadedRef.current = false
-      setArchived(null)
-    } else if (!archivedLoadedRef.current) {
-      archivedLoadedRef.current = true
-      startArchivedTransition(async () => {
-        try {
-          // Painel embutido na página de uma clínica (defaultClinicId setado):
-          // histórico recorta pra ela só, senão viraria o histórico de todas
-          // as clínicas da carteira e pareceria ter ido parar em /tarefas.
-          setArchived(await listArchivedTasks(1000, defaultClinicId ?? undefined))
-        } catch {
-          archivedLoadedRef.current = false
-          toast.error("Falha ao carregar histórico.")
-        }
-      })
-    }
+    if (view === "historico" && !archivedLoadedRef.current) loadArchived()
   }
 
   function restore(id: string) {
@@ -1130,10 +1133,18 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         />
       ) : view === "historico" ? (
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">
-            Biblioteca de tarefas concluídas e canceladas — seguem no banco (nada é apagado); use a busca e os
-            filtros acima para achar como um processo antigo foi resolvido.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Biblioteca de tarefas concluídas e canceladas — seguem no banco (nada é apagado); use a busca e os
+              filtros acima para achar como um processo antigo foi resolvido.
+            </p>
+            {/* Fica em cache entre trocas de view — este botão cobre o caso raro
+                de precisar do dado mais fresco (aba aberta há muito tempo). */}
+            <Button type="button" size="sm" variant="ghost" disabled={archivedPending} onClick={loadArchived}>
+              <RotateCcw className="size-3.5" />
+              Atualizar
+            </Button>
+          </div>
           {archivedPending && archived === null ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Carregando histórico…</p>
           ) : archivedFiltered.length === 0 ? (
