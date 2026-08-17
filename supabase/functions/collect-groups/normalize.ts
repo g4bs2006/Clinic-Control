@@ -7,6 +7,15 @@ export interface GroupRow {
   instance: string;
 }
 
+/** GroupRow + o estado de sincronização que dirige o rodízio da coleta. */
+export interface GroupSyncState extends GroupRow {
+  clinic_id: string | null;
+  /** Última página varrida com sucesso (cursor de paginação, migration 0075). */
+  last_synced_page: number;
+  /** Quando o grupo foi coletado pela última vez (cursor do rodízio, 0076). */
+  last_collected_at: string | null;
+}
+
 export interface MessageRow {
   clinic_id: null;
   instance: string;
@@ -50,22 +59,41 @@ export function extractPagesCount(payload: unknown): number {
 }
 
 // Intervalo de páginas a buscar nesta execução (a partir da página 2 — a 1
-// já foi lida antes, pra descobrir `totalPages`). Sem checkpoint (grupo novo
-// ou ainda não migrado): varre do zero, com teto de segurança. Com
-// checkpoint: só as páginas novas desde a última sincronização + overlap
-// (a última página pode ter ganhado registros novos entre uma execução e
-// outra). Se o checkpoint já alcançou o total, o intervalo fica vazio
-// (start > end) e o chamador simplesmente não itera.
+// já foi lida antes, pra descobrir `totalPages`). Início: do zero (checkpoint
+// ausente) ou do checkpoint salvo com overlap (a última página pode ter
+// ganhado registros novos entre uma execução e outra). Fim: LIMITADO a
+// `maxPagesPerRun` páginas além do início, mesmo que o total real seja muito
+// maior — um checkpoint desatualizado (ex.: grupo que cresceu além do teto
+// antigo enquanto a busca ficava truncada) não pode virar uma varredura sem
+// teto numa única chamada; o catch-up acontece gradualmente, run após run,
+// até o checkpoint alcançar `totalPages`.
 export function pageRangeToFetch(
   totalPages: number,
   checkpoint: number,
-  coldStartMaxPages: number,
+  maxPagesPerRun: number,
   overlapPages: number,
 ): { start: number; end: number } {
-  if (checkpoint <= 0) {
-    return { start: 2, end: Math.min(totalPages, coldStartMaxPages) };
-  }
-  return { start: Math.max(2, checkpoint - overlapPages + 1), end: totalPages };
+  const start = checkpoint <= 0 ? 2 : Math.max(2, checkpoint - overlapPages + 1);
+  return { start, end: Math.min(totalPages, start + maxPagesPerRun - 1) };
+}
+
+// Ordem em que os grupos são varridos numa execução. Uma coleta completa não
+// cabe no limite de execução da Edge Function (81 grupos × ~3,4s de Evolution
+// ≈ 275s, contra 200s), então cada run processa o que couber no deadline e as
+// seguintes continuam daqui — este é o rodízio que garante que ninguém fique
+// pra trás: grupos mapeados a clínica primeiro (são os que alimentam resumo e
+// tarefas), e dentro disso os menos recentemente coletados (nunca coletado
+// vem antes de todos).
+export function orderGroupsForRun<
+  T extends { clinic_id?: string | null; last_collected_at?: string | null },
+>(groups: T[]): T[] {
+  return [...groups].sort((a, b) => {
+    const mapped = (a.clinic_id ? 0 : 1) - (b.clinic_id ? 0 : 1);
+    if (mapped !== 0) return mapped;
+    const at = a.last_collected_at ? Date.parse(a.last_collected_at) : 0;
+    const bt = b.last_collected_at ? Date.parse(b.last_collected_at) : 0;
+    return at - bt;
+  });
 }
 
 // A Evolution devolve { success, data: [ ...grupos... ] } no fetchAllGroups.

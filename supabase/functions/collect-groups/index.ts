@@ -1,32 +1,49 @@
-// Edge Function: coleta diária das mensagens dos grupos (Evolution) -> Supabase.
-// Substitui o workflow n8n. Agendada via pg_cron.
+// Edge Function: coleta das mensagens dos grupos (Evolution) -> Supabase.
+// Substitui o workflow n8n. Agendada via pg_cron (4x/dia).
 //
 // Secrets: EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE, CRON_SECRET
 // SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são injetadas automaticamente.
 //
 // Chamada: POST com header x-cron-secret: <CRON_SECRET> e ?lookbackHours=24
-//   (use lookbackHours=0 no primeiro backfill).
+//   (use lookbackHours=0 no backfill manual — ignora o checkpoint de página).
+//   ?probe=1 → diagnóstico da Evolution, não coleta (ver bloco abaixo).
+//
+// ── Por que esta função trabalha em fatias ──────────────────────────────────
+// Medição do ?probe=1 contra a Evolution de produção (2026-08-17):
+//   fetchAllGroups ~12s · findMessages ~3,4s POR GRUPO (custo fixo de query:
+//   88KB levou 6,1s e 621KB levou 4,5s) · 8 grupos sequencial 27,2s vs 20,4s
+//   em paralelo → a Evolution SERIALIZA, concorrência quase não ajuda.
+// Logo 81 grupos × 3,4s ≈ 275s + 12s ≈ 287s, contra ~200s de limite de
+// execução da Edge Function. Uma coleta completa NÃO CABE em uma execução.
+// Antes a função só gravava no fim, então ser morta aos 200s zerava tudo — a
+// coleta passou 7 dias (11→17/08) sem inserir uma linha, o que por tabela
+// parou os resumos diários e a geração de tarefas por IA.
+// Agora: grava por lote, para sozinha no deadline e varre em round-robin
+// (last_collected_at), de modo que as 4 execuções diárias cobrem todos os
+// grupos e nenhum trabalho é perdido.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   extractGroups,
   extractPagesCount,
   normalizeMessages,
+  orderGroupsForRun,
   pageRangeToFetch,
-  type GroupRow,
+  type GroupSyncState,
   type MessageRow,
 } from "./normalize.ts";
 
 const SCHEMA = "clinic_control";
 const PAGE_SIZE = 1000;
-// Teto de segurança só para grupo SEM checkpoint (novo, ou ainda não migrado
-// pelo bootstrap da 0075). Grupo já conhecido usa o checkpoint em
-// whatsapp_groups.last_synced_page e busca só as páginas novas — ver
-// pageRangeToFetch. Sem isso, toda execução revarria o histórico inteiro de
-// ~80 grupos e passou a dar timeout (504) no cron a partir de 2026-08-10.
-const MAX_COLD_START_PAGES = 40;
+// Teto de páginas por grupo por execução. A maioria dos grupos tem 1 página,
+// mas há exceções grandes (ex.: "Importante - CONTACT IA", 36.783 mensagens /
+// 37 páginas) — sem teto, um único grupo desses consome a execução inteira.
+const MAX_PAGES_PER_RUN = 40;
 const OVERLAP_PAGES = 2;
 const CONCURRENCY = 5;
+// Abaixo do limite real (~200s) com folga para o último lote gravar e a
+// resposta voltar. Preferimos devolver 200 com partial:true a ser mortos.
+const RUN_DEADLINE_MS = 120_000;
 
 // .trim() defende contra espaços acidentais ao colar os secrets.
 const EVO_URL = (Deno.env.get("EVOLUTION_API_URL") ?? "").trim().replace(/\/+$/, "");
@@ -44,6 +61,7 @@ function evoHeaders(json = false): HeadersInit {
 }
 
 Deno.serve(async (req) => {
+  const startedAt = Date.now();
   if (!CRON_SECRET || req.headers.get("x-cron-secret") !== CRON_SECRET) {
     return new Response("unauthorized", { status: 401 });
   }
@@ -51,11 +69,96 @@ Deno.serve(async (req) => {
     return Response.json({ ok: false, error: "Evolution env ausente" }, { status: 500 });
   }
 
-  const lookbackHours = Number(new URL(req.url).searchParams.get("lookbackHours") ?? "24");
+  const url = new URL(req.url);
+  const lookbackHours = Number(url.searchParams.get("lookbackHours") ?? "24");
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE, {
     db: { schema: SCHEMA },
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // ── ?probe=1 — diagnóstico, não coleta ─────────────────────────────────────
+  // Mede o custo REAL da Evolution (latência, bytes, totalPages, e se ela
+  // paraleliza) numa amostra pequena. É o que transformou "a coleta está
+  // lenta" em números — sem isso, mexer nos tetos é chute. Responde em ~30s.
+  if (url.searchParams.get("probe") === "1") {
+    const sampleSize = Number(url.searchParams.get("samples") ?? "3");
+    const t0 = Date.now();
+    const gr = await fetch(`${EVO_URL}/group/fetchAllGroups/${INST}?getParticipants=false`, {
+      headers: evoHeaders(),
+    });
+    const gText = await gr.text();
+    const fetchAllGroupsMs = Date.now() - t0;
+
+    const { data: sample } = await supabase
+      .from("whatsapp_groups")
+      .select("group_jid, name, last_synced_page")
+      .limit(sampleSize);
+
+    const samples = [];
+    for (const g of sample ?? []) {
+      const t1 = Date.now();
+      const r = await fetch(`${EVO_URL}/chat/findMessages/${INST}`, {
+        method: "POST",
+        headers: evoHeaders(true),
+        body: JSON.stringify({
+          where: { key: { remoteJid: g.group_jid } },
+          page: 1,
+          offset: PAGE_SIZE,
+        }),
+      });
+      const text = await r.text();
+      const ms = Date.now() - t1;
+      let totalPages = -1;
+      let records = -1;
+      let totalMsgs = -1;
+      try {
+        const j = JSON.parse(text);
+        const d = (j?.data ?? j) as Record<string, unknown>;
+        const msgs = (d?.messages ?? {}) as Record<string, unknown>;
+        totalPages = extractPagesCount(j);
+        records = Array.isArray(msgs.records) ? msgs.records.length : -1;
+        totalMsgs = typeof msgs.total === "number" ? msgs.total : -1;
+      } catch { /* payload não-JSON: os -1 acima já sinalizam */ }
+      samples.push({
+        group: g.name ?? g.group_jid,
+        status: r.status,
+        ms,
+        kb: Math.round(text.length / 1024),
+        totalPages,
+        records,
+        totalMsgs,
+        checkpoint: g.last_synced_page,
+      });
+    }
+
+    // Os mesmos grupos, agora em PARALELO: paralelo << sequencial significa
+    // que a Evolution paraleliza (subir CONCURRENCY ajudaria); ≈ igual
+    // significa que ela serializa, e só reduzir escopo/tempo resolve.
+    const tPar = Date.now();
+    await Promise.all(
+      (sample ?? []).map((g) =>
+        fetch(`${EVO_URL}/chat/findMessages/${INST}`, {
+          method: "POST",
+          headers: evoHeaders(true),
+          body: JSON.stringify({
+            where: { key: { remoteJid: g.group_jid } },
+            page: 1,
+            offset: PAGE_SIZE,
+          }),
+        }).then((r) => r.text()).catch(() => ""),
+      ),
+    );
+    const parallelMs = Date.now() - tPar;
+
+    return Response.json({
+      ok: true,
+      probe: true,
+      pageSize: PAGE_SIZE,
+      fetchAllGroups: { status: gr.status, ms: fetchAllGroupsMs, kb: Math.round(gText.length / 1024) },
+      samples,
+      concurrency: { sequentialMs: samples.reduce((a, s) => a + s.ms, 0), parallelMs, n: samples.length },
+    });
+  }
 
   // 1) grupos: tenta a Evolution; se falhar, cai para os já descobertos no banco.
   const gRes = await fetch(
@@ -72,22 +175,38 @@ Deno.serve(async (req) => {
   }
 
   // união (fetched + conhecidos no banco) para não depender do fetchAllGroups
-  const byJid = new Map<string, GroupRow>();
   const { data: known } = await supabase
     .from("whatsapp_groups")
-    .select("group_jid, name, last_synced_page");
-  const checkpointByJid = new Map<string, number>();
+    .select("group_jid, name, clinic_id, last_synced_page, last_collected_at");
+  const stateByJid = new Map<string, GroupSyncState>();
   for (const k of known ?? []) {
-    byJid.set(k.group_jid, { group_jid: k.group_jid, name: k.name ?? null, instance: EVO_INSTANCE });
-    checkpointByJid.set(k.group_jid, (k.last_synced_page as number | null) ?? 0);
+    stateByJid.set(k.group_jid as string, {
+      group_jid: k.group_jid as string,
+      name: (k.name as string | null) ?? null,
+      instance: EVO_INSTANCE,
+      clinic_id: (k.clinic_id as string | null) ?? null,
+      last_synced_page: (k.last_synced_page as number | null) ?? 0,
+      last_collected_at: (k.last_collected_at as string | null) ?? null,
+    });
   }
-  for (const g of fetched) byJid.set(g.group_jid, g);
-  const groups = [...byJid.values()];
+  // Grupo recém-descoberto entra sem cursor — o rodízio o trata como "nunca
+  // coletado", então ele é atendido logo na próxima execução.
+  for (const g of fetched) {
+    const prev = stateByJid.get(g.group_jid);
+    stateByJid.set(g.group_jid, {
+      group_jid: g.group_jid,
+      instance: EVO_INSTANCE,
+      name: g.name ?? prev?.name ?? null,
+      clinic_id: prev?.clinic_id ?? null,
+      last_synced_page: prev?.last_synced_page ?? 0,
+      last_collected_at: prev?.last_collected_at ?? null,
+    });
+  }
+  const groups = orderGroupsForRun([...stateByJid.values()]);
 
-  // 2) mensagens por grupo (concorrência limitada). A ordenação do findMessages
-  // não é cronológica confiável — por isso cada grupo é varrido a partir do
-  // checkpoint salvo (ou do zero, com teto, se novo/sem checkpoint) em vez de
-  // só pedir a última página; ver pageRangeToFetch.
+  // 2) mensagens por grupo. A ordenação do findMessages não é cronológica
+  // confiável, então cada grupo é varrido a partir do checkpoint de página
+  // salvo (ver pageRangeToFetch) em vez de só pedir a última página.
   async function fetchPage(groupJid: string, page: number): Promise<unknown> {
     const r = await fetch(`${EVO_URL}/chat/findMessages/${INST}`, {
       method: "POST",
@@ -101,11 +220,51 @@ Deno.serve(async (req) => {
     return r.json();
   }
 
-  const allRows: MessageRow[] = [];
-  const newCheckpoints: { group_jid: string; last_synced_page: number }[] = [];
+  // Grava um lote já normalizado. Chamado a CADA lote, nunca só no fim: a
+  // função pode ser interrompida antes de terminar todos os grupos, e gravar
+  // no fim significava perder 100% do trabalho — a causa da coleta ter ficado
+  // 7 dias sem inserir nada.
+  async function persist(rows: MessageRow[]): Promise<{ inserted: number; errors: number }> {
+    // dedup: a Evolution repete records; ON CONFLICT DO UPDATE não aceita a
+    // mesma linha duas vezes no mesmo comando. Em duplicata, fica a com texto.
+    const byKey = new Map<string, MessageRow>();
+    for (const r of rows) {
+      const k = `${r.group_jid}|${r.message_id}`;
+      const prev = byKey.get(k);
+      if (!prev || (!prev.text && r.text)) byKey.set(k, r);
+    }
+    const unique = [...byKey.values()];
+    let inserted = 0;
+    let errors = 0;
+    for (let i = 0; i < unique.length; i += 500) {
+      const chunk = unique.slice(i, i + 500);
+      // merge (não ignore): re-runs atualizam linhas antigas — ex.: preencher text
+      const { error } = await supabase
+        .from("whatsapp_group_messages")
+        .upsert(chunk, { onConflict: "group_jid,message_id", ignoreDuplicates: false });
+      if (error) errors++;
+      else inserted += chunk.length;
+    }
+    return { inserted, errors };
+  }
+
+  let messagesSeen = 0;
+  let inserted = 0;
+  let insertErrors = 0;
   let fetchErrors = 0;
   let pagesFetched = 0;
+  let groupsProcessed = 0;
+  let partial = false;
+
   for (let i = 0; i < groups.length; i += CONCURRENCY) {
+    // Para de abrir lote novo perto do deadline e devolve 200 com partial:true
+    // em vez de ser morta no meio de uma gravação. O que já foi coletado está
+    // gravado, e o rodízio faz a próxima execução seguir de onde esta parou.
+    if (Date.now() - startedAt > RUN_DEADLINE_MS) {
+      partial = true;
+      break;
+    }
+
     const batch = groups.slice(i, i + CONCURRENCY);
     const results = await Promise.all(
       batch.map(async (g) => {
@@ -115,74 +274,60 @@ Deno.serve(async (req) => {
           const totalPages = extractPagesCount(first);
           pagesFetched++;
           // lookbackHours=0 é o backfill manual documentado no README ("pega
-          // TODO o histórico") — ignora o checkpoint e varre do zero, senão
-          // um grupo já sincronizado nunca seria re-varrido por completo.
-          const checkpoint = lookbackHours > 0 ? checkpointByJid.get(g.group_jid) ?? 0 : 0;
-          const { start, end } = pageRangeToFetch(totalPages, checkpoint, MAX_COLD_START_PAGES, OVERLAP_PAGES);
+          // TODO o histórico") — ignora o checkpoint e varre do zero.
+          const checkpoint = lookbackHours > 0 ? g.last_synced_page ?? 0 : 0;
+          const { start, end } = pageRangeToFetch(totalPages, checkpoint, MAX_PAGES_PER_RUN, OVERLAP_PAGES);
           for (let p = start; p <= end; p++) {
             rows.push(...normalizeMessages(await fetchPage(g.group_jid, p), EVO_INSTANCE, lookbackHours));
             pagesFetched++;
           }
-          // Só avança o checkpoint se chegou ao fim sem erro — se essa
-          // clínica falhar no meio, a próxima execução tenta de novo do
-          // mesmo ponto em vez de "perder" as páginas não buscadas. E nunca
-          // além de `end`: se o cold-start limitou a busca a MAX_COLD_START_PAGES
-          // enquanto o grupo tem mais páginas que isso, marcar o checkpoint em
-          // `totalPages` faria a próxima execução pular pra sempre as páginas
-          // que ainda não foram buscadas.
+          // Nunca além de `end`: se MAX_PAGES_PER_RUN truncou a varredura,
+          // marcar o checkpoint em `totalPages` faria a próxima execução pular
+          // pra sempre as páginas que ficaram de fora.
           return { groupJid: g.group_jid, rows, newCheckpoint: end };
         } catch (_e) {
           fetchErrors++;
+          // Sem cursor: o grupo não conta como coletado e volta ao topo do
+          // rodízio na próxima execução, em vez de ficar um dia sem coleta.
           return { groupJid: g.group_jid, rows: [] as MessageRow[], newCheckpoint: null };
         }
       }),
     );
-    for (const r of results) {
-      allRows.push(...r.rows);
-      if (r.newCheckpoint !== null) {
-        newCheckpoints.push({ group_jid: r.groupJid, last_synced_page: r.newCheckpoint });
-      }
+
+    const batchRows = results.flatMap((r) => r.rows);
+    messagesSeen += batchRows.length;
+    const w = await persist(batchRows);
+    inserted += w.inserted;
+    insertErrors += w.errors;
+
+    // Cursor do rodízio + checkpoint de página, só para quem coletou sem erro.
+    const collectedAt = new Date().toISOString();
+    const done = results
+      .filter((r) => r.newCheckpoint !== null)
+      .map((r) => ({
+        group_jid: r.groupJid,
+        last_synced_page: r.newCheckpoint as number,
+        last_collected_at: collectedAt,
+      }));
+    if (done.length) {
+      await supabase
+        .from("whatsapp_groups")
+        .upsert(done, { onConflict: "group_jid", ignoreDuplicates: false });
+      groupsProcessed += done.length;
     }
-  }
-
-  if (newCheckpoints.length) {
-    await supabase
-      .from("whatsapp_groups")
-      .upsert(newCheckpoints, { onConflict: "group_jid", ignoreDuplicates: false });
-  }
-
-  // 3) grava mensagens (idempotente por group_jid+message_id)
-  // dedup: a Evolution repete records; ON CONFLICT DO UPDATE não aceita a mesma
-  // linha duas vezes no mesmo comando. Em duplicata, fica a versão com texto.
-  const byKey = new Map<string, MessageRow>();
-  for (const r of allRows) {
-    const k = `${r.group_jid}|${r.message_id}`;
-    const prev = byKey.get(k);
-    if (!prev || (!prev.text && r.text)) byKey.set(k, r);
-  }
-  const rows = [...byKey.values()];
-
-  let inserted = 0;
-  let insertErrors = 0;
-  for (let i = 0; i < rows.length; i += 500) {
-    const chunk = rows.slice(i, i + 500);
-    // merge (não ignore): re-runs atualizam linhas antigas — ex.: preencher text
-    const { error } = await supabase
-      .from("whatsapp_group_messages")
-      .upsert(chunk, { onConflict: "group_jid,message_id", ignoreDuplicates: false });
-    if (error) insertErrors++;
-    else inserted += chunk.length;
   }
 
   return Response.json({
     ok: true,
     lookbackHours,
+    partial, // true = deadline atingido; o resto sai na próxima execução
+    elapsedMs: Date.now() - startedAt,
     groupsFetched: fetched.length,
-    groupsUsed: groups.length,
+    groupsKnown: groups.length,
+    groupsProcessed,
     fetchAllGroupsStatus: gStatus,
     pagesFetched,
-    messages_seen: allRows.length,
-    messages_unique: rows.length,
+    messages_seen: messagesSeen,
     inserted,
     fetchErrors,
     insertErrors,

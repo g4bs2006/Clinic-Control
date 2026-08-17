@@ -4,6 +4,7 @@ import {
   extractPagesCount,
   extractText,
   normalizeMessages,
+  orderGroupsForRun,
   pageRangeToFetch,
 } from "../supabase/functions/collect-groups/normalize";
 
@@ -72,14 +73,21 @@ describe("extractPagesCount", () => {
 });
 
 describe("pageRangeToFetch", () => {
-  it("sem checkpoint (grupo novo): varre do zero, limitado ao teto de cold-start", () => {
-    expect(pageRangeToFetch(100, 0, 40, 2)).toEqual({ start: 2, end: 40 });
+  it("sem checkpoint (grupo novo): varre do zero, limitado ao teto por execução", () => {
+    expect(pageRangeToFetch(100, 0, 40, 2)).toEqual({ start: 2, end: 41 });
     expect(pageRangeToFetch(5, 0, 40, 2)).toEqual({ start: 2, end: 5 });
   });
 
   it("com checkpoint: só as páginas novas, com overlap", () => {
     // sincronizado até a página 38 → refaz 37-38 (overlap 2) e avança até o total
     expect(pageRangeToFetch(45, 38, 40, 2)).toEqual({ start: 37, end: 45 });
+  });
+
+  it("checkpoint desatualizado + total bem maior: catch-up limitado por execução, não tudo de uma vez", () => {
+    // total real cresceu p/ 500 enquanto o teto antigo truncava em ~40; mesmo
+    // assim, essa execução só avança 40 páginas a partir do checkpoint — o
+    // resto fica pra próxima execução (senão volta a dar timeout).
+    expect(pageRangeToFetch(500, 38, 40, 2)).toEqual({ start: 37, end: 76 });
   });
 
   it("checkpoint além do total (grupo encolheu): intervalo vazio, chamador não itera", () => {
@@ -93,6 +101,45 @@ describe("pageRangeToFetch", () => {
 
   it("checkpoint não deixa start menor que 2 (página 1 já foi lida antes)", () => {
     expect(pageRangeToFetch(3, 1, 40, 2)).toEqual({ start: 2, end: 3 });
+  });
+});
+
+describe("orderGroupsForRun", () => {
+  const jid = (g: { group_jid: string }) => g.group_jid;
+
+  it("grupos mapeados a clínica vêm antes dos não mapeados", () => {
+    const out = orderGroupsForRun([
+      { group_jid: "sem", clinic_id: null, last_collected_at: null },
+      { group_jid: "com", clinic_id: "c1", last_collected_at: "2026-08-17T00:00:00Z" },
+    ]);
+    // o mapeado vem primeiro mesmo tendo sido coletado mais recentemente
+    expect(out.map(jid)).toEqual(["com", "sem"]);
+  });
+
+  it("dentro do mesmo grupo, o menos recentemente coletado vem primeiro", () => {
+    const out = orderGroupsForRun([
+      { group_jid: "novo", clinic_id: "c", last_collected_at: "2026-08-17T10:00:00Z" },
+      { group_jid: "antigo", clinic_id: "c", last_collected_at: "2026-08-15T10:00:00Z" },
+      { group_jid: "meio", clinic_id: "c", last_collected_at: "2026-08-16T10:00:00Z" },
+    ]);
+    expect(out.map(jid)).toEqual(["antigo", "meio", "novo"]);
+  });
+
+  it("nunca coletado (null) tem prioridade sobre qualquer já coletado", () => {
+    const out = orderGroupsForRun([
+      { group_jid: "ja", clinic_id: "c", last_collected_at: "2020-01-01T00:00:00Z" },
+      { group_jid: "nunca", clinic_id: "c", last_collected_at: null },
+    ]);
+    expect(out.map(jid)).toEqual(["nunca", "ja"]);
+  });
+
+  it("não muta o array recebido", () => {
+    const input = [
+      { group_jid: "b", clinic_id: null, last_collected_at: null },
+      { group_jid: "a", clinic_id: "c", last_collected_at: null },
+    ];
+    orderGroupsForRun(input);
+    expect(input.map(jid)).toEqual(["b", "a"]);
   });
 });
 

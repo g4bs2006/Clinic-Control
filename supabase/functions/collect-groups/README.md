@@ -56,14 +56,64 @@ $$);
 - Idempotente: reexecutar não duplica (unique `group_jid, message_id`).
 - Lógica pura em `normalize.ts` (testada em `tests/whatsapp-collect.test.ts`).
 - `fetchErrors`/`insertErrors` no retorno sinalizam cobertura parcial.
-- **Checkpoint por grupo** (`whatsapp_groups.last_synced_page`, migration
-  `0075`): cada execução busca só as páginas novas desde a última sincronizada
-  (+ 2 de overlap), em vez de revarrer o histórico inteiro. Sem isso, o
-  crescimento do histórico dos grupos fez a função ultrapassar o timeout do
-  `pg_net` (120s) e dar 504 em toda chamada a partir de 2026-08-10 — sem
-  sincronizar mensagem nova, o que também parou os resumos diários e a
-  geração de tarefas por IA. `?lookbackHours=0` (backfill manual) ignora o
-  checkpoint e varre do zero, como antes.
+
+## Por que a coleta trabalha em fatias
+
+Entre 2026-08-10 e 17 a coleta ficou **7 dias sem inserir uma linha** — e, por
+tabela, os resumos diários e a geração de tarefas por IA pararam (sem mensagem
+nova, toda clínica caía em `skipped_few_messages`). O `?probe=1` mediu a causa
+contra a Evolution de produção:
+
+| Medida | Resultado |
+|---|---|
+| `fetchAllGroups` | ~12s |
+| `findMessages` (1 página) | **~3,4s por grupo** |
+| 8 grupos sequencial vs paralelo | 27,2s vs 20,4s → **serializa** |
+
+O custo é **fixo por query**, não por payload (88KB levou 6,1s; 621KB levou
+4,5s), então nem paginar menos nem paralelizar mais compram tempo. Com 81
+grupos isso dá ~275s + 12s ≈ **287s contra ~200s de limite de execução** da
+Edge Function: **uma coleta completa não cabe em uma execução**. Como a versão
+antiga só gravava no fim, ser morta aos 200s descartava 100% do trabalho — daí
+os 7 dias de zero, com o `cron.job_run_details` mostrando `succeeded` o tempo
+todo (o `net.http_post` só registra o enfileiramento, não o resultado).
+
+Por isso a função hoje:
+
+- **grava por lote**, nunca só no fim — ser interrompida não perde o coletado;
+- **para sozinha em ~120s** e devolve `200` com `partial: true`, em vez de ser
+  morta (o retorno passa a ser sinal honesto de saúde);
+- **varre em round-robin** por `last_collected_at` (migration `0076`), com os
+  grupos mapeados a clínica na frente — são os que alimentam resumo e tarefas.
+  Cada execução continua de onde a anterior parou; as 4 execuções diárias
+  cobrem os 50 mapeados todo dia.
+- **checkpoint de página por grupo** (`last_synced_page`, migration `0075`):
+  a maioria dos grupos tem 1 página, mas há exceções (ex.: *Importante -
+  CONTACT IA*, 36.783 mensagens / 37 páginas) que sem teto consumiriam a
+  execução inteira. `?lookbackHours=0` (backfill) ignora o checkpoint.
+
+### Diagnóstico (`?probe=1`)
+
+```
+POST /functions/v1/collect-groups?probe=1&samples=8
+Header: x-cron-secret: <CRON_SECRET>
+```
+Não coleta nada: mede latência/bytes/`totalPages` por grupo e compara
+sequencial vs paralelo. Use antes de mexer em `MAX_PAGES_PER_RUN`,
+`CONCURRENCY` ou `RUN_DEADLINE_MS` — foi o que separou "muitas páginas" de
+"cada página é lenta", que pedem correções opostas.
+
+### Recuperar dias sem coleta
+
+`lookbackHours` maior não custa requests a mais (a página 1 já traz o histórico
+do grupo), então para reprocessar uma janela perdida basta ampliá-la e depois
+regerar os resumos dia a dia:
+```
+POST .../collect-groups?lookbackHours=240
+POST .../summarize-groups?date=2026-08-12&force=1   # um por dia perdido
+```
+O trigger `whatsapp_daily_summaries_expand_pendencias` recria as sugestões de
+tarefa sozinho a partir dos resumos (com dedup por similaridade).
 
 ## 4. Sincronização on-demand (app)
 
