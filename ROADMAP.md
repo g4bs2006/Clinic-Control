@@ -63,7 +63,8 @@ Infra: permanece no **Vercel** (auto-deploy do `main`) + **Supabase**. Avaliamos
 
 ## Pendências operacionais
 
-- [ ] **Migrar o modelo `deepseek-chat` antes de 2026-07-24** (descontinuação anunciada) — senão os resumos e as subtarefas por IA param. _(prazo fixo)_
+- [x] **Migrar o modelo `deepseek-chat`** — feito em 2026-08-03 (`ai_settings.model` = `deepseek-v4-pro`). Atenção: é um modelo de **raciocínio**, e o `max_tokens` herdado (1600) era orçamento de modelo não-raciocinante — ele gastava o teto pensando e devolvia resposta vazia em parte das clínicas. Corrigido para 8000 na migration `0077`; ver o comentário dela antes de baixar esse valor.
+- [ ] As **subtarefas por IA** (`src/lib/tasks/actions.ts`) ainda usam `deepseek-chat` via `LLM_MODEL`, com `max_tokens` fixo em 600 — se um dia apontarem para um modelo de raciocínio, cai no mesmo problema.
 - [ ] Definir `CRON_SECRET` na Edge Function `collect-groups` e `COLLECT_GROUPS_CRON_SECRET` no Vercel (mesmo valor) para a sincronização on-demand.
 - [ ] Adicionar `DEEPSEEK_API_KEY` no Vercel / `.env.local` para a quebra de subtarefas por IA.
 - [ ] Conferir se a `SUPABASE_SERVICE_ROLE_KEY` do Vercel está atualizada e planejar rotação da service key.
