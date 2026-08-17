@@ -275,7 +275,9 @@ Deno.serve(async (req) => {
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
         temperature: aiCfg?.temperature != null ? Number(aiCfg.temperature) : 0.3,
-        max_tokens: aiCfg?.max_tokens != null ? Number(aiCfg.max_tokens) : 1500,
+        // Alto de propósito — ver 0077: com modelo de raciocínio o teto é
+        // gasto pensando e o corte devolve `content` vazio.
+        max_tokens: aiCfg?.max_tokens != null ? Number(aiCfg.max_tokens) : 8000,
       }),
     });
     if (!res.ok) throw new Error(`LLM ${res.status}: ${(await res.text()).slice(0, 300)}`);

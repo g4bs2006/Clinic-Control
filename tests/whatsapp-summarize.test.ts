@@ -120,6 +120,20 @@ describe("parseModelSummary", () => {
     expect(parseModelSummary(JSON.stringify({ temas: [] }))).toBeNull();
   });
 
+  // Exigir que a resposta INTEIRA fosse JSON derrubava o resumo de várias
+  // clínicas assim que o modelo prefaciava a saída — a falha só aparecia como
+  // "resposta do modelo não é o JSON esperado", sem pista da causa.
+  it("extrai o JSON mesmo com prosa antes/depois", () => {
+    expect(parseModelSummary("Aqui está o resumo:\n" + JSON.stringify(good))?.resumo_md)
+      .toBe(good.resumo_md);
+    expect(parseModelSummary(JSON.stringify(good) + "\n\nEspero ter ajudado!")?.resumo_md)
+      .toBe(good.resumo_md);
+    expect(
+      parseModelSummary("Claro!\n```json\n" + JSON.stringify(good) + "\n```\nQualquer coisa avise.")
+        ?.resumo_md,
+    ).toBe(good.resumo_md);
+  });
+
   it("valida o formato do prompt", () => {
     const p = buildPrompt("Yamar", "01/07/2026", "[10:00] A: oi");
     expect(p).toContain('clínica "Yamar"');

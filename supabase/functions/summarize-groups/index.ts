@@ -114,7 +114,10 @@ Deno.serve(async (req) => {
   const cfg: LlmConfig = {
     model: (aiCfg?.model as string | null)?.trim() || MODEL_FALLBACK,
     temperature: aiCfg?.temperature != null ? Number(aiCfg.temperature) : 0.3,
-    maxTokens: aiCfg?.max_tokens != null ? Number(aiCfg.max_tokens) : 1200,
+    // Default alto de propósito: com modelo de raciocínio (deepseek-v4-pro), o
+    // teto é consumido PENSANDO e o corte deixa `content` vazio — o antigo
+    // 1200 fazia a API responder 200 com resposta vazia. Teto não é consumo.
+    maxTokens: aiCfg?.max_tokens != null ? Number(aiCfg.max_tokens) : 8000,
   };
   const instructions = (aiCfg?.summary_instructions as string | null)?.trim() || undefined;
 
@@ -170,6 +173,12 @@ Deno.serve(async (req) => {
         resumo_md: parsed?.resumo_md ?? null,
         highlights: parsed?.highlights ?? null,
         error: parsed ? undefined : "resposta do modelo não é o JSON esperado",
+        // Quando o parse falha, devolve o texto cru: sem isso a falha é uma
+        // caixa-preta (foi o que escondeu, desde 2026-08-03, o motivo real de
+        // várias clínicas não gerarem resumo). Só no preview, que não grava.
+        raw: parsed ? undefined : llm.content.slice(0, 1200),
+        rawLength: parsed ? undefined : llm.content.length,
+        completionTokens: parsed ? undefined : llm.completionTokens,
       });
     } catch (e) {
       return Response.json({ ok: false, error: (e as Error).message });

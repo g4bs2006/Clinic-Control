@@ -141,9 +141,27 @@ export function buildPrompt(
   ].join("\n");
 }
 
-/** Interpreta a resposta do modelo (JSON puro ou cercado por ```json). */
+/**
+ * Isola o objeto JSON de uma resposta de modelo. Exigir que a resposta INTEIRA
+ * seja JSON é frágil: basta o modelo prefaciar com "Aqui está o resumo:" ou
+ * emitir raciocínio antes do bloco para o parse falhar por completo — e a
+ * falha aparecia só como "resposta do modelo não é o JSON esperado", sem
+ * pista nenhuma. Então: tenta o texto limpo e, se não der, recorta do primeiro
+ * `{` até o último `}`.
+ */
+function extractJsonObject(raw: string): string | null {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  if (cleaned.startsWith("{") && cleaned.endsWith("}")) return cleaned;
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  return cleaned.slice(start, end + 1);
+}
+
+/** Interpreta a resposta do modelo (JSON puro, cercado por ```json, ou embutido em prosa). */
 export function parseModelSummary(raw: string): ModelSummary | null {
-  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const cleaned = extractJsonObject(raw);
+  if (!cleaned) return null;
   try {
     const j = JSON.parse(cleaned) as Record<string, unknown>;
     const resumo = typeof j.resumo_md === "string" ? j.resumo_md.trim() : "";
