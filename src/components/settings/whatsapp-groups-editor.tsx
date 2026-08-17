@@ -37,7 +37,9 @@ export function WhatsappGroupsEditor({ groups, clinics, readOnly = false }: What
       const res = await syncWhatsappGroups()
       setSyncing(false)
       if (res.ok) {
-        toast.success(`${res.groupsFetched} grupos na Evolution · ${res.messagesInserted} mensagens novas.`)
+        // Só descoberta: a coleta de mensagens fica com o cron (leva ~120s e
+        // não caberia no tempo desta ação).
+        toast.success(`${res.groupsFetched} grupos encontrados na Evolution.`)
         router.refresh()
       } else {
         toast.error(res.error)

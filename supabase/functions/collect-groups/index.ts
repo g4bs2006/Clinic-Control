@@ -174,6 +174,21 @@ Deno.serve(async (req) => {
       .upsert(fetched, { onConflict: "group_jid", ignoreDuplicates: false });
   }
 
+  // ?discoverOnly=1 — só descobre grupos novos, não coleta mensagens. É o que
+  // o botão "Buscar grupos novos" da tela de configuração realmente precisa:
+  // descoberta custa ~12s (só o fetchAllGroups acima), enquanto a coleta
+  // completa leva ~120s e estouraria o tempo da server action. A coleta de
+  // mensagens continua a cargo do cron.
+  if (url.searchParams.get("discoverOnly") === "1") {
+    return Response.json({
+      ok: true,
+      discoverOnly: true,
+      elapsedMs: Date.now() - startedAt,
+      groupsFetched: fetched.length,
+      fetchAllGroupsStatus: gStatus,
+    });
+  }
+
   // união (fetched + conhecidos no banco) para não depender do fetchAllGroups
   const { data: known } = await supabase
     .from("whatsapp_groups")

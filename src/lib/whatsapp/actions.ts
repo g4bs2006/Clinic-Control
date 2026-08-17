@@ -275,13 +275,17 @@ export async function listWhatsappGroups(): Promise<WhatsappGroupRow[]> {
 }
 
 /**
- * Roda a coleta da Evolution (`collect-groups`) na hora, em vez de esperar o
- * cron das 18h — para quando entra uma clínica nova e o grupo dela ainda não
- * apareceu na lista de mapeamento. Reusa a mesma Edge Function do cron diário,
- * só que on-demand; lookback curto (24h) então é rápido mesmo com muitos grupos.
+ * Descobre grupos novos na Evolution na hora, em vez de esperar o cron — para
+ * quando entra uma clínica nova e o grupo dela ainda não apareceu na lista de
+ * mapeamento.
+ *
+ * Usa `?discoverOnly=1`: só o `fetchAllGroups` + upsert (~12s). NÃO chama a
+ * coleta de mensagens, que hoje leva ~120s (a Evolution cobra ~3,4s fixos por
+ * grupo e serializa) e estouraria o tempo desta server action — era por isso
+ * que o botão parecia não fazer nada. Mensagens continuam a cargo do cron.
  */
 export async function syncWhatsappGroups(): Promise<
-  | { ok: true; groupsFetched: number; messagesInserted: number }
+  | { ok: true; groupsFetched: number }
   | { ok: false; error: string }
 > {
   const gate = await requireGestorClient();
@@ -296,9 +300,9 @@ export async function syncWhatsappGroups(): Promise<
     };
   }
 
-  let data: { ok?: boolean; error?: string; groupsFetched?: number; inserted?: number } | null = null;
+  let data: { ok?: boolean; error?: string; groupsFetched?: number } | null = null;
   try {
-    const res = await fetch(`${baseUrl}/functions/v1/collect-groups?lookbackHours=24`, {
+    const res = await fetch(`${baseUrl}/functions/v1/collect-groups?discoverOnly=1`, {
       method: "POST",
       headers: { "x-cron-secret": secret },
     });
@@ -312,7 +316,7 @@ export async function syncWhatsappGroups(): Promise<
 
   revalidatePath("/configuracoes/whatsapp");
   revalidatePath("/whatsapp");
-  return { ok: true, groupsFetched: data.groupsFetched ?? 0, messagesInserted: data.inserted ?? 0 };
+  return { ok: true, groupsFetched: data.groupsFetched ?? 0 };
 }
 
 /** Mapeia (ou desmapeia, clinicId=null) um grupo para uma clínica. */
