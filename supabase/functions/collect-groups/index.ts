@@ -12,15 +12,20 @@ import {
   extractGroups,
   extractPagesCount,
   normalizeMessages,
+  pageRangeToFetch,
   type GroupRow,
   type MessageRow,
 } from "./normalize.ts";
 
 const SCHEMA = "clinic_control";
 const PAGE_SIZE = 1000;
-// Teto de segurança por grupo (40k msgs). A paginação é ASC (antigas primeiro):
-// as mensagens NOVAS estão nas ÚLTIMAS páginas — um teto baixo corta o presente.
-const MAX_PAGES = 40;
+// Teto de segurança só para grupo SEM checkpoint (novo, ou ainda não migrado
+// pelo bootstrap da 0075). Grupo já conhecido usa o checkpoint em
+// whatsapp_groups.last_synced_page e busca só as páginas novas — ver
+// pageRangeToFetch. Sem isso, toda execução revarria o histórico inteiro de
+// ~80 grupos e passou a dar timeout (504) no cron a partir de 2026-08-10.
+const MAX_COLD_START_PAGES = 40;
+const OVERLAP_PAGES = 2;
 const CONCURRENCY = 5;
 
 // .trim() defende contra espaços acidentais ao colar os secrets.
@@ -68,16 +73,21 @@ Deno.serve(async (req) => {
 
   // união (fetched + conhecidos no banco) para não depender do fetchAllGroups
   const byJid = new Map<string, GroupRow>();
-  const { data: known } = await supabase.from("whatsapp_groups").select("group_jid, name");
+  const { data: known } = await supabase
+    .from("whatsapp_groups")
+    .select("group_jid, name, last_synced_page");
+  const checkpointByJid = new Map<string, number>();
   for (const k of known ?? []) {
     byJid.set(k.group_jid, { group_jid: k.group_jid, name: k.name ?? null, instance: EVO_INSTANCE });
+    checkpointByJid.set(k.group_jid, (k.last_synced_page as number | null) ?? 0);
   }
   for (const g of fetched) byJid.set(g.group_jid, g);
   const groups = [...byJid.values()];
 
-  // 2) mensagens por grupo (concorrência limitada), varrendo TODAS as páginas —
-  // a ordenação do findMessages não é cronológica; sem varrer, msgs recentes
-  // de grupos grandes ficam fora (bug corrigido em 2026-07-02).
+  // 2) mensagens por grupo (concorrência limitada). A ordenação do findMessages
+  // não é cronológica confiável — por isso cada grupo é varrido a partir do
+  // checkpoint salvo (ou do zero, com teto, se novo/sem checkpoint) em vez de
+  // só pedir a última página; ver pageRangeToFetch.
   async function fetchPage(groupJid: string, page: number): Promise<unknown> {
     const r = await fetch(`${EVO_URL}/chat/findMessages/${INST}`, {
       method: "POST",
@@ -92,6 +102,7 @@ Deno.serve(async (req) => {
   }
 
   const allRows: MessageRow[] = [];
+  const newCheckpoints: { group_jid: string; last_synced_page: number }[] = [];
   let fetchErrors = 0;
   let pagesFetched = 0;
   for (let i = 0; i < groups.length; i += CONCURRENCY) {
@@ -101,20 +112,43 @@ Deno.serve(async (req) => {
         try {
           const first = await fetchPage(g.group_jid, 1);
           const rows = normalizeMessages(first, EVO_INSTANCE, lookbackHours);
-          const pages = Math.min(extractPagesCount(first), MAX_PAGES);
+          const totalPages = extractPagesCount(first);
           pagesFetched++;
-          for (let p = 2; p <= pages; p++) {
+          // lookbackHours=0 é o backfill manual documentado no README ("pega
+          // TODO o histórico") — ignora o checkpoint e varre do zero, senão
+          // um grupo já sincronizado nunca seria re-varrido por completo.
+          const checkpoint = lookbackHours > 0 ? checkpointByJid.get(g.group_jid) ?? 0 : 0;
+          const { start, end } = pageRangeToFetch(totalPages, checkpoint, MAX_COLD_START_PAGES, OVERLAP_PAGES);
+          for (let p = start; p <= end; p++) {
             rows.push(...normalizeMessages(await fetchPage(g.group_jid, p), EVO_INSTANCE, lookbackHours));
             pagesFetched++;
           }
-          return rows;
+          // Só avança o checkpoint se chegou ao fim sem erro — se essa
+          // clínica falhar no meio, a próxima execução tenta de novo do
+          // mesmo ponto em vez de "perder" as páginas não buscadas. E nunca
+          // além de `end`: se o cold-start limitou a busca a MAX_COLD_START_PAGES
+          // enquanto o grupo tem mais páginas que isso, marcar o checkpoint em
+          // `totalPages` faria a próxima execução pular pra sempre as páginas
+          // que ainda não foram buscadas.
+          return { groupJid: g.group_jid, rows, newCheckpoint: end };
         } catch (_e) {
           fetchErrors++;
-          return [] as MessageRow[];
+          return { groupJid: g.group_jid, rows: [] as MessageRow[], newCheckpoint: null };
         }
       }),
     );
-    for (const rows of results) allRows.push(...rows);
+    for (const r of results) {
+      allRows.push(...r.rows);
+      if (r.newCheckpoint !== null) {
+        newCheckpoints.push({ group_jid: r.groupJid, last_synced_page: r.newCheckpoint });
+      }
+    }
+  }
+
+  if (newCheckpoints.length) {
+    await supabase
+      .from("whatsapp_groups")
+      .upsert(newCheckpoints, { onConflict: "group_jid", ignoreDuplicates: false });
   }
 
   // 3) grava mensagens (idempotente por group_jid+message_id)

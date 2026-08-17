@@ -49,6 +49,25 @@ export function extractPagesCount(payload: unknown): number {
   return typeof p === "number" && Number.isFinite(p) && p > 0 ? Math.floor(p) : 1;
 }
 
+// Intervalo de páginas a buscar nesta execução (a partir da página 2 — a 1
+// já foi lida antes, pra descobrir `totalPages`). Sem checkpoint (grupo novo
+// ou ainda não migrado): varre do zero, com teto de segurança. Com
+// checkpoint: só as páginas novas desde a última sincronização + overlap
+// (a última página pode ter ganhado registros novos entre uma execução e
+// outra). Se o checkpoint já alcançou o total, o intervalo fica vazio
+// (start > end) e o chamador simplesmente não itera.
+export function pageRangeToFetch(
+  totalPages: number,
+  checkpoint: number,
+  coldStartMaxPages: number,
+  overlapPages: number,
+): { start: number; end: number } {
+  if (checkpoint <= 0) {
+    return { start: 2, end: Math.min(totalPages, coldStartMaxPages) };
+  }
+  return { start: Math.max(2, checkpoint - overlapPages + 1), end: totalPages };
+}
+
 // A Evolution devolve { success, data: [ ...grupos... ] } no fetchAllGroups.
 export function extractGroups(payload: unknown, instance: string): GroupRow[] {
   const j = (payload ?? {}) as Record<string, any>;

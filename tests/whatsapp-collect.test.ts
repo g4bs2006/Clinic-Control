@@ -4,6 +4,7 @@ import {
   extractPagesCount,
   extractText,
   normalizeMessages,
+  pageRangeToFetch,
 } from "../supabase/functions/collect-groups/normalize";
 
 describe("extractGroups", () => {
@@ -67,6 +68,31 @@ describe("extractPagesCount", () => {
     expect(extractPagesCount(null)).toBe(1);
     expect(extractPagesCount({ messages: { pages: 0 } })).toBe(1);
     expect(extractPagesCount({ messages: { pages: "x" } })).toBe(1);
+  });
+});
+
+describe("pageRangeToFetch", () => {
+  it("sem checkpoint (grupo novo): varre do zero, limitado ao teto de cold-start", () => {
+    expect(pageRangeToFetch(100, 0, 40, 2)).toEqual({ start: 2, end: 40 });
+    expect(pageRangeToFetch(5, 0, 40, 2)).toEqual({ start: 2, end: 5 });
+  });
+
+  it("com checkpoint: só as páginas novas, com overlap", () => {
+    // sincronizado até a página 38 → refaz 37-38 (overlap 2) e avança até o total
+    expect(pageRangeToFetch(45, 38, 40, 2)).toEqual({ start: 37, end: 45 });
+  });
+
+  it("checkpoint além do total (grupo encolheu): intervalo vazio, chamador não itera", () => {
+    const { start, end } = pageRangeToFetch(38, 50, 40, 2);
+    expect(start).toBeGreaterThan(end);
+  });
+
+  it("overlap sempre refaz as últimas páginas conhecidas, mesmo já sincronizado", () => {
+    expect(pageRangeToFetch(38, 38, 40, 2)).toEqual({ start: 37, end: 38 });
+  });
+
+  it("checkpoint não deixa start menor que 2 (página 1 já foi lida antes)", () => {
+    expect(pageRangeToFetch(3, 1, 40, 2)).toEqual({ start: 2, end: 3 });
   });
 });
 

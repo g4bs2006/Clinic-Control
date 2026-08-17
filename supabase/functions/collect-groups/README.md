@@ -56,6 +56,14 @@ $$);
 - Idempotente: reexecutar não duplica (unique `group_jid, message_id`).
 - Lógica pura em `normalize.ts` (testada em `tests/whatsapp-collect.test.ts`).
 - `fetchErrors`/`insertErrors` no retorno sinalizam cobertura parcial.
+- **Checkpoint por grupo** (`whatsapp_groups.last_synced_page`, migration
+  `0075`): cada execução busca só as páginas novas desde a última sincronizada
+  (+ 2 de overlap), em vez de revarrer o histórico inteiro. Sem isso, o
+  crescimento do histórico dos grupos fez a função ultrapassar o timeout do
+  `pg_net` (120s) e dar 504 em toda chamada a partir de 2026-08-10 — sem
+  sincronizar mensagem nova, o que também parou os resumos diários e a
+  geração de tarefas por IA. `?lookbackHours=0` (backfill manual) ignora o
+  checkpoint e varre do zero, como antes.
 
 ## 4. Sincronização on-demand (app)
 
