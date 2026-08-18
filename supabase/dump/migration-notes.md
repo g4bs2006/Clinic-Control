@@ -73,7 +73,7 @@ Atualizar no deploy e apontar para o projeto novo:
   da Helena pela UI (clínica Dr. João Roberto Furtado).
 
 ### 3d. n8n
-Trocar a credencial "Supabase API" no workflow `docs/n8n/coleta-grupos-18h.json`
+Trocar a credencial "Supabase API" no workflow `docs/reference/n8n/coleta-grupos-18h.json`
 para apontar ao Host + Service Role do projeto novo.
 
 ## 4. Conferência pós-migração

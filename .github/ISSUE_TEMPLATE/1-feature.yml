@@ -1,0 +1,30 @@
+name: Funcionalidade
+description: Algo novo ou uma melhoria em algo que já existe
+labels: ["tipo/feat"]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Problema
+      description: Que dor da operação isso resolve? Descreva o estado atual, não a solução.
+      placeholder: Hoje a equipe precisa abrir o ClickUp para saber se uma tarefa depende de outra.
+    validations:
+      required: true
+  - type: textarea
+    id: resultado
+    attributes:
+      label: Resultado esperado
+      description: Como sabemos que terminou? Liste o comportamento observável.
+    validations:
+      required: true
+  - type: textarea
+    id: escopo
+    attributes:
+      label: O que está fora de escopo
+      description: Opcional, mas é o campo que mais evita retrabalho.
+  - type: input
+    id: migration
+    attributes:
+      label: Precisa de migration?
+      description: Se sim, diga qual tabela/coluna. O banco é compartilhado com o Aniversariantes.
+      placeholder: "Sim — nova tabela task_dependencies"

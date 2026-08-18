@@ -1,0 +1,21 @@
+name: Operação
+description: Trabalho sem código — onboarding de clínica, credenciais, configuração, integração
+labels: ["tipo/operacao"]
+body:
+  - type: textarea
+    id: tarefa
+    attributes:
+      label: O que precisa ser feito
+    validations:
+      required: true
+  - type: input
+    id: quem
+    attributes:
+      label: Depende de quem
+      description: Terceiro, cliente, fornecedor — o que trava o item se não vier.
+      placeholder: "Cliente: enviar token da Helena"
+  - type: input
+    id: prazo
+    attributes:
+      label: Prazo real
+      description: Data com consequência, não estimativa. Deixe vazio se não houver.

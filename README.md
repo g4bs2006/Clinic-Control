@@ -20,6 +20,9 @@ Aplicação privada de uso interno — não é um produto open source e não ace
 - [Deploy](#deploy)
 - [Roadmap](#roadmap)
 
+> Como o trabalho é organizado (fluxo, branches, labels, WIP): [`CONTRIBUTING.md`](CONTRIBUTING.md).
+> Decisões de arquitetura e seus porquês: [`docs/adr/`](docs/adr/).
+
 ## Visão geral
 
 Cada clínica atendida pela Contact.IA opera em um de dois modos:
@@ -331,7 +334,11 @@ supabase/
   migrations/               histórico incremental do schema (SQL puro, numerado, 60+ arquivos)
   functions/                Edge Functions (Deno): collect-groups, summarize-groups, health-evolution, collect-openai-usage, notify (digest ao grupo interno)
 tests/                      testes Vitest, um arquivo por módulo de lógica pura
-docs/                       documentação de apoio (API da Helena, planos de fase)
+docs/                       documentação, organizada por função (Diátaxis) — ver docs/README.md
+  adr/                      decisões de arquitetura e o porquê delas
+  reference/                consulta: API da Helena (128 páginas), workflows n8n
+  how-to/                   receitas operacionais
+  historico/                fases já entregues (documento morto)
 ```
 
 ## Configuração do ambiente
@@ -383,7 +390,7 @@ npm test
 
 ## Deploy
 
-- **Aplicação**: Vercel, com deploy automático a cada push no branch `main`.
+- **Aplicação**: VPS Hostinger — container atrás do nginx da stack `contactia`, com deploy automático a cada push no `main` via GitHub Actions (`.github/workflows/deploy-vps.yml`). Runbook em [`deploy/README.md`](deploy/README.md); o porquê da saída da Vercel no [ADR 0002](docs/adr/0002-vps-hostinger-em-vez-de-vercel.md).
 - **Banco de dados e Storage**: Supabase, projeto compartilhado com outro sistema da organização — o Clinic Control usa exclusivamente o schema `clinic_control`.
 - **Processos agendados**: Edge Functions do Supabase, disparadas por `pg_cron`/`pg_net` (coleta de grupos, resumo diário, checagem de saúde da instância do WhatsApp).
 

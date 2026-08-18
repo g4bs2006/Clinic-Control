@@ -28,7 +28,7 @@ function todaySP(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 }
 function ddmm(d: string): string {
-  const [y, m, day] = d.split("-");
+  const [, m, day] = d.split("-");
   return `${day}/${m}`;
 }
 

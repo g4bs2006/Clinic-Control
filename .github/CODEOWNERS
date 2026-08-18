@@ -1,0 +1,12 @@
+# Dono padrão de tudo. Serve pra dois efeitos práticos:
+# review automaticamente solicitado nos PRs, e um lugar único pra responder
+# "quem decide sobre esta pasta" quando a equipe crescer.
+*                       @g4bs2006
+
+# Áreas onde um merge errado sai caro: banco compartilhado com o Aniversariantes,
+# deploy da VPS e a pipeline. Ficam explícitas mesmo com o dono sendo o mesmo,
+# pra que a regra sobreviva a novos colaboradores.
+/supabase/migrations/   @g4bs2006
+/deploy/                @g4bs2006
+/.github/workflows/     @g4bs2006
+/docs/adr/              @g4bs2006
