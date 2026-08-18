@@ -1,0 +1,38 @@
+name: Bug
+description: Algo se comporta diferente do esperado
+labels: ["tipo/bug"]
+body:
+  - type: textarea
+    id: esperado-vs-real
+    attributes:
+      label: Esperado x observado
+      value: |
+        **Esperado:**
+        **Observado:**
+    validations:
+      required: true
+  - type: textarea
+    id: reproducao
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Entrar em /tarefas
+        2. Arrastar uma tarefa para Concluída
+        3. Recarregar — ela volta para Fazendo
+    validations:
+      required: true
+  - type: dropdown
+    id: onde
+    attributes:
+      label: Onde acontece
+      options:
+        - Produção (clinic.control.contactia.com.br)
+        - Local (npm run dev)
+        - Ambos
+    validations:
+      required: true
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Evidência
+      description: Log, print, id da clínica, horário. Não cole segredos nem dados de paciente — o repositório é público.

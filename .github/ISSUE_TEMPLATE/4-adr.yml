@@ -1,0 +1,30 @@
+name: Decisão de arquitetura (ADR)
+description: Uma escolha técnica com alternativas reais, que alguém vai questionar depois
+labels: ["tipo/adr", "area/docs"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ao fechar esta issue, o registro final vira um arquivo em `docs/adr/`.
+        A issue é onde a decisão é *discutida*; o ADR é onde ela fica *registrada*.
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto
+      description: Que força nos obriga a decidir agora?
+    validations:
+      required: true
+  - type: textarea
+    id: opcoes
+    attributes:
+      label: Opções consideradas
+      description: Uma por linha, com o custo de cada uma. Se só há uma opção, não é um ADR.
+    validations:
+      required: true
+  - type: textarea
+    id: consequencias
+    attributes:
+      label: Consequências
+      description: O que fica mais difícil depois desta escolha? É a parte que o futuro vai ler.
+    validations:
+      required: true
