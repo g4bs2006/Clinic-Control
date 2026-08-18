@@ -1,6 +1,6 @@
 // Endpoints administrativos da Helena — exigem o token MASTER da conta
 // parceira (env HELENA_MASTER_TOKEN), diferente dos tokens por clínica.
-// Docs: Core - Helena/Contas (criar.md, criar_token.md).
+// Docs: docs/reference/helena-api/Core/Contas (criar.md, criar_token.md).
 //
 // ATENÇÃO (sondado em 2026-07-03, a doc marca tudo como opcional — não é):
 // o POST /company exige apps (não-vazio), resourcers, owner (com email E
