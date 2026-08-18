@@ -1,0 +1,54 @@
+# Verificação de PR. Existe porque o deploy-vps.yml dispara no push em `main`:
+# sem este gate, lint e testes só rodariam DEPOIS do código estar em produção.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  # Também no push em main: pega o caso de commit direto sem PR.
+  push:
+    branches: [main]
+
+# Um PR que recebe vários pushes seguidos só precisa do resultado do último.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Mesma major do Dockerfile (node:24-alpine) — CI que passa num Node
+          # diferente do de produção não prova muita coisa.
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tipos
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        # `next build` executa código de módulo, então precisa das variáveis
+        # existirem — não serem válidas. Valores de fachada bastam e evitam
+        # depender de secrets num PR de fork.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: ci-service-role-key
+          SUPABASE_JWT_SECRET: ci-jwt-secret-com-tamanho-suficiente-para-passar
+          AUTH_SECRET: ci-auth-secret-com-tamanho-suficiente-para-passar
+          HELENA_TOKEN_ENC_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          VAULT_ENC_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+        run: npm run build
