@@ -1,6 +1,10 @@
 # Roadmap — Clinic Control
 
-_Última atualização: 2026-07-07_
+_Última atualização: 2026-08-18_
+
+> **O acompanhamento do dia a dia vive no [Project](https://github.com/users/g4bs2006/projects)**, não aqui.
+> Este arquivo guarda o *porquê* — norte estratégico, frentes e o que foi descartado.
+> O *o quê / quando* são as issues. Como o trabalho flui: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Norte estratégico
 
@@ -16,9 +20,9 @@ detecta (proatividade) → vira tarefa (matar o ClickUp) → notifica (entrega) 
 2. **Notificações** — levar os sinais para onde a equipe está (WhatsApp / e-mail / push).
 3. **Proatividade** — churn preditivo, padrões entre clínicas, ações automáticas.
 
-Descartado por ora: painel para o cliente final (exigiria isolamento real de dados, incompatível com o modelo atual "todo staff é confiável").
+Descartado por ora: painel para o cliente final — ver [ADR 0003](docs/adr/0003-sem-painel-para-cliente-final.md).
 
-Infra: permanece no **Vercel** (auto-deploy do `main`) + **Supabase**. Avaliamos self-host (TurboCloud/VPS) e decidimos não migrar — está funcionando bem.
+Infra: **VPS Hostinger** (container atrás do nginx da stack `contactia`, auto-deploy do `main` via GitHub Actions) + **Supabase** (banco, storage, Edge Functions e todos os crons). Saímos da Vercel em 2026-07-29 — a decisão e as responsabilidades que ela transferiu para nós estão no [ADR 0002](docs/adr/0002-vps-hostinger-em-vez-de-vercel.md).
 
 ---
 
@@ -65,6 +69,6 @@ Infra: permanece no **Vercel** (auto-deploy do `main`) + **Supabase**. Avaliamos
 
 - [x] **Migrar o modelo `deepseek-chat`** — feito em 2026-08-03 (`ai_settings.model` = `deepseek-v4-pro`). Atenção: é um modelo de **raciocínio**, e o `max_tokens` herdado (1600) era orçamento de modelo não-raciocinante — ele gastava o teto pensando e devolvia resposta vazia em parte das clínicas. Corrigido para 8000 na migration `0077`; ver o comentário dela antes de baixar esse valor.
 - [ ] As **subtarefas por IA** (`src/lib/tasks/actions.ts`) ainda usam `deepseek-chat` via `LLM_MODEL`, com `max_tokens` fixo em 600 — se um dia apontarem para um modelo de raciocínio, cai no mesmo problema.
-- [ ] Definir `CRON_SECRET` na Edge Function `collect-groups` e `COLLECT_GROUPS_CRON_SECRET` no Vercel (mesmo valor) para a sincronização on-demand.
-- [ ] Adicionar `DEEPSEEK_API_KEY` no Vercel / `.env.local` para a quebra de subtarefas por IA.
-- [ ] Conferir se a `SUPABASE_SERVICE_ROLE_KEY` do Vercel está atualizada e planejar rotação da service key.
+- [ ] Definir `CRON_SECRET` na Edge Function `collect-groups` e `COLLECT_GROUPS_CRON_SECRET` na VPS (mesmo valor; ver `deploy/verificar-env.sh`) para a sincronização on-demand.
+- [ ] Adicionar `DEEPSEEK_API_KEY` na VPS / `.env.local` para a quebra de subtarefas por IA.
+- [ ] Conferir se a `SUPABASE_SERVICE_ROLE_KEY` da VPS está atualizada e planejar rotação da service key.
