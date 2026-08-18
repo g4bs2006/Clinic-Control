@@ -1,6 +1,6 @@
 # 0006 — Tornar rastreável a dependência de schema entre os dois repos
 
-- **Status:** Proposto
+- **Status:** Aceito
 - **Data:** 2026-08-18
 
 ## Contexto
@@ -32,9 +32,12 @@ Unificar a numeração seria custo sem ganho.
 
 Tornar a dependência **declarada e verificável**, sem mover migration nenhuma:
 
-1. **Contrato documentado.** `docs/reference/schema-aniversariantes.md` descreve
-   as tabelas `aniversariantes_*` que o Clinic Control consome, com as colunas
-   que ele realmente lê. É o contrato entre os dois repos.
+1. **Contrato documentado.** [`docs/reference/schema-aniversariantes.md`](../reference/schema-aniversariantes.md)
+   descreve as tabelas `aniversariantes_*` que o Clinic Control consome, coluna
+   por coluna. Ao escrevê-lo apareceram dois fatos que não estavam registrados
+   em lugar nenhum: o acoplamento é de **leitura e escrita** (há `upsert`, não só
+   `select`), e a constraint `..._prontuario_credenciais_check` existe **em
+   duplicata** — uma vez no banco, outra em TypeScript.
 2. **Ponteiro nos dois lados.** Um comentário no topo de
    `aniversariantes-service.ts` aponta para o contrato e para o repo dono;
    o `README.md` do Aniversariantes avisa que essas tabelas têm um consumidor
@@ -50,6 +53,10 @@ Tornar a dependência **declarada e verificável**, sem mover migration nenhuma:
   nenhum risco de reaplicar o que já está no banco.
 - A dependência passa a ter um lugar onde é lida antes de ser quebrada. Continua
   sendo convenção, não garantia imposta pelo banco.
+- Escrever o contrato já rendeu duas descobertas (upsert e constraint
+  duplicada) e uma issue de segurança — credenciais que o Clinic Control cifra
+  atravessam para o schema vizinho em texto plano. Documentar acoplamento
+  encontra acoplamento.
 - **Não é a solução definitiva.** A definitiva é o monorepo com um `packages/db`
   único, onde o contrato deixa de ser documento e volta a ser código verificado
   pelo compilador. Este ADR compra tempo até lá.

@@ -30,4 +30,4 @@ Numeração sequencial, nunca reaproveitada. Arquivo: `00XX-titulo-em-kebab.md`.
 | [0003](0003-sem-painel-para-cliente-final.md) | Não construir painel para o cliente final | Aceito |
 | [0004](0004-tarefas-nativas-em-vez-do-clickup.md) | Tarefas nativas para substituir o ClickUp | Aceito |
 | [0005](0005-deepseek-como-provedor-de-llm.md) | DeepSeek como provedor de LLM | Aceito |
-| [0006](0006-dono-unico-das-migrations.md) | Tornar rastreável a dependência de schema entre os repos | Proposto |
+| [0006](0006-dono-unico-das-migrations.md) | Tornar rastreável a dependência de schema entre os repos | Aceito |

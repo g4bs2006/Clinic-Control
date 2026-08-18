@@ -20,6 +20,9 @@ achar nada.
   compartilhado com o Aniversariantes explica boa parte das restrições do resto.
 - **[`reference/helena-api/`](reference/helena-api/)** — 128 páginas da API
   Helena (Chat, CRM, Core), a referência externa mais consultada do projeto.
+- **[`reference/schema-aniversariantes.md`](reference/schema-aniversariantes.md)** —
+  contrato das tabelas que este repo consome mas não versiona. Leitura obrigatória
+  antes de mexer em qualquer coisa do Aniversariantes.
 - **[`reference/n8n/`](reference/n8n/)** — workflows do n8n. Ver o
   `DEPRECATED.md` antes de reutilizar: a coleta migrou para Edge Function.
 - **[`historico/`](historico/)** — `fase-1.md` e os planos em `superpowers/`,
