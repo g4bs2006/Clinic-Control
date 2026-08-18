@@ -300,7 +300,7 @@ Deno.serve(async (req) => {
           // marcar o checkpoint em `totalPages` faria a próxima execução pular
           // pra sempre as páginas que ficaram de fora.
           return { groupJid: g.group_jid, rows, newCheckpoint: end };
-        } catch (_e) {
+        } catch {
           fetchErrors++;
           // Sem cursor: o grupo não conta como coletado e volta ao topo do
           // rodízio na próxima execução, em vez de ficar um dia sem coleta.

@@ -31,8 +31,8 @@ describe("resolveStatus", () => {
   it("funciona quando rate_min e rate_max sao strings", () => {
     const stringRules = rules.map(r => ({
       ...r,
-      rate_min: String(r.rate_min) as any,
-      rate_max: String(r.rate_max) as any,
+      rate_min: String(r.rate_min) as unknown as number,
+      rate_max: String(r.rate_max) as unknown as number,
     }));
     expect(resolveStatus({ rate: 0.02, rules: stringRules })).toEqual({ label: "Risco Churn", color: "#9ca3af" });
     expect(resolveStatus({ rate: 0.12, rules: stringRules })).toEqual({ label: "Bom", color: "#3b82f6" });

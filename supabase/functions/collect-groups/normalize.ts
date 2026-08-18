@@ -31,18 +31,30 @@ export interface MessageRow {
 
 const MAX_TEXT_LEN = 4000;
 
+// A Evolution não garante a forma do payload, então toda navegação aqui é
+// defensiva. Estes dois helpers existem pra fazer isso sem `any`: `asObj`
+// devolve um saco de `unknown` (acesso livre a chaves, mas cada valor precisa
+// ser estreitado antes de virar dado nosso) e `asStr` é o estreitamento —
+// devolve null tanto para tipo errado quanto para string vazia, que é o mesmo
+// comportamento do `||` que estava aqui antes.
+function asObj(v: unknown): Record<string, unknown> {
+  return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
+}
+function asStr(v: unknown): string | null {
+  return typeof v === "string" && v !== "" ? v : null;
+}
+
 // Texto da mensagem: conversa simples, texto estendido (reply/link) ou legenda
 // de mídia. Mídia sem legenda (áudio, figurinha…) fica null.
 export function extractText(message: unknown): string | null {
-  const m = (message ?? {}) as Record<string, any>;
+  const m = asObj(message);
   const raw =
-    m.conversation ||
-    m.extendedTextMessage?.text ||
-    m.imageMessage?.caption ||
-    m.videoMessage?.caption ||
-    m.documentMessage?.caption ||
-    null;
-  if (typeof raw !== "string") return null;
+    asStr(m.conversation) ??
+    asStr(asObj(m.extendedTextMessage).text) ??
+    asStr(asObj(m.imageMessage).caption) ??
+    asStr(asObj(m.videoMessage).caption) ??
+    asStr(asObj(m.documentMessage).caption);
+  if (raw === null) return null;
   const t = raw.trim();
   if (!t) return null;
   return t.length > MAX_TEXT_LEN ? t.slice(0, MAX_TEXT_LEN) : t;
@@ -52,9 +64,9 @@ export function extractText(message: unknown): string | null {
 // A ordenação dos records NÃO é cronológica confiável → é preciso varrer todas
 // as páginas mesmo na coleta diária (o filtro de lookback descarta as antigas).
 export function extractPagesCount(payload: unknown): number {
-  const j = (payload ?? {}) as Record<string, any>;
-  const d = (j.data ?? j) as Record<string, any>;
-  const p = d?.messages?.pages;
+  const j = asObj(payload);
+  const d = asObj(j.data ?? j);
+  const p = asObj(d.messages).pages;
   return typeof p === "number" && Number.isFinite(p) && p > 0 ? Math.floor(p) : 1;
 }
 
@@ -98,21 +110,23 @@ export function orderGroupsForRun<
 
 // A Evolution devolve { success, data: [ ...grupos... ] } no fetchAllGroups.
 export function extractGroups(payload: unknown, instance: string): GroupRow[] {
-  const j = (payload ?? {}) as Record<string, any>;
-  const groups: any[] =
+  const j = asObj(payload);
+  const jData = asObj(j.data);
+  const groups: unknown[] =
     (Array.isArray(j) && j) ||
     (Array.isArray(j.data) && j.data) ||
     (Array.isArray(j.groups) && j.groups) ||
-    (j.data && Array.isArray(j.data.groups) && j.data.groups) ||
+    (Array.isArray(jData.groups) && jData.groups) ||
     [];
 
   const out: GroupRow[] = [];
-  for (const g of groups) {
-    const jid = g?.id || g?.remoteJid || g?.jid;
-    if (!jid || !String(jid).endsWith("@g.us")) continue;
+  for (const raw of groups) {
+    const g = asObj(raw);
+    const jid = asStr(g.id) ?? asStr(g.remoteJid) ?? asStr(g.jid);
+    if (!jid || !jid.endsWith("@g.us")) continue;
     out.push({
       group_jid: jid,
-      name: g.subject || g.subjectOwner || g.name || null,
+      name: asStr(g.subject) ?? asStr(g.subjectOwner) ?? asStr(g.name),
       instance,
     });
   }
@@ -128,10 +142,11 @@ export function normalizeMessages(
   lookbackHours = 0,
   now = Date.now(),
 ): MessageRow[] {
-  const j = (payload ?? {}) as Record<string, any>;
-  const d = (j.data ?? j) as Record<string, any>;
-  const records: any[] =
-    (d && d.messages && Array.isArray(d.messages.records) && d.messages.records) ||
+  const j = asObj(payload);
+  const d = asObj(j.data ?? j);
+  const dMessages = asObj(d.messages);
+  const records: unknown[] =
+    (Array.isArray(dMessages.records) && dMessages.records) ||
     (d && Array.isArray(d.messages) && d.messages) ||
     (Array.isArray(d) && d) ||
     (Array.isArray(j) && j) ||
@@ -140,11 +155,13 @@ export function normalizeMessages(
   const cutoffMs = lookbackHours > 0 ? now - lookbackHours * 3600 * 1000 : 0;
   const out: MessageRow[] = [];
 
-  for (const r of records) {
-    const key = r?.key || {};
-    if (!key.id) continue;
+  for (const rec of records) {
+    const r = asObj(rec);
+    const key = asObj(r.key);
+    const messageId = asStr(key.id);
+    if (!messageId) continue;
 
-    const groupJid: string = key.remoteJid || "";
+    const groupJid = asStr(key.remoteJid) ?? "";
     if (!groupJid.endsWith("@g.us")) continue; // só grupos
 
     const ts = r.messageTimestamp ?? null;
@@ -154,22 +171,22 @@ export function normalizeMessages(
           ? ts * 1000
           : ts
         : ts
-          ? new Date(ts).getTime()
+          ? new Date(String(ts)).getTime()
           : now;
     if (tsMs < cutoffMs) continue;
 
-    const sender =
-      (key.participant && String(key.participant).split("@")[0]) || r.pushName || null;
+    const participant = asStr(key.participant);
+    const sender = (participant && participant.split("@")[0]) || asStr(r.pushName);
 
     out.push({
       clinic_id: null,
       instance,
       group_jid: groupJid,
-      message_id: key.id,
+      message_id: messageId,
       from_me: key.fromMe === true,
       participant: sender,
-      push_name: r.pushName || null,
-      message_type: r.messageType || null,
+      push_name: asStr(r.pushName),
+      message_type: asStr(r.messageType),
       text: extractText(r.message),
       event_ts: new Date(tsMs).toISOString(),
     });
