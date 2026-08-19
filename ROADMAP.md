@@ -28,6 +28,7 @@ Infra: **VPS Hostinger** (container atrás do nginx da stack `contactia`, auto-d
 
 ## Concluído recentemente (julho/2026)
 
+- **Anotações e detalhes da clínica** (migration `0078`) — o contexto que se perdia em conversa solta agora vive na aba Cadastro. `clinic_notes`: texto corrido com autor, fixável (mesmo eixo do pin de tarefa) e **privado por anotação** — a mesma pessoa escreve recado para o time e rascunho só dela. `clinic_details`: campos livres chave/valor como extensão da Ficha, com autocomplete dos rótulos já usados em outras clínicas (sem isso o mesmo dado vira "Horário contato" aqui e "Horário de contato" ali, e a comparação entre clínicas morre). Sem RLS no app, a privacidade é regra de servidor (`canViewNote`/`canEditNote`), e um trigger apaga as privadas quando o autor é excluído — `on delete set null` deixaria linha privada sem dono, invisível e imortal.
 - **Agenda "Minha semana"** — 3º modo em /tarefas com as tarefas do usuário agrupadas por prazo (Atrasadas, Hoje, Esta semana, Mais tarde, Sem prazo).
 - **Seleção múltipla + ação em lote** — na lista de tarefas e na fila de sugestões da IA (confirmar/descartar várias de uma vez).
 - **Ciclo de vida das tarefas concluídas** — Lista esconde concluídas/canceladas por padrão (toggle "mostrar concluídas"); arquivamento automático das que passam de 7 dias (coluna `archived_at` + cron diário `archive-done-tasks-daily`), preservando o histórico.
@@ -60,6 +61,7 @@ Infra: **VPS Hostinger** (container atrás do nginx da stack `contactia`, auto-d
 | Média | Rollup semanal por IA | Consolidado semanal; aguarda mais dados acumulados. |
 | Média | Relatório de conversas — Fase 2/3 | Abas IA×Humano / Habilidades / Mensagens, keywords por clínica e funil na tela. |
 | Média | Churn preditivo | Usar o histórico acumulado para prever risco antes de acontecer. |
+| Média | Anotações na busca global — fase 2 | Indexar `clinic_notes` em `global-search.tsx`, **só as compartilhadas**. Ficou fora da primeira rodada de propósito: a busca é outra camada de leitura, e é exatamente onde o filtro de autor é esquecido e a privada vaza. |
 | Baixa | Categorização automática de pendência | Sugerir categoria da tarefa por palavra-chave da pendência. |
 | Baixa | Segurança — itens adiados | Base URL fixa no re-disparo do relatório (`/api/reports/process`); mensagem de erro genérica da Helena ao cliente. |
 

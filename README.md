@@ -281,6 +281,7 @@ Domínios de tabelas por área:
 | Custo OpenAI (chaves das clínicas) | `openai_projects`, `openai_api_keys`, `openai_key_usage`, `openai_alert_settings`, `openai_usage_alerts` |
 | IA e segurança | `ai_usage_log` (consumo de tokens/custo do LLM da plataforma), `login_attempts` (rate limit de login) |
 | Checklist | `check_items` (pessoal ou fixo/global, via `is_global`), `clinic_checks` (estado por clínica **e** por usuário) |
+| Contexto da clínica | `clinic_notes` (anotações da equipe ou privadas do autor), `clinic_details` (campos livres chave/valor), `clinic_file_notes` (anotação por caminho de arquivo/pasta) |
 | Outros | `clinic_churns`, `form_credentials` |
 
 ## Autenticação e autorização
@@ -300,7 +301,7 @@ flowchart LR
 
 As Server Actions acessam o banco por um client de service role que **ignora o RLS** — todo usuário autenticado é staff interno de confiança, e a autorização é feita em nível de aplicação. Existem dois papéis:
 
-- **gestor** — acesso irrestrito.
+- **gestor** — acesso irrestrito, com uma exceção deliberada: anotações de clínica marcadas como privadas (`clinic_notes.is_private`) são visíveis apenas para quem as escreveu. "Privada" só significa algo se valer para todos; abrir exceção para o gestor tornaria o rótulo mentira. Como não há RLS, essa regra é de servidor — `canViewNote`/`canEditNote` em `src/lib/clinics/notes.ts`, aplicadas em toda leitura e escrita de `notes-actions.ts`.
 - **desenvolvedor** — por padrão enxerga apenas as clínicas em que consta como responsável (`clinics.developer_id`), além de tarefas atribuídas a ele. Esse recorte ("escopo de carteira") é um **filtro de visão** aplicado nas páginas com dado por clínica (dashboard, mensal, comparativo, churns, gerenciador de grupos e tarefas), não uma fronteira de isolamento entre staff.
 
 Operações administrativas são restritas a gestor via `requireGestor()`: trocar papéis, ativar/desativar usuários, redefinir senha e definir o responsável (carteira) de uma clínica — com proteções contra o gestor rebaixar/desativar a si mesmo — além de configurar categorias de tarefa, faixas de status e o WhatsApp (grupos/equipe). Nas Configurações, o desenvolvedor tem acesso **somente-leitura** a esses pontos sensíveis (e à lista de usuários), com a proibição valendo nas duas camadas: gate no servidor e modo read-only na UI. A aba de IA das Configurações é oculta para o desenvolvedor. O cofre e o vínculo de arquivos/senhas seguem o mesmo modelo de compartilhamento explícito (`visible_to_devs`).

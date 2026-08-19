@@ -1,9 +1,18 @@
 // Aba "Cadastro" — setup e referência (mexe-se raramente): ficha da clínica,
-// provisionamento Helena, credenciais de formulário, integração e arquivos.
+// detalhes livres, anotações da equipe, provisionamento Helena, credenciais de
+// formulário, integração e arquivos.
 import type { ReactNode } from "react"
 import { notFound } from "next/navigation"
 import { getClinic } from "@/lib/clinics/actions"
 import { listClinicFiles, listClinicFileNotes } from "@/lib/clinics/files-actions"
+import {
+  listClinicDetailLabels,
+  listClinicDetails,
+  listClinicNotes,
+} from "@/lib/clinics/notes-actions"
+import { ClinicDetailsFields } from "@/components/clinics/clinic-details-fields"
+import { ClinicNotes } from "@/components/clinics/clinic-notes"
+import { getCurrentProfile } from "@/lib/users/actions"
 import { listFormCredentials } from "@/lib/clinics/form-credentials-actions"
 import { getClinicHelenaIntegration } from "@/lib/helena/accounts-actions"
 import { ClinicHelenaIntegration } from "@/components/clinics/clinic-helena-integration"
@@ -56,6 +65,10 @@ export default async function ClinicCadastroPage({
     partnerContacts,
     automationOk,
     aniversariantesSetup,
+    notes,
+    details,
+    detailLabels,
+    profile,
   ] = await Promise.all([
     listUserProfiles(),
     listProvisioning(id),
@@ -67,6 +80,12 @@ export default async function ClinicCadastroPage({
     // Só o banco: entra na mesma rodada de fetch, sem chamar a Helena.
     automationIsConfigurable(id),
     getAniversariantesSetup(id, clinic.system ?? null),
+    // `listClinicNotes` já filtra as privadas de outras pessoas no servidor —
+    // o cliente nunca recebe o que não pode ver.
+    listClinicNotes(id),
+    listClinicDetails(id),
+    listClinicDetailLabels(),
+    getCurrentProfile(),
   ])
   const strategistContacts = partnerContacts.filter((c) => c.role === "strategist")
   const trafficManagerContacts = partnerContacts.filter((c) => c.role === "traffic_manager")
@@ -105,6 +124,26 @@ export default async function ClinicCadastroPage({
             />
           </FichaRow>
         </div>
+      </Panel>
+
+      {/* ── Detalhes da clínica (campos livres) ─────────────────── */}
+      {/* Logo depois da Ficha porque é a mesma leitura — "o que esta clínica é" —
+          só que com os campos que a gente inventa conforme aparece a necessidade. */}
+      <Panel
+        title="Detalhes da clínica"
+        subtitle="campos livres · o que a Ficha não cobre e a equipe precisa achar rápido"
+      >
+        <ClinicDetailsFields clinicId={id} details={details} labelSuggestions={detailLabels} />
+      </Panel>
+
+      {/* ── Anotações ──────────────────────────────────────────── */}
+      {/* Acima de Provisionamento/Arquivos de propósito: contexto que a equipe lê
+          toda semana não pode ficar enterrado embaixo de setup que se mexe uma vez. */}
+      <Panel
+        title="Anotações"
+        subtitle="contexto da clínica · cada anotação é da equipe ou só sua"
+      >
+        <ClinicNotes clinicId={id} notes={notes} viewerId={profile?.id ?? null} />
       </Panel>
 
       {/* ── Provisionamento Helena ─────────────────────────────── */}
