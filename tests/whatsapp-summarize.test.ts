@@ -4,6 +4,8 @@ import {
   buildTranscript,
   buildYesterdayDigest,
   parseModelSummary,
+  transcriptBody,
+  usableForSummary,
   senderLabel,
   type TeamEntry,
   type TranscriptMessage,
@@ -155,5 +157,46 @@ describe("buildYesterdayDigest", () => {
     expect(buildYesterdayDigest(null)).toBe("");
     expect(buildYesterdayDigest(undefined)).toBe("");
     expect(buildYesterdayDigest({})).toBe("");
+  });
+});
+
+describe("mídia no transcript", () => {
+  const base = { event_ts: "2026-08-19T13:00:00.000Z", participant: null, push_name: "Ana", from_me: false };
+
+  it("áudio e imagem sem legenda entram como marcador", () => {
+    expect(transcriptBody({ text: null, message_type: "audioMessage" })).toBe("[áudio]");
+    expect(transcriptBody({ text: null, message_type: "imageMessage" })).toBe("[imagem]");
+    expect(transcriptBody({ text: null, message_type: "tipoNovoDaEvolution" })).toBe("[mídia]");
+  });
+
+  it("reação e cifrada são ignoradas, texto tem precedência", () => {
+    expect(transcriptBody({ text: null, message_type: "reactionMessage" })).toBeNull();
+    expect(transcriptBody({ text: null, message_type: "secretEncryptedMessage" })).toBeNull();
+    expect(transcriptBody({ text: "oi", message_type: "imageMessage" })).toBe("oi");
+  });
+
+  it("grupo com 1 texto e vários áudios rende resumo (antes era descartado)", () => {
+    const msgs: TranscriptMessage[] = [
+      { ...base, text: "bom dia, o paciente reclamou", message_type: "conversation" },
+      { ...base, text: null, message_type: "audioMessage" },
+      { ...base, text: null, message_type: "audioMessage" },
+      { ...base, text: null, message_type: "reactionMessage" },
+    ];
+    const { usable, hasText } = usableForSummary(msgs);
+    // A reação sai; sobram 3 linhas, uma delas com texto real.
+    expect(usable).toHaveLength(3);
+    expect(hasText).toBe(true);
+    const { transcript } = buildTranscript(usable, team);
+    expect(transcript).toContain("[áudio]");
+    expect(transcript).not.toContain("[reação]");
+  });
+
+  it("dia só de mídia sem legenda não vira resumo", () => {
+    const { usable, hasText } = usableForSummary([
+      { ...base, text: null, message_type: "audioMessage" },
+      { ...base, text: null, message_type: "stickerMessage" },
+    ]);
+    expect(usable).toHaveLength(2);
+    expect(hasText).toBe(false);
   });
 });

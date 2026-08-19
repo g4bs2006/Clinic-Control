@@ -6,6 +6,8 @@ export interface TranscriptMessage {
   push_name: string | null;
   from_me: boolean;
   text: string | null;
+  /** messageType da Evolution. Ausente = trata como texto puro (testes antigos). */
+  message_type?: string | null;
 }
 
 export interface TeamEntry {
@@ -62,6 +64,43 @@ export function senderLabel(
   return `Cliente (…${id.slice(-4)})`;
 }
 
+// Mídia sem legenda entra no transcript como marcador. 20% das linhas gravadas
+// têm `text` null (áudio, imagem, figurinha…) e antes eram descartadas na
+// consulta — um grupo que conversa por áudio era indistinguível de um grupo
+// morto, e a clínica ficava sem resumo mesmo tendo o dia inteiro de conversa.
+const MEDIA_LABELS: Record<string, string> = {
+  audioMessage: "[áudio]",
+  imageMessage: "[imagem]",
+  videoMessage: "[vídeo]",
+  ptvMessage: "[vídeo]",
+  documentMessage: "[documento]",
+  stickerMessage: "[figurinha]",
+  locationMessage: "[localização]",
+  contactMessage: "[contato]",
+};
+// Ruído: reação não é conteúdo de conversa, e a cifrada/protocolo não tem
+// conteúdo legível. Entram como linha nenhuma, nem como marcador.
+const IGNORED_TYPES = new Set(["reactionMessage", "secretEncryptedMessage", "protocolMessage"]);
+
+/** Corpo da linha no transcript: o texto, um marcador de mídia, ou null (ignorar). */
+export function transcriptBody(m: Pick<TranscriptMessage, "text" | "message_type">): string | null {
+  if (m.text) return m.text;
+  const t = m.message_type ?? "";
+  if (!t || IGNORED_TYPES.has(t)) return null;
+  return MEDIA_LABELS[t] ?? "[mídia]";
+}
+
+// Linhas que valem transcript, e se sobrou algum texto real entre elas. Só
+// marcador de mídia não rende resumo: o modelo não teria do que falar e gastaria
+// token produzindo ruído — então exigimos ao menos uma linha com texto.
+export function usableForSummary(messages: TranscriptMessage[]): {
+  usable: TranscriptMessage[];
+  hasText: boolean;
+} {
+  const usable = messages.filter((m) => transcriptBody(m) !== null);
+  return { usable, hasText: usable.some((m) => !!m.text) };
+}
+
 /** Transcript "[HH:MM] Nome: texto" (fuso SP), limitado para caber no prompt. */
 export function buildTranscript(
   messages: TranscriptMessage[],
@@ -71,13 +110,14 @@ export function buildTranscript(
   let total = 0;
   let used = 0;
   for (const m of messages) {
-    if (!m.text) continue;
+    const body = transcriptBody(m);
+    if (!body) continue;
     const hhmm = new Date(m.event_ts).toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
       timeZone: "America/Sao_Paulo",
     });
-    const line = `[${hhmm}] ${senderLabel(m, teamByLid)}: ${m.text}`;
+    const line = `[${hhmm}] ${senderLabel(m, teamByLid)}: ${body}`;
     if (total + line.length > MAX_TRANSCRIPT_CHARS) break;
     lines.push(line);
     total += line.length + 1;
