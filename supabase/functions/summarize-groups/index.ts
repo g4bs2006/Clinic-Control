@@ -21,6 +21,7 @@ import {
   buildTranscript,
   buildYesterdayDigest,
   parseModelSummary,
+  usableForSummary,
   type TeamEntry,
   type TranscriptMessage,
   type YesterdayDigest,
@@ -144,17 +145,21 @@ Deno.serve(async (req) => {
     if (!jids.length) return Response.json({ ok: false, error: "Clínica sem grupo de WhatsApp mapeado." });
     const { data: msgs } = await supabase
       .from("whatsapp_group_messages")
-      .select("event_ts, participant, push_name, from_me, text")
+      .select("event_ts, participant, push_name, from_me, text, message_type")
       .in("group_jid", jids)
       .gte("event_ts", dayStart)
       .lte("event_ts", dayEnd)
-      .not("text", "is", null)
       .order("event_ts");
-    const messages = (msgs ?? []) as TranscriptMessage[];
-    if (messages.length < MIN_MESSAGES) {
-      return Response.json({ ok: false, error: "Poucas mensagens nesse dia para gerar resumo." });
+    const { usable, hasText } = usableForSummary((msgs ?? []) as TranscriptMessage[]);
+    if (usable.length < MIN_MESSAGES || !hasText) {
+      return Response.json({
+        ok: false,
+        error: hasText
+          ? "Poucas mensagens nesse dia para gerar resumo."
+          : "Só mídia sem legenda nesse dia — sem texto para resumir.",
+      });
     }
-    const { transcript } = buildTranscript(messages, teamByLid);
+    const { transcript } = buildTranscript(usable, teamByLid);
     const { data: clinicRow } = await supabase.from("clinics").select("name").eq("id", clinicId).maybeSingle();
     const prompt = buildPrompt(
       (clinicRow?.name as string) ?? "clínica",
@@ -228,20 +233,21 @@ Deno.serve(async (req) => {
         try {
           const { data: msgs } = await supabase
             .from("whatsapp_group_messages")
-            .select("event_ts, participant, push_name, from_me, text")
+            .select("event_ts, participant, push_name, from_me, text, message_type")
             .in("group_jid", groupsByClinic.get(clinicId)!)
             .gte("event_ts", dayStart)
             .lte("event_ts", dayEnd)
-            .not("text", "is", null)
             .order("event_ts");
 
-          const messages = (msgs ?? []) as TranscriptMessage[];
-          if (messages.length < MIN_MESSAGES) {
+          // Sem filtro de `text` na consulta: áudio/imagem entram como marcador
+          // (ver transcriptBody). O corte fica com usableForSummary.
+          const { usable, hasText } = usableForSummary((msgs ?? []) as TranscriptMessage[]);
+          if (usable.length < MIN_MESSAGES || !hasText) {
             skipped++;
             return;
           }
 
-          const { transcript, used } = buildTranscript(messages, teamByLid);
+          const { transcript, used } = buildTranscript(usable, teamByLid);
           const clinicName = nameById.get(clinicId) ?? "clínica";
           const yesterdayDigest = buildYesterdayDigest(yesterdayByClinic.get(clinicId));
           const llm = await callLlm(

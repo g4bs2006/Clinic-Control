@@ -24,6 +24,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  cursorUpdatesFor,
   extractGroups,
   extractPagesCount,
   normalizeMessages,
@@ -239,7 +240,11 @@ Deno.serve(async (req) => {
   // função pode ser interrompida antes de terminar todos os grupos, e gravar
   // no fim significava perder 100% do trabalho — a causa da coleta ter ficado
   // 7 dias sem inserir nada.
-  async function persist(rows: MessageRow[]): Promise<{ inserted: number; errors: number }> {
+  // Devolve também quais grupos tiveram lote com erro: quem não gravou não pode
+  // ganhar cursor novo (ver cursorUpdatesFor).
+  async function persist(
+    rows: MessageRow[],
+  ): Promise<{ inserted: number; errors: number; failedGroups: Set<string> }> {
     // dedup: a Evolution repete records; ON CONFLICT DO UPDATE não aceita a
     // mesma linha duas vezes no mesmo comando. Em duplicata, fica a com texto.
     const byKey = new Map<string, MessageRow>();
@@ -251,21 +256,27 @@ Deno.serve(async (req) => {
     const unique = [...byKey.values()];
     let inserted = 0;
     let errors = 0;
+    const failedGroups = new Set<string>();
     for (let i = 0; i < unique.length; i += 500) {
       const chunk = unique.slice(i, i + 500);
       // merge (não ignore): re-runs atualizam linhas antigas — ex.: preencher text
       const { error } = await supabase
         .from("whatsapp_group_messages")
         .upsert(chunk, { onConflict: "group_jid,message_id", ignoreDuplicates: false });
-      if (error) errors++;
-      else inserted += chunk.length;
+      if (error) {
+        errors++;
+        // O lote é por tamanho, não por grupo: qualquer grupo com linha no lote
+        // perdido é suspeito e não avança o cursor.
+        for (const r of chunk) failedGroups.add(r.group_jid);
+      } else inserted += chunk.length;
     }
-    return { inserted, errors };
+    return { inserted, errors, failedGroups };
   }
 
   let messagesSeen = 0;
   let inserted = 0;
   let insertErrors = 0;
+  let cursorErrors = 0;
   let fetchErrors = 0;
   let pagesFetched = 0;
   let groupsProcessed = 0;
@@ -315,25 +326,27 @@ Deno.serve(async (req) => {
     inserted += w.inserted;
     insertErrors += w.errors;
 
-    // Cursor do rodízio + checkpoint de página, só para quem coletou sem erro.
+    // Cursor do rodízio + checkpoint de página, só para quem coletou E gravou.
     const collectedAt = new Date().toISOString();
-    const done = results
-      .filter((r) => r.newCheckpoint !== null)
-      .map((r) => ({
-        group_jid: r.groupJid,
-        last_synced_page: r.newCheckpoint as number,
-        last_collected_at: collectedAt,
-      }));
+    const done = cursorUpdatesFor(results, w.failedGroups, collectedAt);
     if (done.length) {
-      await supabase
+      // Erro aqui também é silencioso e caro: sem cursor o grupo é recoletado
+      // (custa tempo, não dados), mas precisa aparecer na resposta.
+      const { error: cursorError } = await supabase
         .from("whatsapp_groups")
         .upsert(done, { onConflict: "group_jid", ignoreDuplicates: false });
-      groupsProcessed += done.length;
+      if (cursorError) cursorErrors++;
+      else groupsProcessed += done.length;
     }
   }
 
   return Response.json({
-    ok: true,
+    // Falha de ESCRITA não pode sair como sucesso: era isso que fazia o
+    // `sync_warning` do gerador de tarefas (generate-runner.ts) nunca disparar,
+    // e a coleta relatar "coletado" com o banco vazio. `fetchErrors` fica fora
+    // de propósito — o grupo não avançou o cursor e sai na próxima execução,
+    // então não houve perda; já `partial` é operação normal em fatias.
+    ok: insertErrors === 0 && cursorErrors === 0,
     lookbackHours,
     partial, // true = deadline atingido; o resto sai na próxima execução
     elapsedMs: Date.now() - startedAt,
@@ -346,5 +359,11 @@ Deno.serve(async (req) => {
     inserted,
     fetchErrors,
     insertErrors,
+    cursorErrors,
+    // generate-runner.ts lê `error` para montar o sync_warning que aparece na tela.
+    error:
+      insertErrors || cursorErrors
+        ? `gravação falhou (${insertErrors} lote(s) de mensagem, ${cursorErrors} de cursor) — os grupos afetados serão recoletados`
+        : undefined,
   });
 });
