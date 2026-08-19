@@ -108,6 +108,32 @@ export function orderGroupsForRun<
   });
 }
 
+/** Resultado da varredura de um grupo, do ponto de vista do cursor. */
+export interface GroupRunResult {
+  groupJid: string;
+  /** Última página varrida, ou null se a busca na Evolution falhou. */
+  newCheckpoint: number | null;
+}
+
+// Quais cursores gravar depois de um lote. Um grupo só avança se as mensagens
+// dele foram REALMENTE gravadas: avançar o cursor em cima de uma gravação que
+// falhou é perda permanente, porque a coleta seguinte parte de `now - lookback`
+// e ninguém nunca repede a janela perdida. Grupo com falha de escrita (ou de
+// busca, `newCheckpoint: null`) fica sem cursor novo e volta ao topo do rodízio.
+export function cursorUpdatesFor(
+  results: GroupRunResult[],
+  failedGroups: ReadonlySet<string>,
+  collectedAt: string,
+): { group_jid: string; last_synced_page: number; last_collected_at: string }[] {
+  return results
+    .filter((r) => r.newCheckpoint !== null && !failedGroups.has(r.groupJid))
+    .map((r) => ({
+      group_jid: r.groupJid,
+      last_synced_page: r.newCheckpoint as number,
+      last_collected_at: collectedAt,
+    }));
+}
+
 // A Evolution devolve { success, data: [ ...grupos... ] } no fetchAllGroups.
 export function extractGroups(payload: unknown, instance: string): GroupRow[] {
   const j = asObj(payload);

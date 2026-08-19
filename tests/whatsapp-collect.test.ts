@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  cursorUpdatesFor,
   extractGroups,
   extractPagesCount,
   extractText,
@@ -191,5 +192,44 @@ describe("normalizeMessages", () => {
     expect(rows).toHaveLength(2);
     // com janela de 0.0001h (~0.36s), nada sobra
     expect(normalizeMessages(messagesPayload, "I", 0.0001, now)).toHaveLength(0);
+  });
+});
+
+describe("cursorUpdatesFor", () => {
+  const at = "2026-08-19T12:00:00.000Z";
+
+  it("grupo com gravação falha NÃO avança o cursor", () => {
+    const done = cursorUpdatesFor(
+      [
+        { groupJid: "g1@g.us", newCheckpoint: 3 },
+        { groupJid: "g2@g.us", newCheckpoint: 2 },
+      ],
+      new Set(["g2@g.us"]),
+      at,
+    );
+    // Antes o cursor avançava para os dois: g2 ficava marcado como coletado
+    // sem ter gravado nada, e a janela dele era perdida para sempre.
+    expect(done).toEqual([{ group_jid: "g1@g.us", last_synced_page: 3, last_collected_at: at }]);
+  });
+
+  it("grupo com falha na busca (checkpoint null) continua sem cursor", () => {
+    const done = cursorUpdatesFor(
+      [{ groupJid: "g1@g.us", newCheckpoint: null }],
+      new Set(),
+      at,
+    );
+    expect(done).toEqual([]);
+  });
+
+  it("sem falha nenhuma, todos avançam", () => {
+    const done = cursorUpdatesFor(
+      [
+        { groupJid: "g1@g.us", newCheckpoint: 1 },
+        { groupJid: "g2@g.us", newCheckpoint: 5 },
+      ],
+      new Set(),
+      at,
+    );
+    expect(done.map((d) => d.group_jid)).toEqual(["g1@g.us", "g2@g.us"]);
   });
 });
