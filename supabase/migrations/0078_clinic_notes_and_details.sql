@@ -79,3 +79,28 @@ create table if not exists clinic_details (
 
 create index if not exists clinic_details_clinic_idx
   on clinic_details (clinic_id, position, label);
+
+-- ── updated_at + RLS/grants ──────────────────────────────────────────────────
+drop trigger if exists clinic_notes_updated_at on clinic_notes;
+create trigger clinic_notes_updated_at before update on clinic_notes
+  for each row execute function set_updated_at();
+
+drop trigger if exists clinic_details_updated_at on clinic_details;
+create trigger clinic_details_updated_at before update on clinic_details
+  for each row execute function set_updated_at();
+
+-- Fecha para TODO acesso via PostgREST — nada de `grant ... to authenticated`
+-- com policy `using (true)`, que é a convenção da maioria das tabelas (0069).
+-- Aqui ela seria um furo: o app não usa mais Supabase Auth (todo acesso é
+-- service role, ver src/lib/supabase/server.ts), então `authenticated` não é
+-- ninguém deste app — mas um JWT qualquer do projeto leria as anotações
+-- PRIVADAS de todo mundo, e a privacidade aqui é regra de servidor sem rede de
+-- segurança no banco. O precedente correto é app_users (0025), que também
+-- guarda dado que o navegador nunca deve ver: revoga anon E authenticated.
+alter table clinic_notes enable row level security;
+revoke all on clinic_notes from anon, authenticated;
+grant all on clinic_notes to service_role;
+
+alter table clinic_details enable row level security;
+revoke all on clinic_details from anon, authenticated;
+grant all on clinic_details to service_role;
