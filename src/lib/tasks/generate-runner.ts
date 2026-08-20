@@ -3,9 +3,20 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 // Quantas clínicas analisar por tick — igual à CONCURRENCY da Edge Function
 // summarize-groups: cada tick resolve em ~1 rodada de LLM, bem abaixo do
-// limite de tempo da function. Re-tick duplicado é inofensivo (upsert do
-// resumo + dedup das sugestões), só desperdiça uma chamada.
+// limite de tempo da function.
 const BATCH_SIZE = 3;
+
+// Trava contra tick concorrente do MESMO job. O resumo do dia corrente sempre
+// regenera (force=true em summarize-groups), então um re-tick não é um no-op:
+// é uma segunda chamada de LLM (não-determinística) sobre as mesmas mensagens,
+// e cada upsert dispara de novo o trigger de sugestões — a mesma pendência
+// reformulada várias vezes na fila. O auto-kick de job travado do polling
+// (STALL_MS lá em generate-actions.ts) dispara um tick sem saber se o
+// anterior ainda está em voo (chamada de LLM pode passar de 90s); o lock evita
+// que os dois processem o mesmo lote ao mesmo tempo. LOCK_STALE_MS é maior que
+// o STALL_MS do polling para nunca expirar um lock de um tick genuinamente
+// travado antes do próprio auto-kick decidir redisparar.
+const LOCK_STALE_MS = 150_000;
 
 export type SuggestionTickResult =
   | { done: false; status: string; progressDone: number; progressTotal: number }
@@ -63,6 +74,30 @@ async function failJob(jobId: string, message: string): Promise<SuggestionTickRe
 }
 
 /**
+ * Tenta travar o job para este tick. Falha (retorna false) se outro tick já
+ * está em voo há menos de LOCK_STALE_MS — sinal de que o auto-kick do
+ * polling disparou em cima de um tick ainda rodando. UPDATE condicional é
+ * atômico: dois ticks concorrentes não podem ambos "ganhar" a trava.
+ */
+async function acquireTickLock(jobId: string): Promise<boolean> {
+  const supabase = createServiceClient();
+  const staleBefore = new Date(Date.now() - LOCK_STALE_MS).toISOString();
+  const { data, error } = await supabase
+    .from("suggestion_jobs")
+    .update({ processing_since: new Date().toISOString() })
+    .eq("id", jobId)
+    .or(`processing_since.is.null,processing_since.lt.${staleBefore}`)
+    .select("id");
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
+}
+
+async function releaseTickLock(jobId: string): Promise<void> {
+  const supabase = createServiceClient();
+  await supabase.from("suggestion_jobs").update({ processing_since: null }).eq("id", jobId);
+}
+
+/**
  * Processa um tick do job de geração: no primeiro tick sincroniza as mensagens
  * dos grupos (collect-groups); nos seguintes analisa BATCH_SIZE clínicas
  * (summarize-groups?clinics= — o trigger do banco converte as tarefas do
@@ -84,6 +119,13 @@ export async function processSuggestionJob(jobId: string): Promise<SuggestionTic
 
   const cfg = edgeConfig();
   if (!cfg) return failJob(jobId, "Config ausente (NEXT_PUBLIC_SUPABASE_URL / COLLECT_GROUPS_CRON_SECRET)");
+
+  // Outro tick deste job já está em voo (ex.: auto-kick do polling disparou em
+  // cima de uma chamada de LLM ainda rodando) — não reprocessa o mesmo lote em
+  // paralelo. Reporta o progresso atual; quem chamou tenta de novo depois.
+  if (!(await acquireTickLock(jobId))) {
+    return { done: false, status: job.status, progressDone: job.progress_done, progressTotal: job.clinic_ids.length };
+  }
 
   const total = job.clinic_ids.length;
   const stats: SuggestionJobStats = { ...EMPTY_STATS, ...(job.stats ?? {}) };
@@ -158,5 +200,9 @@ export async function processSuggestionJob(jobId: string): Promise<SuggestionTic
     return { done: true, status: "done" };
   } catch (e) {
     return failJob(jobId, e instanceof Error ? e.message : String(e));
+  } finally {
+    // Libera a trava mesmo em erro/timeout — senão o job fica preso até
+    // LOCK_STALE_MS vencer, mesmo já não tendo nada rodando de verdade.
+    await releaseTickLock(jobId);
   }
 }
