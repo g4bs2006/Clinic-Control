@@ -1,6 +1,6 @@
 # Contrato de schema: `aniversariantes_*`
 
-Referência das tabelas que o **Clinic Control** consome no schema `public`, mas
+Referência das tabelas que o **Clinic Control** consome no schema `aniversariantes`, mas
 que são versionadas pelo repositório **[Aniversariantes]**. Existe porque essa
 dependência é invisível no versionamento — ver
 [ADR 0006](../adr/0006-dono-unico-das-migrations.md).
@@ -18,10 +18,10 @@ Clinic-Control                                  Aniversariantes
 ──────────────                                  ───────────────
 lib/clinics/aniversariantes-actions.ts
   └─ lib/supabase/aniversariantes-service.ts
-       (client service_role, schema public)
+       (client service_role, schema aniversariantes)
               │  lê + ESCREVE                        versiona o schema
               ▼                                              │
-        public.aniversariantes_clinicas  ◀───────────────────┘
+  aniversariantes.aniversariantes_clinicas ◀──────────────────┘
 ```
 
 Atenção: **não é somente leitura.** `provisionAniversariantes()` faz `upsert`
@@ -75,7 +75,7 @@ Todas com RLS *deny-all*: acesso apenas por service role no backend.
 
 Assimetria de postura entre os dois lados, registrada de propósito:
 
-| | Clinic Control (`clinic_control`) | Aniversariantes (`public`) |
+| | Clinic Control (`clinic_control`) | Aniversariantes (`aniversariantes`) |
 |---|---|---|
 | Token Helena | `helena_token_encrypted` — AES-256-GCM, `iv:tag:ciphertext` | `helena_token` — **texto plano** |
 
@@ -93,6 +93,6 @@ Não há verificação automática hoje (é o item opcional do ADR 0006). Manual
 ```sql
 select column_name, data_type, is_nullable
 from information_schema.columns
-where table_schema = 'public' and table_name = 'aniversariantes_clinicas'
+where table_schema = 'aniversariantes' and table_name = 'aniversariantes_clinicas'
 order by ordinal_position;
 ```
