@@ -59,3 +59,37 @@ schema dedicado eliminou a colisão de nomes com o sistema que já morava em
 O que **não** é um problema, ao contrário do que a leitura apressada sugere: as
 duas séries de migrations não competem, porque atuam em schemas disjuntos. A
 ordem relativa entre elas é indefinida, mas irrelevante.
+
+## Emenda — 2026-08-21: `public` deixou de ser compartilhado
+
+A #71 foi executada. As tabelas dos outros dois sistemas saíram de `public` e
+cada app passou a ter schema próprio:
+
+| Schema | Dono |
+|---|---|
+| `clinic_control` | Clinic Control |
+| `aniversariantes` | repo Aniversariantes |
+| `dashboards` | repo DashBoard-s |
+| `public` | só `automacao_clinicas` (lida pelo n8n, fora de repo) |
+
+**O que isso muda nesta decisão:**
+
+- A frase acima sobre o schema dedicado ter "eliminado a colisão de nomes com o
+  sistema que já morava em `public` (dois `clinics` diferentes coexistem sem se
+  ver)" descreve um estado que **não existe mais**. A homônima virou
+  `dashboards.clinics`. O schema dedicado do Clinic Control continua correto —
+  por isolamento e por ter dono claro — mas não mais por colisão.
+- O **custo 3 (blast radius de projeto) continua idêntico.** Quota, rotação da
+  service key, pausa do projeto e limites de conexão seguem compartilhados. A #71
+  separou *schemas*, não projetos. Era o custo aceito nesta ADR e segue aceito.
+- O **custo 1 (dependência não versionada) continua**, e agora é mais visível:
+  `aniversariantes-service.ts` aponta para um schema cujo DDL vive noutro repo.
+  Ver [0006](0006-dono-unico-das-migrations.md), que segue valendo.
+- O **custo 4 (sem isolamento por tenant) continua** e é o que sustenta o
+  [0003](0003-sem-painel-para-cliente-final.md). A #71 isolou sistemas, não
+  clínicas.
+
+Ou seja: a decisão do 0001 — banco único compartilhado — **não foi revertida**.
+O que mudou foi a granularidade do isolamento dentro dele, de "um schema para
+nós e `public` para os outros" para "um schema por app". Runbook e procedimento
+de rollback em [`../how-to/migracao-schemas-por-app.md`](../how-to/migracao-schemas-por-app.md).

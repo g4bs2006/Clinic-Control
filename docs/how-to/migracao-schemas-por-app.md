@@ -68,15 +68,15 @@ configuração, não por shim no banco.
 Os passos 3, 4, 6 e 8 **só podem ser feitos à mão** — dependem de painel, de
 GitHub Actions e de deploy, não de repo.
 
-1. [ ] **Aplicar a `0082`** (cria os schemas vazios + grants). Inócua, pode ser
+1. [x] **Aplicar a `0082`** (cria os schemas vazios + grants). Inócua, pode ser
        aplicada a qualquer momento. Não move nada.
-2. [ ] **Deployar os três apps em produção**, ainda sem a env var definida.
+2. [x] **Deployar os três apps em produção**, ainda sem a env var definida.
        Clinic Control na VPS Hostinger; Aniversariantes e DashBoard-s na Vercel.
        Nada muda de comportamento — é o passo que abre a janela segura.
-3. [ ] **Expor os schemas no PostgREST.** Painel → Settings → API → *Exposed
+3. [x] **Expor os schemas no PostgREST.** Painel → Settings → API → *Exposed
        schemas* → adicionar `aniversariantes` e `dashboards`. **Não há API nem
        MCP para isso.** Pode ser feito com os schemas ainda vazios.
-4. [ ] **Pausar os crons.** Chamada em voo durante o move falha. São **três**,
+4. [x] **Pausar os crons.** Chamada em voo durante o move falha. São **três**,
        em dois lugares diferentes:
        - DashBoard-s, GitHub Actions: `sync-clinicorp.yml` e `ingest-cards.yml`.
          Rodam a cada ~30 min, então a janela é curta e vale desligar só na hora.
@@ -87,24 +87,33 @@ GitHub Actions e de deploy, não de repo.
          chamada sem ela. Se você religar (é só cadastrar a variável), ele volta
          a ser risco aqui. Rodando 1x/dia às 6h UTC, a saída mais simples é
          fazer o corte fora dessa hora em vez de pausar.
-5. [ ] **Aplicar a `0083`** — o corte. Move as 8 tabelas e dropa as duas funções
+5. [x] **Aplicar a `0083`** — o corte. Move as 8 tabelas e dropa as duas funções
        mortas. Precisa ser atômica (ver o cabeçalho do arquivo).
-6. [ ] **Conferir as contagens.** Query e linha de base no fim da `0083`.
-7. [ ] **Definir as env vars em produção e redeployar os três:**
+6. [x] **Conferir as contagens.** Query e linha de base no fim da `0083`.
+7. [x] **Definir as env vars em produção e redeployar os três:**
        `ANIVERSARIANTES_DB_SCHEMA=aniversariantes` (Clinic Control e
        Aniversariantes) e `DASHBOARDS_DB_SCHEMA=dashboards` (DashBoard-s).
-8. [ ] **Religar os crons**, rodar um ciclo de cada e conferir o upsert de
+8. [x] **Religar os crons**, rodar um ciclo de cada e conferir o upsert de
        `cards` — é o caminho que nenhum shim cobriria.
-9. [ ] **Verificação funcional:** dashboard de uma clínica real abrindo por
-       `?clinic=slug`, e o painel do Aniversariantes na aba Cadastro carregando.
-10. [ ] **Conferir `_syncLock` preso** em `dashboards.clinics.steps`, caso algum
-        processo tenha morrido no meio.
+9. [ ] **Verificação funcional pela UI** — *pendente, exige sessão/browser*:
+       dashboard de uma clínica real abrindo por `?clinic=slug`, e o painel do
+       Aniversariantes na aba Cadastro carregando. Verificado por API em vez
+       disso: `/api/clinicas` e `/api/aniversariantes` devolvendo dado real do
+       schema novo, upsert de `cards` com `on_conflict` retornando 200, e um
+       ciclo de cada cron gravando em `dashboards.*` (ingest_log +38,
+       sync_log +11). Falta só o olho humano na tela.
+10. [x] **Conferir `_syncLock` preso** em `dashboards.clinics.steps`. Existe um
+        em IBS IMPLANTES (unidade "Bueno", `21:20:26Z`), **anterior ao move** —
+        não foi causado por ele. Deixado intacto de propósito: o formato mudou
+        horas antes (`fix(sync): checkpoint do lastSyncAt por unidade`), e um
+        timestamp por unidade parece checkpoint, não mutex. Se for checkpoint,
+        limpar perde progresso. Confirmar com quem mexeu no sync.
 
 ### Depois do corte
 
-- [ ] `docs/reference/schema-aniversariantes.md` atualizado com os nomes novos.
-- [ ] ADR 0001 emendado — a justificativa do "`public` compartilhado" muda.
-- [ ] Comentário de `src/lib/supabase/config.ts` (menciona a colisão de
+- [x] `docs/reference/schema-aniversariantes.md` atualizado com os nomes novos.
+- [x] ADR 0001 emendado — a justificativa do "`public` compartilhado" muda.
+- [x] Comentário de `src/lib/supabase/config.ts` (menciona a colisão de
       `clinics`, que deixa de existir).
 - [ ] Aniversariantes: tipos regerados para o schema novo e o cast `as 'public'`
       de `src/lib/supabase.ts` removido; o `SCHEMA` volta a ser constante.
