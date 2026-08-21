@@ -1,6 +1,6 @@
 # Roadmap — Clinic Control
 
-_Última atualização: 2026-08-18_
+_Última atualização: 2026-08-20_
 
 > **O acompanhamento do dia a dia vive no [Project](https://github.com/users/g4bs2006/projects)**, não aqui.
 > Este arquivo guarda o *porquê* — norte estratégico, frentes e o que foi descartado.
@@ -10,15 +10,19 @@ _Última atualização: 2026-08-18_
 
 Transformar o Clinic Control de "painel que a equipe consulta" em **central de operação que puxa a equipe para a ação**, unificando a gestão da carteira de clínicas e substituindo ferramentas dispersas (planilhas, ClickUp, grupos de WhatsApp, CRM).
 
-Três frentes que se reforçam num ciclo:
+Quatro frentes (revisado em 2026-08-20 — eram três; notificações e proatividade cresceram escopo o suficiente pra separar identidade/integração em frentes próprias):
 
 ```
-detecta (proatividade) → vira tarefa (matar o ClickUp) → notifica (entrega) → equipe age → rastreia
+detecta (proatividade) → vira tarefa (núcleo operacional) → notifica (agente) → equipe age → rastreia
 ```
 
-1. **Matar o ClickUp** — completar as tarefas nativas até a equipe não precisar mais dele. _(frente atual)_
-2. **Notificações** — levar os sinais para onde a equipe está (WhatsApp / e-mail / push).
-3. **Proatividade** — churn preditivo, padrões entre clínicas, ações automáticas.
+1. **Núcleo operacional** (era "Matar o ClickUp") — tarefas nativas, dependências entre tarefas, calendário/reuniões v1. _(frente atual)_
+   - Critério de saída: fecha quando **Dependências entre tarefas** e **Calendário v1** estiverem em produção.
+2. **Agente & Notificações** — identidade por número de WhatsApp (com fluxo de troca de número verificado), push individualizado por dono de clínica, agente conversacional sob demanda.
+3. **Integrações externas** — OAuth por usuário e sync com serviços de terceiros (Google Calendar primeiro; infra pensada pra servir integrações futuras).
+4. **Observabilidade & Proatividade** — dashboard de erros de automação (n8n) com triagem por IA, churn preditivo, padrões entre clínicas.
+
+Regra de WIP entre frentes não muda: **uma frente ativa por vez**, WIP de 2 itens em "Fazendo" no total continua sendo o limitador real de quanto trabalho corre em paralelo — mais frentes é só granularidade de categorização, não licença pra rodar tudo ao mesmo tempo.
 
 Descartado por ora: painel para o cliente final — ver [ADR 0003](docs/adr/0003-sem-painel-para-cliente-final.md).
 
@@ -40,30 +44,50 @@ Infra: **VPS Hostinger** (container atrás do nginx da stack `contactia`, auto-d
 
 ---
 
-## Frente atual: matar o ClickUp
+## Frente atual: núcleo operacional
 
 - [x] Agenda "Minha semana" (visão pessoal por prazo)
 - [x] Seleção múltipla e ação em lote (lista + sugestões)
 - [x] **Tarefas recorrentes** — regras declarativas com materialização lazy, anti-empilhamento e fan-out por carteira; detector de rotinas e diagnóstico pós-onboarding.
-- [ ] **Dependências entre tarefas** — "bloqueada por"; envolve migration (`task_dependencies`) + UI + lógica de bloqueio.
-- [ ] **Lembretes externos de prazo** — depende da frente de Notificações (a "Minha semana" já cobre o aviso in-app).
+- [ ] **Dependências entre tarefas** — "bloqueada por"; envolve migration (`task_dependencies`) + UI + lógica de bloqueio. Épico: #33.
+- [ ] **Calendário v1 (motor interno)** — reuniões/eventos/compromissos, avaliando reaproveitar o motor de recorrência de tarefas. Épico: #37. Sync com Google Calendar é v2, na frente Integrações externas (#56, #59).
+- [ ] **Lembretes externos de prazo** — depende da frente Agente & Notificações (a "Minha semana" já cobre o aviso in-app).
 
 ---
 
-## Próximos passos (priorizados)
+## Curto prazo
 
-| Prioridade | Item | Observação |
-|---|---|---|
-| Alta | Dependências entre tarefas | Frente "matar o ClickUp". |
-| Alta | Notificações + lembretes de prazo | Fundação de entrega; habilita lembretes externos. Decisão pendente: canal (e-mail é a espinha dorsal mais confiável para alertas críticos, já que a Evolution/WhatsApp pode cair). |
-| Média | Detecção de padrões entre clínicas | Agrupar reclamações/temas recorrentes via *embeddings* (`pgvector`); desenhado, aguarda chave de embeddings (DeepSeek não oferece endpoint). |
-| Média | Timeline de sentimento (30 dias) | Faixa de sentimento no perfil da clínica. |
-| Média | Rollup semanal por IA | Consolidado semanal; aguarda mais dados acumulados. |
-| Média | Relatório de conversas — Fase 2/3 | Abas IA×Humano / Habilidades / Mensagens, keywords por clínica e funil na tela. |
-| Média | Churn preditivo | Usar o histórico acumulado para prever risco antes de acontecer. |
-| Média | Anotações na busca global — fase 2 | Indexar `clinic_notes` em `global-search.tsx`, **só as compartilhadas**. Ficou fora da primeira rodada de propósito: a busca é outra camada de leitura, e é exatamente onde o filtro de autor é esquecido e a privada vaza. |
-| Baixa | Categorização automática de pendência | Sugerir categoria da tarefa por palavra-chave da pendência. |
-| Baixa | Segurança — itens adiados | Base URL fixa no re-disparo do relatório (`/api/reports/process`); mensagem de erro genérica da Helena ao cliente. |
+| Item | Observação |
+|---|---|
+| Dependências entre tarefas | Frente "núcleo operacional". Épico #33. |
+| Rollup semanal por IA | Consolidado semanal; volume de dados já suficiente para executar. |
+| Pendências operacionais (`CRON_SECRET` do collect-groups, `DEEPSEEK_API_KEY` na VPS, rotação da service key) | Sem dependência técnica, só execução. |
+| Dívida técnica: `max_tokens` fixo em 600 nas subtarefas por IA | Mesmo risco do bug corrigido na migration 0077 (resposta vazia em modelo de raciocínio) se um dia trocarem de modelo. |
+| Dívida técnica: base URL fixa no re-disparo de `/api/reports/process` | — |
+| Segurança: mensagem de erro genérica da Helena ao cliente | — |
+| Investigar/remover instrução suspeita em `AGENTS.md` | Conteúdo não corresponde a nenhum comportamento real do Next.js — provável injeção. |
+
+## Médio prazo
+
+| Item | Observação |
+|---|---|
+| Identidade por número de WhatsApp (com troca de número verificada) | Base da frente Agente & Notificações. Épico #41, ADR #42. |
+| Push individualizado por dono de clínica | Substitui o broadcast único de grupo. Depende da identidade acima. Épico #46. |
+| Agente conversacional sob demanda (resumo de clínica, pendências do dia) | v2 da frente Agente & Notificações, depende do push v1. Épico #50. |
+| Timeline de sentimento (30 dias) | Aguarda decisão de provedor de embeddings/IA (mesma trava da detecção de padrões, longo prazo). |
+| Anotações na busca global — fase 2 | Indexar `clinic_notes` em `global-search.tsx`, **só as compartilhadas**. Ficou fora da primeira rodada de propósito: a busca é outra camada de leitura, e é exatamente onde o filtro de autor é esquecido e a privada vaza. |
+| Relatório de conversas — Fase 2/3 | Abas IA×Humano / Habilidades / Mensagens, keywords por clínica e funil na tela. |
+| OAuth Google Calendar + sync unidirecional | Frente Integrações externas. ADR #55, épicos #56 e #59. |
+| Dashboard de erros do n8n | Frente Observabilidade & Proatividade. Épico #62. Base necessária antes da triagem por IA. |
+| Categorização automática de pendência | Sugerir categoria da tarefa por palavra-chave da pendência. |
+
+## Longo prazo
+
+| Item | Observação |
+|---|---|
+| Detecção de padrões entre clínicas | Agrupar reclamações/temas recorrentes via *embeddings* (`pgvector`); desenhado, aguarda decisão de provedor (DeepSeek não oferece endpoint de embeddings). |
+| Churn preditivo | Usar o histórico acumulado para prever risco antes de acontecer; depende de massa crítica de snapshots mensais. |
+| Triagem por IA dos erros do n8n | Épico #66, depende do dashboard de erros (médio prazo) já estar coletando dados. |
 
 ---
 
