@@ -40,6 +40,11 @@ RECOMENDADAS=(
   DEEPSEEK_API_KEY                  # "Gerar da IA" em /tarefas
   LLM_MODEL                         # default deepseek-chat
   LLM_BASE_URL                      # default https://api.deepseek.com
+  # Assina os links de acesso ao painel Aniversariantes. Ausente aqui só derruba
+  # os dois botões da aba Cadastro — mas o MESMO valor precisa estar na Vercel do
+  # Aniversariantes, e lá a ausência bloqueia o painel inteiro. Divergir os dois
+  # é pior que faltar nos dois: o link é emitido e recusado do outro lado.
+  ANIVERSARIANTES_LINK_SECRET
 )
 
 # Estas devem ficar AUSENTES para reproduzir o comportamento da Vercel — ver
