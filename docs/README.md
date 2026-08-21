@@ -23,6 +23,10 @@ achar nada.
 - **[`reference/schema-aniversariantes.md`](reference/schema-aniversariantes.md)** —
   contrato das tabelas que este repo consome mas não versiona. Leitura obrigatória
   antes de mexer em qualquer coisa do Aniversariantes.
+- **[`how-to/migracao-schemas-por-app.md`](how-to/migracao-schemas-por-app.md)** —
+  runbook da migração que tira o Aniversariantes e o DashBoard-s do schema
+  `public`. Tem passos que só podem ser feitos à mão e uma ordem que, invertida,
+  derruba os três apps — ler antes de aplicar a `0082`/`0083`.
 - **[`reference/n8n/`](reference/n8n/)** — workflows do n8n. Ver o
   `DEPRECATED.md` antes de reutilizar: a coleta migrou para Edge Function.
 - **[`historico/`](historico/)** — `fase-1.md` e os planos em `superpowers/`,
