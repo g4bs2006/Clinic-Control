@@ -31,6 +31,7 @@ import { createAniversariantesServiceClient } from "@/lib/supabase/aniversariant
 import { decryptToken } from "@/lib/crypto/token";
 import { getSessionUser } from "@/lib/auth/session";
 import { listFormCredentials } from "./form-credentials-actions";
+import { aniversariantesHelenaTabUrl, aniversariantesPanelUrl } from "./aniversariantes-link";
 import { mapClinicSystemToProntuario, type AniversariantesClinica, type AniversariantesSetup, type ProvisionAniversariantesInput } from "./aniversariantes-types";
 
 /**
@@ -177,4 +178,49 @@ export async function provisionAniversariantes(
 
   revalidatePath(`/clinicas/${clinicId}`);
   return { ok: true as const, slug: companyId };
+}
+
+// URL do app. Fica aqui, do lado servidor, em vez de no componente: o link só
+// serve acompanhado de um token assinado, e montar os dois no mesmo lugar evita
+// que alguém reconstrua a URL sem o token e ache que funciona.
+const ANIVERSARIANTES_BASE_URL =
+  process.env.ANIVERSARIANTES_BASE_URL ?? "https://aniversariantes-murex.vercel.app";
+
+/**
+ * Link de acesso ao painel, gerado SOB DEMANDA (no clique, não no render).
+ *
+ * Dois motivos para não devolver isso junto do `getAniversariantesSetup`:
+ * o token do botão expira em 10 minutos e ficaria velho numa aba aberta, e o
+ * link permanente é credencial — não deve ficar embutido no HTML de toda
+ * renderização da aba Cadastro.
+ *
+ * `permanente: true` devolve o link SEM expiração, para colar na configuração da
+ * aba da Helena da clínica. É credencial de longa duração: só a rotação de
+ * `ANIVERSARIANTES_LINK_SECRET` a invalida. Ver Clinic-Control#74.
+ */
+export async function getAniversariantesLink(clinicId: string, permanente = false) {
+  if (!(await getSessionUser())) return { ok: false as const, error: "Não autenticado" };
+
+  const cc = createServiceClient();
+  const { data: integ } = await cc
+    .from("clinic_integrations")
+    .select("company_id")
+    .eq("clinic_id", clinicId)
+    .maybeSingle();
+
+  const slug = integ?.company_id as string | undefined;
+  if (!slug) {
+    return { ok: false as const, error: "Clínica sem company_id da Helena — não há como montar o link." };
+  }
+
+  try {
+    const url = permanente
+      ? aniversariantesHelenaTabUrl(ANIVERSARIANTES_BASE_URL, slug)
+      : aniversariantesPanelUrl(ANIVERSARIANTES_BASE_URL, slug);
+    return { ok: true as const, url };
+  } catch (err) {
+    // Segredo ausente cai aqui. Mensagem explícita porque o sintoma no app do
+    // outro lado seria só "acesso não autorizado", sem pista da causa.
+    return { ok: false as const, error: (err as Error).message };
+  }
 }

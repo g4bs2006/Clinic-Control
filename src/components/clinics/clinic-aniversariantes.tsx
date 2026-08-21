@@ -12,11 +12,9 @@ import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { provisionAniversariantes } from "@/lib/clinics/aniversariantes-actions";
+import { getAniversariantesLink, provisionAniversariantes } from "@/lib/clinics/aniversariantes-actions";
 import type { AniversariantesSetup, SistemaProntuario } from "@/lib/clinics/aniversariantes-types";
 
-// Projeto Vercel do Aniversariantes (ver Aniversariantes/README.md § Deploy).
-const ANIVERSARIANTES_BASE_URL = "https://aniversariantes-murex.vercel.app";
 
 export function ClinicAniversariantes({
   clinicId,
@@ -48,6 +46,7 @@ export function ClinicAniversariantes({
 }
 
 function ProvisionedView({
+  clinicId,
   clinicName,
   setup,
 }: {
@@ -61,7 +60,13 @@ function ProvisionedView({
   if (editing) {
     return (
       <ProvisionForm
-        clinicId={clinica.id}
+        // `clinicId` do Clinic Control, NÃO `clinica.id`. Estava passando
+        // `clinica.id` (a PK em aniversariantes_clinicas), e provisionAniversariantes
+        // busca `clinic_integrations` por `clinic_id` — então "Atualizar
+        // credenciais" numa clínica já provisionada não achava o company_id e
+        // falhava. Só acontecia neste caminho: no provisionamento inicial o id
+        // vinha correto.
+        clinicId={clinicId}
         clinicName={clinicName}
         setup={setup}
         onDone={() => setEditing(false)}
@@ -78,19 +83,67 @@ function ProvisionedView({
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <a
-          href={`${ANIVERSARIANTES_BASE_URL}/?clinica=${encodeURIComponent(clinica.slug)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          Abrir Aniversariantes <ExternalLink className="size-3" />
-        </a>
+        <AcessoAniversariantes clinicId={clinicId} />
         <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>
           Atualizar credenciais
         </Button>
       </div>
     </div>
+  );
+}
+
+// O app Aniversariantes não tem login: o acesso é por link assinado, e o token
+// carrega o slug da clínica (Clinic-Control#74). Daí os dois botões:
+//   - "Abrir": token de 10 minutos, para a equipe interna ver o painel agora.
+//   - "Copiar link da aba da Helena": token SEM expiração, para colar uma vez na
+//     configuração da aba daquela clínica. É credencial de longa duração.
+// Os links são pedidos no clique, não no render: o de 10 minutos ficaria velho
+// numa aba aberta, e o permanente não deve ficar embutido no HTML da página.
+function AcessoAniversariantes({ clinicId }: { clinicId: string }) {
+  const [pending, startTransition] = useTransition();
+
+  function abrir() {
+    startTransition(async () => {
+      const r = await getAniversariantesLink(clinicId);
+      if (!r.ok) return void toast.error(r.error);
+      window.open(r.url, "_blank", "noopener,noreferrer");
+    });
+  }
+
+  function copiarPermanente() {
+    startTransition(async () => {
+      const r = await getAniversariantesLink(clinicId, true);
+      if (!r.ok) return void toast.error(r.error);
+      await navigator.clipboard.writeText(r.url);
+      toast.success("Link copiado. Cole na configuração da aba da Helena desta clínica.", {
+        description: "Não expira — quem tiver o link acessa o painel desta clínica.",
+      });
+    });
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={abrir}
+        disabled={pending}
+        className="gap-1.5"
+      >
+        {pending ? <Loader2 className="size-3 animate-spin" /> : null}
+        Abrir Aniversariantes <ExternalLink className="size-3" />
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={copiarPermanente}
+        disabled={pending}
+      >
+        Copiar link da aba da Helena
+      </Button>
+    </>
   );
 }
 
