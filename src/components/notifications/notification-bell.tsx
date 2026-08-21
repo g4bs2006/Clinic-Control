@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Loader2, X } from "lucide-react";
+import { Bell, Check, Loader2, X, PanelRightOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { notificationVisual, dayBucket, type DayBucket } from "@/lib/notifications/display";
 import { useNotifications } from "./notification-context";
+import { useTaskPanel } from "@/components/tasks/task-panel-context";
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -17,6 +18,14 @@ function timeAgo(iso: string): string {
   const d = Math.floor(h / 24);
   if (d < 7) return `há ${d} d`;
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+// Extrai o id da tarefa de uma notificação ligada a tarefa (url /tarefas/[id] ou
+// entity_type === "task"), para abrir direto no painel global.
+function taskIdFrom(url: string | null, entityType: string | null, entityId: string | null): string | null {
+  if (entityType === "task" && entityId) return entityId;
+  const m = url?.match(/\/tarefas\/([^/?]+)/);
+  return m?.[1] ?? null;
 }
 
 export function NotificationBell({
@@ -32,6 +41,7 @@ export function NotificationBell({
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const router = useRouter();
+  const { openTask: openTaskInPanel } = useTaskPanel();
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -178,13 +188,15 @@ export function NotificationBell({
                     <ul className="divide-y divide-border/50">
                       {g.rows.map((n) => {
                         const { Icon, colorClass } = notificationVisual(n.type);
+                        const panelTaskId = taskIdFrom(n.url, n.entity_type, n.entity_id);
                         return (
                           <li key={n.id} className="group/item relative">
                             <button
                               type="button"
                               onClick={() => onItemClick(n.id, n.url)}
                               className={cn(
-                                "flex w-full items-start gap-3 py-3 pl-4 pr-9 text-left transition-colors hover:bg-accent/40",
+                                "flex w-full items-start gap-3 py-3 pl-4 text-left transition-colors hover:bg-accent/40",
+                                panelTaskId ? "pr-14" : "pr-9",
                                 !n.read_at && "bg-accent/20",
                               )}
                             >
@@ -219,6 +231,22 @@ export function NotificationBell({
                             >
                               <X className="size-3.5" />
                             </button>
+                            {panelTaskId && (
+                              <button
+                                type="button"
+                                aria-label="Abrir tarefa no painel"
+                                title="Abrir no painel"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markRead(n.id);
+                                  setOpen(false);
+                                  openTaskInPanel(panelTaskId);
+                                }}
+                                className="absolute right-8 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/item:opacity-100"
+                              >
+                                <PanelRightOpen className="size-3.5" />
+                              </button>
+                            )}
                           </li>
                         );
                       })}
