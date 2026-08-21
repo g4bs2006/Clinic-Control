@@ -16,8 +16,14 @@
 --   3. Settings → API → Exposed schemas: `aniversariantes` e `dashboards`
 --      adicionados. É passo de PAINEL, não tem API nem MCP. Esquecer este é o
 --      jeito mais fácil de quebrar 100% das chamadas com PGRST106.
---   4. Crons do DashBoard-s pausados (GitHub Actions: sync-clinicorp.yml,
---      ingest-cards.yml). Chamada em voo durante o move falha.
+--   4. Crons pausados. São TRÊS, em dois lugares:
+--      - DashBoard-s (GitHub Actions): sync-clinicorp.yml, ingest-cards.yml.
+--        Rodam a cada ~30 min.
+--      - Aniversariantes (Vercel Cron, vercel.json, 0 6 * * *):
+--        /api/cron/sync-clinicorp. Hoje está MORTO (CRON_SECRET não cadastrada
+--        na Vercel desde 12/08/2026), mas volta a ser risco assim que religado.
+--        Rodando 1x/dia às 6h UTC, mais simples é cortar fora dessa hora.
+--      Chamada em voo durante o move falha.
 --
 -- DEPOIS de aplicar, na ordem: conferir contagens (abaixo) → definir as env
 -- vars em produção e redeployar os três → religar os crons → rodar um ciclo de
