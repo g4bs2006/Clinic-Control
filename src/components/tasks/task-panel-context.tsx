@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useRouter } from "next/navigation";
 import { listClinics } from "@/lib/clinics/actions";
 import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions";
@@ -10,7 +18,8 @@ import type { ClinicOption, ProfileOption } from "./task-fields";
 
 /**
  * Painel global de tarefas (estilo "mini-player"): uma tarefa aberta em overlay
- * ancorado que sobrevive à navegação (vive no layout) e pode ser minimizada.
+ * ancorado que sobrevive à navegação (vive no layout), ao recarregar (F5) e
+ * sincroniza entre abas do navegador (localStorage + evento `storage`).
  * Aberto por um botão explícito (OpenInPanelButton) em qualquer tela — não
  * substitui o modal de /tarefas nem o deep-link /tarefas/[id].
  */
@@ -41,11 +50,86 @@ export function useTaskPanel(): TaskPanelCtx {
   return ctx;
 }
 
+// ── Persistência (F5 + abas) ─────────────────────────────────────────────────
+// O estado do painel (qual tarefa está aberta e se está minimizado) vive no
+// localStorage: sobrevive ao recarregar E é compartilhado entre abas (o evento
+// `storage` avisa as outras abas). Mesma ideia do filtro/sidebar do projeto:
+// a memória é a verdade, o localStorage é backup + canal de sync entre abas.
+const STORAGE_KEY = "cc-task-panel";
+const STORAGE_EVENT = "cc-task-panel-change";
+
+type PersistedState = { taskId: string | null; minimized: boolean };
+const DEFAULT_SNAPSHOT: PersistedState = { taskId: null, minimized: false };
+
+function parsePersisted(raw: string): PersistedState {
+  try {
+    const parsed = JSON.parse(raw) as Partial<PersistedState>;
+    return {
+      taskId: typeof parsed.taskId === "string" ? parsed.taskId : null,
+      minimized: !!parsed.minimized,
+    };
+  } catch {
+    return DEFAULT_SNAPSHOT;
+  }
+}
+
+function readPersisted(): PersistedState {
+  if (typeof window === "undefined") return DEFAULT_SNAPSHOT;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? parsePersisted(raw) : DEFAULT_SNAPSHOT;
+  } catch {
+    return DEFAULT_SNAPSHOT;
+  }
+}
+
+// Espelho em memória — lido por getSnapshot (estável entre chamadas) e escrito
+// por setStore. Começa null para ser populado sob demanda (só no cliente).
+let store: PersistedState | null = null;
+
+function getStoreSnapshot(): PersistedState {
+  if (store === null) store = readPersisted();
+  return store;
+}
+
+function setStore(next: PersistedState) {
+  store = next;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // Quota/modo privativo: segue só em memória (não persiste, mas não quebra).
+  }
+  window.dispatchEvent(new Event(STORAGE_EVENT));
+}
+
+// Notifica quando o store muda — tanto na mesma aba (ação do usuário) quanto nas
+// outras abas (evento `storage`, que dispara apenas nas abas que NÃO escreveram).
+function subscribeStore(onStoreChange: () => void): () => void {
+  const onLocal = () => onStoreChange();
+  const onStorage = (e: StorageEvent) => {
+    if (e.key !== STORAGE_KEY) return;
+    store = e.newValue ? parsePersisted(e.newValue) : DEFAULT_SNAPSHOT;
+    onStoreChange();
+  };
+  window.addEventListener(STORAGE_EVENT, onLocal);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(STORAGE_EVENT, onLocal);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
 export function TaskPanelProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [taskId, setTaskId] = useState<string | null>(null);
-  const [minimized, setMinimized] = useState(false);
-  const [title, setTitle] = useState<string | null>(null);
+  // taskId/minimized vêm do store externo (localStorage) — hidrata sem setState
+  // em effect (o snapshot do servidor é o padrão; o cliente aplica após montar).
+  const { taskId, minimized } = useSyncExternalStore(
+    subscribeStore,
+    getStoreSnapshot,
+    () => DEFAULT_SNAPSHOT,
+  );
+  const [titleState, setTitleState] = useState<{ taskId: string; title: string } | null>(null);
   const [supportLoaded, setSupportLoaded] = useState(false);
   const [clinics, setClinics] = useState<(ClinicOption & { developerId: string | null })[]>([]);
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);
@@ -80,33 +164,44 @@ export function TaskPanelProvider({ children }: { children: React.ReactNode }) {
     };
   }, [taskId, supportLoaded]);
 
+  // Título da tarefa aberta (para a mini barra). Só setState em callback assíncrono.
+  // Se a tarefa não existe mais (deletada em outra aba), fecha o painel.
+  useEffect(() => {
+    if (!taskId) return;
+    let cancelled = false;
+    void getTask(taskId).then((t) => {
+      if (cancelled) return;
+      if (t) setTitleState({ taskId, title: t.title });
+      else setStore({ taskId: null, minimized: false });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [taskId]);
+
   const openTask = useCallback((id: string) => {
     dirtyRef.current = false;
-    setTitle(null);
-    setMinimized(false);
-    setTaskId(id);
-    // Um getTask extra é barato e desacopla a mini barra do diálogo (que faz a
-    // própria carga completa de subtarefas/anexos/atividade).
-    void getTask(id).then((t) => {
-      if (t) setTitle(t.title);
-    });
+    setStore({ taskId: id, minimized: false });
   }, []);
 
   const close = useCallback(() => {
-    setTaskId(null);
-    setMinimized(false);
-    setTitle(null);
+    setStore({ taskId: null, minimized: false });
     if (dirtyRef.current) {
       dirtyRef.current = false;
       router.refresh();
     }
   }, [router]);
 
-  const minimize = useCallback(() => setMinimized(true), []);
-  const expand = useCallback(() => setMinimized(false), []);
+  const minimize = useCallback(() => setStore({ taskId, minimized: true }), [taskId]);
+  const expand = useCallback(() => setStore({ taskId, minimized: false }), [taskId]);
+
   const markDirty = useCallback(() => {
     dirtyRef.current = true;
   }, []);
+
+  // O título só vale se for da tarefa atualmente aberta (evita exibir o título de
+  // uma tarefa anterior enquanto a nova ainda está carregando).
+  const title = titleState && titleState.taskId === taskId ? titleState.title : null;
 
   const value: TaskPanelCtx = {
     taskId,
