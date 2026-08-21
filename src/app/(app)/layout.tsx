@@ -3,6 +3,8 @@ import { MobileTopBar } from "@/components/mobile-top-bar";
 import { GlobalSearch } from "@/components/global-search";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { NotificationProvider } from "@/components/notifications/notification-context";
+import { TaskPanelProvider } from "@/components/tasks/task-panel-context";
+import { TaskPanel } from "@/components/tasks/task-panel";
 import { getSessionUser } from "@/lib/auth/session";
 import { getCarteiraScope } from "@/lib/users/actions";
 
@@ -11,6 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <ConfirmProvider>
       <NotificationProvider>
+      <TaskPanelProvider>
       <div className="flex min-h-screen bg-background">
         <AppNav
           user={
@@ -30,6 +33,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <GlobalSearch />
       </div>
+      <TaskPanel />
+      </TaskPanelProvider>
       </NotificationProvider>
     </ConfirmProvider>
   );

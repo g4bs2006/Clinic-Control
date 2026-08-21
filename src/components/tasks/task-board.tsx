@@ -21,6 +21,7 @@ import { GenerateSuggestionsButton } from "./generate-suggestions-button"
 import { RecurrencesDialog } from "./recurrences-dialog"
 import { TaskSuggestions } from "./task-suggestions"
 import { TaskDetailDialog } from "./task-detail-dialog"
+import { OpenInPanelButton } from "./open-in-panel-button"
 import { KanbanBoard } from "./kanban-board"
 import { TaskDashboard } from "./task-dashboard"
 import { SnoozeButton, fmtSnoozeDate } from "./snooze-button"
@@ -284,6 +285,7 @@ function TaskListItem({
       >
         <ExternalLink className="size-3.5" />
       </Link>
+      <OpenInPanelButton taskId={t.id} />
 
       {/* Concluir/Reabrir — no desktop só aparece no hover/foco da linha; no
           mobile fica sempre visível (não há hover). Ocupa o espaço mesmo

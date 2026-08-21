@@ -76,8 +76,17 @@ GitHub Actions e de deploy, não de repo.
 3. [ ] **Expor os schemas no PostgREST.** Painel → Settings → API → *Exposed
        schemas* → adicionar `aniversariantes` e `dashboards`. **Não há API nem
        MCP para isso.** Pode ser feito com os schemas ainda vazios.
-4. [ ] **Pausar os crons do DashBoard-s** (GitHub Actions: `sync-clinicorp.yml`,
-       `ingest-cards.yml`). Chamada em voo durante o move falha.
+4. [ ] **Pausar os crons.** Chamada em voo durante o move falha. São **três**,
+       em dois lugares diferentes:
+       - DashBoard-s, GitHub Actions: `sync-clinicorp.yml` e `ingest-cards.yml`.
+         Rodam a cada ~30 min, então a janela é curta e vale desligar só na hora.
+       - **Aniversariantes, Vercel Cron** (`vercel.json`, `0 6 * * *`) —
+         `/api/cron/sync-clinicorp`. Estava faltando nesta lista, e a razão de
+         ninguém ter notado é que ele **está morto desde 12/08/2026**:
+         `CRON_SECRET` nunca foi cadastrada na Vercel, e a rota rejeita toda
+         chamada sem ela. Se você religar (é só cadastrar a variável), ele volta
+         a ser risco aqui. Rodando 1x/dia às 6h UTC, a saída mais simples é
+         fazer o corte fora dessa hora em vez de pausar.
 5. [ ] **Aplicar a `0083`** — o corte. Move as 8 tabelas e dropa as duas funções
        mortas. Precisa ser atômica (ver o cabeçalho do arquivo).
 6. [ ] **Conferir as contagens.** Query e linha de base no fim da `0083`.
