@@ -13,6 +13,7 @@ import {
   Paperclip,
   MessageSquare,
   ArrowRight,
+  PanelRightOpen,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { TaskRow } from "@/lib/tasks/actions"
@@ -21,6 +22,7 @@ import { spDateParts, agendaBucket } from "@/lib/tasks/agenda"
 import { freqLabel } from "@/lib/tasks/recurrence"
 import { listRecurrences, type TaskRecurrenceRow } from "@/lib/tasks/recurrence-actions"
 import { getTaskCounts, type TaskCounts } from "@/lib/tasks/dashboard-actions"
+import { useTaskPanel } from "./task-panel-context"
 
 const OPEN = new Set<string>(["pendente", "em_andamento"])
 
@@ -125,6 +127,7 @@ export function TaskDashboard({
   currentUserId,
   onOpenTask,
 }: TaskDashboardProps) {
+  const { openTask: openTaskInPanel } = useTaskPanel()
   const { today, endOfWeek } = useMemo(() => spDateParts(new Date()), [])
 
   const profileName = useMemo(() => {
@@ -337,6 +340,18 @@ export function TaskDashboard({
                     <span className="shrink-0 text-right text-[0.68rem] font-medium tabular-nums text-red-400">
                       {t.due_date ? `${daysBetween(t.due_date, today)}d` : ""}
                     </span>
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTaskInPanel(t.id);
+                      }}
+                      title="Abrir no painel"
+                      className="flex size-6 shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
+                    >
+                      <PanelRightOpen className="size-3.5" />
+                    </span>
                   </button>
                 </li>
               ))}
@@ -532,6 +547,18 @@ export function TaskDashboard({
                         </span>
                       ) : null}
                       <ArrowRight className="size-3.5 text-muted-foreground/50" />
+                    </span>
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTaskInPanel(t.id);
+                      }}
+                      title="Abrir no painel"
+                      className="flex size-6 shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
+                    >
+                      <PanelRightOpen className="size-3.5" />
                     </span>
                   </button>
                 </li>

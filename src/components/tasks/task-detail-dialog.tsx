@@ -136,9 +136,11 @@ interface TaskDetailDialogProps {
   asPage?: boolean
   /** Só no modo página: destino do botão "Voltar" (padrão /tarefas). */
   backHref?: string
+  /** Contêiner do detalhe: modal (padrão) ou painel ancorado (mini-player). */
+  variant?: "modal" | "panel"
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onPinned, onChanged, currentUserId = null, asPage = false, backHref = "/tarefas" }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onPinned, onChanged, currentUserId = null, asPage = false, backHref = "/tarefas", variant = "modal" }: TaskDetailDialogProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
@@ -1242,10 +1244,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     )
   }
 
-  // ── Modal (mantém o layout de coluna única) ───────────────────────────────────
-  return (
-    <Dialog open={taskId != null} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+  // ── Corpo de detalhe (coluna única) compartilhado entre modal e painel ───────
+  const body = (
+    <>
         <div className="flex items-center gap-2">
           <Input
             value={title}
@@ -1343,6 +1344,24 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
             </Button>
           </div>
         </div>
+    </>
+  )
+
+  // ── Painel ancorado (mini-player): corpo idêntico, sem backdrop/diálogo ──────
+  if (variant === "panel") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {body}
+        {lightboxEl}
+      </div>
+    )
+  }
+
+  // ── Modal (mantém o layout de coluna única) ───────────────────────────────────
+  return (
+    <Dialog open={taskId != null} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        {body}
         {lightboxEl}
       </DialogContent>
     </Dialog>

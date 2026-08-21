@@ -13,12 +13,14 @@ import {
   ArrowLeft,
   Plus,
   ListTodo,
+  PanelRightOpen,
 } from "lucide-react";
 import { listClinicsInScope } from "@/lib/clinics/actions";
 import { listClinicTasks, updateTaskStatus, createTask, type TaskRow } from "@/lib/tasks/actions";
 import { listActiveTaskCategories, type TaskCategoryRow } from "@/lib/tasks/category-actions";
 import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
+import { useTaskPanel } from "@/components/tasks/task-panel-context";
 import type { ProfileOption } from "@/components/tasks/task-fields";
 import type { Clinic } from "@/lib/clinics/schema";
 import type { TaskPriority, TaskStatus } from "@/lib/tasks/categories";
@@ -65,6 +67,7 @@ export function GlobalSearch() {
   const defaultCategory = categories[0]?.slug ?? "outro";
 
   const router = useRouter();
+  const { openTask: openTaskInPanel } = useTaskPanel();
   const backdropRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Espelho do isOpen para o atalho de teclado decidir abrir/fechar sem stale closure
@@ -265,6 +268,16 @@ export function GlobalSearch() {
     detailRef.current = true;
     setDetailTaskId(taskId);
   }, []);
+
+  // Abre a tarefa no painel global (mini-player) e fecha a paleta, para o painel
+  // ficar visível por cima (a paleta tem z-index maior que o painel).
+  const openInPanel = useCallback(
+    (taskId: string) => {
+      openTaskInPanel(taskId);
+      close();
+    },
+    [openTaskInPanel, close],
+  );
 
   const closeDetail = useCallback(() => {
     detailRef.current = false;
@@ -553,6 +566,18 @@ export function GlobalSearch() {
                         {dueLabel(task.due_date)}
                       </span>
                     )}
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openInPanel(task.id);
+                      }}
+                      title="Abrir no painel"
+                      className="flex size-6 shrink-0 -m-1 items-center justify-center text-muted-foreground/60 hover:text-foreground"
+                    >
+                      <PanelRightOpen className="size-3.5" />
+                    </span>
                   </button>
                 );
               })}
