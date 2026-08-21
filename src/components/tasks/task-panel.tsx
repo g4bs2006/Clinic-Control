@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Minimize2, Maximize2, Loader2 } from "lucide-react";
+import { X, Minimize2, Maximize2, Loader2, PictureInPicture2 } from "lucide-react";
 import { useTaskPanel } from "./task-panel-context";
 import { TaskDetailDialog } from "./task-detail-dialog";
 
@@ -69,6 +69,18 @@ export function TaskPanel() {
           Tarefa
         </span>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              minimize()
+              window.open(`/popup/${taskId}`, "clinic-task-popup", "width=440,height=720,resizable=yes")
+            }}
+            title="Abrir em janela separada (fica visível ao trocar de aba)"
+            aria-label="Abrir em janela separada"
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <PictureInPicture2 className="size-3.5" />
+          </button>
           <button
             type="button"
             onClick={minimize}
