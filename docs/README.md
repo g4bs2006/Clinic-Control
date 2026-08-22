@@ -15,7 +15,7 @@ achar nada.
 
 ## O que está onde
 
-- **[`adr/`](adr/)** — as 6 decisões de arquitetura que sustentam o sistema.
+- **[`adr/`](adr/)** — as 7 decisões de arquitetura que sustentam o sistema.
   Comece pela [0001](adr/0001-banco-unico-compartilhado.md): o banco único
   compartilhado com o Aniversariantes explica boa parte das restrições do resto.
 - **[`reference/helena-api/`](reference/helena-api/)** — 128 páginas da API
