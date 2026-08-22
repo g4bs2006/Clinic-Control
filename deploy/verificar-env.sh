@@ -45,6 +45,9 @@ RECOMENDADAS=(
   # Aniversariantes, e lá a ausência bloqueia o painel inteiro. Divergir os dois
   # é pior que faltar nos dois: o link é emitido e recusado do outro lado.
   ANIVERSARIANTES_LINK_SECRET
+  # URL do DashBoard-s. Ausente desliga so o "Testar acesso" da coluna Dashboard
+  # em /sistemas — o resto da coluna (estado, diagnostico) segue funcionando.
+  DASHBOARDS_BASE_URL
 )
 
 # Estas devem ficar AUSENTES para reproduzir o comportamento da Vercel — ver
