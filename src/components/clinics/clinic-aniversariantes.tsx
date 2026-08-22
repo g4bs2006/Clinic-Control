@@ -159,14 +159,20 @@ function ProvisionForm({
   onDone?: () => void;
 }) {
   const { suggestion, sistemaProntuario, clinica } = setup;
-  const [helenaToken, setHelenaToken] = useState(clinica ? "" : suggestion.helenaToken ?? "");
+  // Pré-preenche INCLUSIVE ao editar clínica já provisionada. Antes era
+  // `clinica ? "" : ...`, e o efeito era um formulário que falhava: como
+  // provisionAniversariantes() rejeita campo obrigatório vazio, "Atualizar
+  // credenciais" exigia redigitar o que o Clinic Control já sabe — ou dava erro
+  // de validação. Os valores vêm das fontes daqui (clinic_integrations,
+  // form_credentials), então pré-preencher é justamente "ressincronizar".
+  const [helenaToken, setHelenaToken] = useState(suggestion.helenaToken ?? "");
   const [helenaFrom, setHelenaFrom] = useState(clinica?.helena_from ?? suggestion.helenaFrom ?? "");
   const [eclinicaToken, setEclinicaToken] = useState("");
-  const [clinicorpTokenApi, setClinicorpTokenApi] = useState(clinica ? "" : suggestion.clinicorpTokenApi ?? "");
+  const [clinicorpTokenApi, setClinicorpTokenApi] = useState(suggestion.clinicorpTokenApi ?? "");
   // Usuário API (Basic Auth) e Subscriber ID são o mesmo valor na prática —
   // um campo só, usado pros dois na hora de gravar (ver aniversariantes-actions.ts).
   const [clinicorpIdentifier, setClinicorpIdentifier] = useState(
-    clinica?.clinicorp_usuario_api ?? (clinica ? "" : suggestion.clinicorpSubscriberId ?? ""),
+    clinica?.clinicorp_usuario_api ?? suggestion.clinicorpSubscriberId ?? "",
   );
   const [pending, startTransition] = useTransition();
 
@@ -206,7 +212,7 @@ function ProvisionForm({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1 sm:col-span-2">
           <Label htmlFor="an-helena-token">
-            Token Helena {suggestion.helenaToken && !clinica && "(sugerido do cadastro)"}
+            Token Helena {suggestion.helenaToken && "(sugerido do cadastro)"}
           </Label>
           <Input
             id="an-helena-token"
@@ -230,7 +236,7 @@ function ProvisionForm({
           <>
             <div className="space-y-1">
               <Label htmlFor="an-cp-token">
-                Token API * {suggestion.clinicorpTokenApi && !clinica && "(do formulário)"}
+                Token API * {suggestion.clinicorpTokenApi && "(do formulário)"}
               </Label>
               <Input
                 id="an-cp-token"
@@ -242,7 +248,7 @@ function ProvisionForm({
             <div className="space-y-1">
               <Label htmlFor="an-cp-identifier">
                 Usuário API / Subscriber ID *{" "}
-                {suggestion.clinicorpSubscriberId && !clinica && "(do formulário)"}
+                {suggestion.clinicorpSubscriberId && "(do formulário)"}
               </Label>
               <Input
                 id="an-cp-identifier"
@@ -251,7 +257,7 @@ function ProvisionForm({
                 required
               />
             </div>
-            {suggestion.formCredentialLabel && !clinica && (
+            {suggestion.formCredentialLabel && (
               <p className="text-xs text-muted-foreground sm:col-span-2">
                 Sugestão vinda da credencial &quot;{suggestion.formCredentialLabel}&quot; — confira
                 antes de salvar, sobretudo se a clínica tiver mais de uma unidade cadastrada.
