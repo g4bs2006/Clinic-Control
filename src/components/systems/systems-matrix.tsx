@@ -24,14 +24,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { cn } from "@/lib/utils";
@@ -48,51 +43,6 @@ const PILL: Record<SystemState, string> = {
   ok: "bg-emerald-500/15 text-emerald-400",
   off: "bg-zinc-500/15 text-zinc-400",
   na: "",
-};
-
-/** Onde o estado daquele sistema é lido — mostrado no painel lateral. */
-const SOURCE: Record<SystemKey, string> = {
-  automacao: "clinic_control.clinic_integrations + public.automacao_clinicas",
-  aniversariantes: "aniversariantes.aniversariantes_clinicas",
-  dashboard: "dashboards.clinics",
-  helena: "clinic_control.clinic_integrations",
-};
-
-/**
- * Onde cada sistema é configurado de fato. A matriz é o eixo do ESTADO; a
- * configuração profunda continua na página que já a fazia bem — o modelo de
- * dois eixos do ADR 0007 não pede centralizar UI, pede um lugar único para
- * enxergar. Daí Helena apontar para a própria página, que tem tokens, webhooks
- * e sync por conta, coisas que não cabem numa célula.
- */
-function deepLink(key: SystemKey, clinicId: string): { href: string; where: string } {
-  if (key === "helena") return { href: "/helena", where: "em Contas Helena" };
-  return { href: `/clinicas/${clinicId}/cadastro`, where: "na aba Cadastro" };
-}
-
-const NEXT_STEP: Record<SystemState, { cta: string; hint: string; act: boolean }> = {
-  pronta: {
-    cta: "Configurar",
-    hint: "Todo pré-requisito já existe no Clinic Control — nada a digitar.",
-    act: true,
-  },
-  parcial: {
-    cta: "Completar",
-    hint: "Existe, mas incompleto. Antes desta tela, este estado não aparecia em lugar nenhum.",
-    act: true,
-  },
-  bloqueada: {
-    cta: "Resolver pré-requisito",
-    hint: "Falta um pré-requisito nesta clínica. Sem o company_id da Helena não há como identificar a conta nos outros sistemas.",
-    act: true,
-  },
-  ok: { cta: "Revisar", hint: "Configurado. Abrir serve para conferir ou ajustar.", act: false },
-  off: {
-    cta: "Ligar",
-    hint: "Desligado de propósito ou nunca ligado — a matriz não sabe distinguir os dois.",
-    act: false,
-  },
-  na: { cta: "", hint: "Este sistema não integra com o prontuário desta clínica.", act: false },
 };
 
 const CONTRACT_LABEL: Record<string, string> = {
@@ -123,7 +73,6 @@ export function SystemsMatrix({ rows }: { rows: SystemsRow[] }) {
   const [onlyPending, setOnlyPending] = useState(false);
   const [colFilter, setColFilter] = useState<SystemKey | null>(null);
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState<{ row: SystemsRow; key: SystemKey } | null>(null);
 
   const contracts = useMemo(
     () => Array.from(new Set(rows.map((r) => r.contractStatus))).sort(),
@@ -267,13 +216,14 @@ export function SystemsMatrix({ rows }: { rows: SystemsRow[] }) {
                         {st === "na" ? (
                           <StatePill state={st} />
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => setOpen({ row: r, key: k })}
-                            className="text-left"
+                          <Link
+                            href={`/sistemas/${r.clinicId}/${k}`}
+                            scroll={false}
+                            className="inline-block"
+                            title={`Configurar ${SYSTEM_LABELS[k]} — ${r.clinicName}`}
                           >
                             <StatePill state={st} hint={r.hints[k]} />
-                          </button>
+                          </Link>
                         )}
                       </TableCell>
                     );
@@ -297,53 +247,6 @@ export function SystemsMatrix({ rows }: { rows: SystemsRow[] }) {
         <span>— não se aplica a esse prontuário</span>
       </div>
 
-      <Dialog open={open !== null} onOpenChange={(v) => !v && setOpen(null)}>
-        <DialogContent>
-          {open && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{SYSTEM_LABELS[open.key]}</DialogTitle>
-                <DialogDescription>
-                  {open.row.clinicName} · prontuário: {open.row.prontuario ?? "não informado"}
-                </DialogDescription>
-              </DialogHeader>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">Estado</dt>
-                <dd>
-                  <StatePill state={open.row.states[open.key]} hint={open.row.hints[open.key]} />
-                </dd>
-                <dt className="text-muted-foreground">Contrato</dt>
-                <dd>{CONTRACT_LABEL[open.row.contractStatus] ?? open.row.contractStatus}</dd>
-                <dt className="text-muted-foreground">Fonte</dt>
-                <dd className="break-all font-mono text-xs">{SOURCE[open.key]}</dd>
-              </dl>
-              <p className="text-xs text-muted-foreground">
-                {NEXT_STEP[open.row.states[open.key]].hint}
-              </p>
-              {open.key === "dashboard" && open.row.states.dashboard !== "ok" && (
-                <p className="text-xs text-amber-400">
-                  O wizard do Dashboard ainda vive no app DashBoard-s. Trazê-lo para cá é a
-                  issue #70 — até lá esta coluna mostra o estado, mas a configuração acontece
-                  do outro lado.
-                </p>
-              )}
-              <Link
-                href={deepLink(open.key, open.row.clinicId).href}
-                className={cn(
-                  buttonVariants({
-                    variant: NEXT_STEP[open.row.states[open.key]].act ? "default" : "outline",
-                  }),
-                  "gap-1.5",
-                )}
-              >
-                {NEXT_STEP[open.row.states[open.key]].cta}{" "}
-                {deepLink(open.key, open.row.clinicId).where}
-                <ExternalLink className="size-3.5" />
-              </Link>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

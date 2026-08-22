@@ -184,7 +184,7 @@ export default async function ClinicCadastroPage({
           era a falta dessa visão que mantinha o Aniversariantes em 2 de 30. */}
       <Panel
         title="Sistemas"
-        subtitle="o que esta clínica tem ligado · configurar em Sistemas, onde a carteira inteira aparece junto"
+        subtitle="o que esta clínica tem ligado · clique num sistema para configurar"
       >
         <ClinicSystemsStrip row={systems.ok ? systems.row : null} />
       </Panel>
