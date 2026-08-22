@@ -27,11 +27,9 @@ import { ClinicStrategistSelect } from "@/components/clinics/clinic-strategist-s
 import { ClinicOdontoImpact } from "@/components/clinics/clinic-odontoimpact"
 import { ClinicFormCredentials } from "@/components/clinics/clinic-form-credentials"
 import { listPartnerContacts } from "@/lib/clinics/partner-contacts-actions"
-import { automationIsConfigurable } from "@/lib/clinics/automation-actions"
-import { ClinicAutomationConfig } from "@/components/clinics/clinic-automation-config"
 import { ClinicN8nUrl } from "@/components/clinics/clinic-n8n-url"
-import { getAniversariantesSetup } from "@/lib/clinics/aniversariantes-actions"
-import { ClinicAniversariantes } from "@/components/clinics/clinic-aniversariantes"
+import { getClinicSystems } from "@/lib/systems/actions"
+import { ClinicSystemsStrip } from "@/components/clinics/clinic-systems-strip"
 
 export const dynamic = "force-dynamic"
 
@@ -63,8 +61,7 @@ export default async function ClinicCadastroPage({
     files,
     fileNotes,
     partnerContacts,
-    automationOk,
-    aniversariantesSetup,
+    systems,
     notes,
     details,
     detailLabels,
@@ -77,9 +74,7 @@ export default async function ClinicCadastroPage({
     listClinicFiles(id),
     listClinicFileNotes(id),
     listPartnerContacts(),
-    // Só o banco: entra na mesma rodada de fetch, sem chamar a Helena.
-    automationIsConfigurable(id),
-    getAniversariantesSetup(id, clinic.system ?? null),
+    getClinicSystems(id),
     // `listClinicNotes` já filtra as privadas de outras pessoas no servidor —
     // o cliente nunca recebe o que não pode ver.
     listClinicNotes(id),
@@ -182,29 +177,17 @@ export default async function ClinicCadastroPage({
         />
       )}
 
-      {/* ── Automação de agendamento (o que o n8n consome) ──────── */}
-      {automationOk && (
-        <Panel
-          title="Automação de agendamento"
-          subtitle="etapas, etiquetas e campos que o n8n usa para agendar · o Clinic Control é a fonte da verdade e espelha para a tabela que os workflows leem"
-        >
-          <ClinicAutomationConfig
-            clinicId={id}
-            label="Abrir configuração (consulta a Helena)"
-            n8nUrl={clinic.n8n_url ?? null}
-          />
-        </Panel>
-      )}
-
-      {/* ── Aniversariantes (mensagens automáticas de aniversário) ── */}
-      {aniversariantesSetup.ok && aniversariantesSetup.supported && (
-        <Panel
-          title="Aniversariantes"
-          subtitle="mensagens automáticas de aniversário · app à parte, reaproveita credenciais já cadastradas aqui"
-        >
-          <ClinicAniversariantes clinicId={id} clinicName={clinic.name} setup={aniversariantesSetup} />
-        </Panel>
-      )}
+      {/* ── Sistemas desta clínica ─────────────────────────────── */}
+      {/* Os painéis de configuração de Automação e Aniversariantes saíram daqui
+          (ADR 0007). Esta aba é sobre A CLÍNICA; a configuração dos sistemas
+          mora em /sistemas, onde dá para ver a carteira inteira de uma vez —
+          era a falta dessa visão que mantinha o Aniversariantes em 2 de 30. */}
+      <Panel
+        title="Sistemas"
+        subtitle="o que esta clínica tem ligado · configurar em Sistemas, onde a carteira inteira aparece junto"
+      >
+        <ClinicSystemsStrip row={systems.ok ? systems.row : null} />
+      </Panel>
 
       {/* ── Arquivos da clínica ────────────────────────────────── */}
       <Panel

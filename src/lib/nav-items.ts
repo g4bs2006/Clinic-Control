@@ -7,6 +7,7 @@ import {
   MessageCircle,
   UserMinus,
   Plug,
+  Boxes,
   Settings,
   ListTodo,
   Eye,
@@ -34,6 +35,9 @@ export const navItems: NavItem[] = [
   { href: "/mapa", label: "Mapa", icon: MapIcon },
   { href: "/whatsapp", label: "Gerenciador de grupos", icon: MessageCircle },
   { href: "/churns", label: "Churns", icon: UserMinus },
+  // Sistemas: estado de integração da carteira (ADR 0007). Distinto de
+  // /configuracoes, que é regra da plataforma.
+  { href: "/sistemas", label: "Sistemas", icon: Boxes },
   { href: "/helena", label: "Contas Helena", icon: Plug },
   // Cofre: devs também acessam — veem só os itens que o gestor compartilhou
   // (filtro por visible_to_devs no servidor).
