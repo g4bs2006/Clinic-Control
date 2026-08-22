@@ -124,3 +124,56 @@ Implementação incremental, nesta ordem: (1) matriz com as colunas Automação
 Ver [0001](0001-banco-unico-compartilhado.md) para por que os sistemas vivem em
 schemas separados do mesmo banco, e [0003](0003-sem-painel-para-cliente-final.md)
 para por que nada disso é exposto ao cliente final.
+
+## Emenda — 2026-08-22: o modal é uma rota, e a Cadastro perdeu a configuração
+
+A decisão acima dizia que a configuração "abre em painel lateral sobre a lista,
+**sem navegar**". A implementação navega — e a diferença importa, então fica
+registrada em vez de silenciosamente divergente.
+
+`/sistemas/<clinicId>/<sistema>` é uma rota de verdade, renderizada como modal
+sobre a matriz por [rota interceptada + slot paralelo](https://nextjs.org/docs/app/api-reference/file-conventions/intercepting-routes).
+Visualmente é o painel que o ADR pedia; estruturalmente a **URL é a fonte da
+verdade do que está aberto**. Isso trouxe quatro ganhos que a decisão original
+não previu:
+
+- a URL é compartilhável — dá para mandar a configuração de uma clínica a um colega;
+- F5 renderiza a página cheia em vez de fechar o modal e perder o trabalho;
+- Voltar fecha o modal, Avançar reabre;
+- a matriz continua montada atrás, então filtro e busca sobrevivem.
+
+E resolve o problema que o ADR deixou aberto sobre o Dashboard: **a mesma rota
+serve os dois formatos.** Enquanto o wizard não vem (#70), abre em modal; quando
+vier e ficar apertado, basta remover o arquivo do slot `@modal` e ele passa a
+navegar para a página cheia — sem refazer nada.
+
+### O que também mudou de casa
+
+A aba Cadastro tinha 7 painéis e crescia a cada sistema novo. A **configuração**
+saiu de lá; ela mantém apenas a faixa que responde "o que esta clínica tem",
+com cada pílula linkando para a configuração. A aba volta a ser sobre a clínica:
+ficha, detalhes, anotações, arquivos.
+
+`Credenciais do Formulário` **fica** no Cadastro, apesar de ser o maior painel
+que sobra (425 linhas): é o que a clínica enviou, e alimenta Aniversariantes
+*e* Dashboard. Pô-la sob um sistema seria errado, e em `/sistemas` faria da
+página um depósito.
+
+### Um teste que a decisão não previa
+
+Cada modal ganhou **teste de redirecionamento**. Para o Aniversariantes ele não
+é um ping: exercita gate, aceitação do token e escopo, reportando os três
+separados — porque são três consertos diferentes com o mesmo sintoma ("não
+abriu").
+
+Existe por causa concreta: em 21/08 o gate caiu em produção por um redeploy de
+build errado, e só apareceu porque alguém testou o *comportamento* em vez de
+confiar no "Ready" do deploy. O botão transforma essa disciplina em um clique.
+
+### Escopo, e o que ficou de fora
+
+Entraram Aniversariantes, Helena e Dashboard. **Automação não** — 568 linhas com
+chamadas à Helena, o maior risco de regressão da lista. Continua em
+`/clinicas/[id]/editar`, e o painel de `/sistemas` diz onde encontrá-la em vez
+de deixar o usuário procurar. O Dashboard entrou **só como leitura**: diagnóstico
+e teste de acesso, sem wizard, que segue no `/setup` do DashBoard-s até a #70.
