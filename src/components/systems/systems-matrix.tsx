@@ -6,10 +6,21 @@
 // clínica tem", a coluna responde "quem falta". Clicar no cabeçalho filtra as
 // pendências daquela coluna, o que dá a leitura "por sistema" sem tela extra.
 //
-// O peso visual é INVERTIDO em relação ao usual: "configurado" recua para um
-// ponto acinzentado e "pronta" recebe o acento de marca. A tela existe para
-// agir — maioria verde não informa nada, e um vazio acionável não deve ser mais
-// discreto que um sucesso.
+// O app tem dois padrões de tabela: o primitivo `ui/table` (clinic-table,
+// monthly-grid) e tabela crua (automation-overview, helena-accounts-table).
+// Esta usa o PRIMITIVO, porque a matriz é uma lista de clínicas e será lida ao
+// lado de /clinicas — `clinic-table.tsx` é o parente mais próximo por conteúdo,
+// e mudanças no primitivo devem propagar para cá.
+//
+// Do automation-overview vem o vocabulário de ESTADO (pílula
+// `rounded-full text-[0.62rem]`, família do READINESS_STYLE), que é uma
+// preocupação separada da marcação da tabela. E do clinic-table vem o
+// tratamento do nome da clínica: `text-brand-gradient`.
+//
+// O peso visual dos estados é INVERTIDO em relação ao usual: "não se aplica" não
+// ganha pílula nenhuma, "configurado" ganha uma discreta, e "pronta" ganha o
+// acento de marca. A tela existe para agir — maioria verde não informa nada, e
+// um vazio acionável não deve ser mais discreto que um sucesso.
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -22,29 +33,21 @@ import {
 } from "@/components/ui/dialog";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { KpiCard } from "@/components/dashboard/kpi-card";
 import { cn } from "@/lib/utils";
 import {
   SYSTEM_KEYS, SYSTEM_LABELS, STATE_LABELS, isPending, tally,
   type SystemKey, type SystemState, type SystemsRow,
 } from "@/lib/systems/types";
 
-// Ponto + rótulo. O ponto carrega a cor; o rótulo carrega o peso. `pronta` é o
-// único que usa o roxo de marca — é onde a atenção deve cair.
-const DOT: Record<SystemState, string> = {
-  pronta: "bg-primary",
-  parcial: "bg-amber-500",
-  bloqueada: "bg-destructive",
-  ok: "bg-emerald-500/70",
-  off: "bg-muted-foreground/50",
-  na: "border border-border bg-transparent",
-};
-const TEXT: Record<SystemState, string> = {
-  pronta: "font-semibold text-primary",
-  parcial: "font-medium text-amber-500",
-  bloqueada: "font-medium text-destructive",
-  ok: "text-muted-foreground",
-  off: "text-muted-foreground",
-  na: "text-muted-foreground/60",
+// Mesma família de classes do READINESS_STYLE de automation-overview.
+const PILL: Record<SystemState, string> = {
+  pronta: "bg-primary/15 text-primary",
+  parcial: "bg-amber-500/15 text-amber-400",
+  bloqueada: "bg-red-500/15 text-red-400",
+  ok: "bg-emerald-500/15 text-emerald-400",
+  off: "bg-zinc-500/15 text-zinc-400",
+  na: "",
 };
 
 /** Onde o estado daquele sistema é lido — mostrado no painel lateral. */
@@ -67,9 +70,6 @@ function deepLink(key: SystemKey, clinicId: string): { href: string; where: stri
   return { href: `/clinicas/${clinicId}/cadastro`, where: "na aba Cadastro" };
 }
 
-/**
- * O que fazer em cada estado.
- */
 const NEXT_STEP: Record<SystemState, { cta: string; hint: string; act: boolean }> = {
   pronta: {
     cta: "Configurar",
@@ -101,6 +101,23 @@ const CONTRACT_LABEL: Record<string, string> = {
   archived: "arquivadas",
 };
 
+function StatePill({ state, hint }: { state: SystemState; hint?: string }) {
+  // `na` sem pílula: é o estado mais frequente na coluna Aniversariantes (31 de
+  // 61 clínicas ativas) e desenhá-lo tornaria a coluna ruidosa justamente onde
+  // não há nada a fazer. Um travessão diz o suficiente.
+  if (state === "na") {
+    return <span className="text-[0.65rem] text-muted-foreground/60">—</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span className={cn("rounded-full px-2 py-0.5 text-[0.62rem] font-semibold", PILL[state])}>
+        {STATE_LABELS[state]}
+      </span>
+      {hint && <span className="text-[0.65rem] text-muted-foreground">{hint}</span>}
+    </span>
+  );
+}
+
 export function SystemsMatrix({ rows }: { rows: SystemsRow[] }) {
   const [contract, setContract] = useState("active");
   const [onlyPending, setOnlyPending] = useState(false);
@@ -131,56 +148,32 @@ export function SystemsMatrix({ rows }: { rows: SystemsRow[] }) {
   }, [scoped, q, colFilter, onlyPending]);
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Resumo antes do detalhe: é o contador que faz alguém agir. */}
+    <div className="space-y-4">
+      {/* Resumo antes do detalhe: é o contador que faz alguém agir. O acento de
+          marca vai nas colunas COM pendência — a atenção segue o trabalho. */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {SYSTEM_KEYS.map((k) => {
           const t = tally(scoped, k);
           const elegiveis = scoped.length - t.na;
           const pend = t.pronta + t.parcial + t.bloqueada;
+          const partes = [
+            t.pronta > 0 && `${t.pronta} pronta${t.pronta > 1 ? "s" : ""}`,
+            t.parcial > 0 && `${t.parcial} parcial${t.parcial > 1 ? "is" : ""}`,
+            t.bloqueada > 0 && `${t.bloqueada} bloqueada${t.bloqueada > 1 ? "s" : ""}`,
+          ].filter(Boolean);
           return (
-            <button
+            <KpiCard
               key={k}
-              type="button"
-              onClick={() => {
-                setColFilter(colFilter === k ? null : k);
-                setOnlyPending(false);
-              }}
-              className={cn(
-                "flex flex-col gap-2 rounded-lg border bg-card px-4 py-3 text-left transition-colors",
-                colFilter === k ? "border-primary" : "border-border hover:border-muted-foreground/40",
-              )}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs font-semibold">{SYSTEM_LABELS[k]}</span>
-                <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {t.ok}/{elegiveis}
-                </span>
-              </div>
-              <div className="flex h-1.5 overflow-hidden rounded-full bg-muted">
-                {t.ok > 0 && <i className="bg-emerald-500/70" style={{ flex: t.ok }} />}
-                {t.pronta > 0 && <i className="bg-primary" style={{ flex: t.pronta }} />}
-                {t.parcial > 0 && <i className="bg-amber-500" style={{ flex: t.parcial }} />}
-                {t.bloqueada > 0 && <i className="bg-destructive" style={{ flex: t.bloqueada }} />}
-                {t.off > 0 && <i className="bg-muted-foreground/40" style={{ flex: t.off }} />}
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {pend > 0 ? (
-                  <>
-                    <b className="font-semibold text-primary">{pend}</b>{" "}
-                    {pend === 1 ? "pendência" : "pendências"}
-                  </>
-                ) : (
-                  "nada pendente"
-                )}
-                {t.na > 0 && ` · ${t.na} não se aplica`}
-              </span>
-            </button>
+              label={SYSTEM_LABELS[k]}
+              value={`${t.ok}/${elegiveis}`}
+              accent={pend > 0 ? "teal" : undefined}
+              hint={partes.length > 0 ? partes.join(" · ") : "nada pendente"}
+            />
           );
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <select
           value={contract}
           onChange={(e) => setContract(e.target.value)}
@@ -193,7 +186,14 @@ export function SystemsMatrix({ rows }: { rows: SystemsRow[] }) {
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar clínica…"
+          aria-label="Buscar clínica"
+          className="sm:max-w-sm"
+        />
+        <label className="flex items-center gap-2 whitespace-nowrap text-sm text-muted-foreground">
           <input
             type="checkbox"
             checked={onlyPending}
@@ -205,108 +205,96 @@ export function SystemsMatrix({ rows }: { rows: SystemsRow[] }) {
           />
           só com pendência
         </label>
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar clínica…"
-          aria-label="Buscar clínica"
-          className="h-9 w-full sm:w-56"
-        />
-        <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground">
+        <span className="text-xs tabular-nums text-muted-foreground sm:ml-auto">
           {visible.length} de {scoped.length}
           {colFilter && ` · pendências em ${SYSTEM_LABELS[colFilter]}`}
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="sticky left-0 z-10 min-w-56 bg-card">Clínica</TableHead>
-              {SYSTEM_KEYS.map((k) => {
-                const t = tally(scoped, k);
-                return (
-                  <TableHead key={k}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setColFilter(colFilter === k ? null : k);
-                        setOnlyPending(false);
-                      }}
-                      className="flex flex-col items-start gap-0.5 hover:text-foreground"
-                      title="Filtrar pendências desta coluna"
-                    >
-                      <span>{SYSTEM_LABELS[k]}</span>
-                      <span className="font-mono text-[11px] font-normal normal-case tracking-normal tabular-nums">
-                        {t.ok}/{scoped.length - t.na}
-                      </span>
-                    </button>
-                  </TableHead>
-                );
-              })}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visible.length === 0 && (
+      {visible.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhuma clínica com esse filtro.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={SYSTEM_KEYS.length + 1} className="text-sm text-muted-foreground">
-                  Nenhuma clínica com esse filtro.
-                </TableCell>
-              </TableRow>
-            )}
-            {visible.map((r) => (
-              <TableRow key={r.clinicId}>
-                <TableCell className="sticky left-0 z-10 bg-card">
-                  <Link
-                    href={`/clinicas/${r.clinicId}/cadastro`}
-                    className="flex flex-col hover:underline"
-                  >
-                    <span className="text-sm font-medium">{r.clinicName}</span>
-                    <span className="text-xs text-muted-foreground">{r.prontuario ?? "sem sistema"}</span>
-                  </Link>
-                </TableCell>
+                <TableHead>Clínica</TableHead>
                 {SYSTEM_KEYS.map((k) => {
-                  const st = r.states[k];
-                  const cell = (
-                    <span className="flex items-center gap-2">
-                      <i className={cn("size-[7px] shrink-0 rounded-full", DOT[st])} />
-                      <span className={cn("text-xs", TEXT[st])}>{STATE_LABELS[st]}</span>
-                      {r.hints[k] && (
-                        <span className="font-mono text-[10px] text-muted-foreground">{r.hints[k]}</span>
-                      )}
-                    </span>
-                  );
+                  const t = tally(scoped, k);
+                  const ativo = colFilter === k;
                   return (
-                    <TableCell key={k}>
-                      {st === "na" ? (
-                        cell
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setOpen({ row: r, key: k })}
-                          className="w-full text-left"
-                        >
-                          {cell}
-                        </button>
-                      )}
-                    </TableCell>
+                    <TableHead key={k}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setColFilter(ativo ? null : k);
+                          setOnlyPending(false);
+                        }}
+                        title="Filtrar pendências desta coluna"
+                        className={cn(
+                          "flex flex-col items-start gap-0.5 py-1 text-left",
+                          ativo ? "text-brand" : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        <span>{SYSTEM_LABELS[k]}</span>
+                        <span className="text-[0.65rem] font-normal tabular-nums">
+                          {t.ok}/{scoped.length - t.na}
+                        </span>
+                      </button>
+                    </TableHead>
                   );
                 })}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {visible.map((r) => (
+                <TableRow key={r.clinicId}>
+                  <TableCell className="font-medium">
+                    <Link
+                      href={`/clinicas/${r.clinicId}/cadastro`}
+                      className="text-brand-gradient font-medium transition-opacity hover:opacity-85"
+                    >
+                      {r.clinicName}
+                    </Link>
+                    <span className="block text-[0.65rem] font-normal text-muted-foreground">
+                      {r.prontuario ?? "sem sistema"}
+                    </span>
+                  </TableCell>
+                  {SYSTEM_KEYS.map((k) => {
+                    const st = r.states[k];
+                    return (
+                      <TableCell key={k}>
+                        {st === "na" ? (
+                          <StatePill state={st} />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setOpen({ row: r, key: k })}
+                            className="text-left"
+                          >
+                            <StatePill state={st} hint={r.hints[k]} />
+                          </button>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
-      <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-        {(["pronta", "parcial", "bloqueada", "ok", "off", "na"] as SystemState[]).map((s) => (
-          <span key={s} className="flex items-center gap-1.5">
-            <i className={cn("size-[7px] rounded-full", DOT[s])} />
-            {STATE_LABELS[s]}
-            {s === "pronta" && " — é aqui que você age"}
-            {s === "na" && " (não se aplica)"}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.65rem] text-muted-foreground">
+        {(["pronta", "parcial", "bloqueada", "ok", "off"] as SystemState[]).map((s) => (
+          <span key={s} className="inline-flex items-center gap-1.5">
+            <span className={cn("rounded-full px-2 py-0.5 font-semibold", PILL[s])}>
+              {STATE_LABELS[s]}
+            </span>
+            {s === "pronta" && "é aqui que você age"}
           </span>
         ))}
+        <span>— não se aplica a esse prontuário</span>
       </div>
 
       <Dialog open={open !== null} onOpenChange={(v) => !v && setOpen(null)}>
@@ -321,9 +309,8 @@ export function SystemsMatrix({ rows }: { rows: SystemsRow[] }) {
               </DialogHeader>
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
                 <dt className="text-muted-foreground">Estado</dt>
-                <dd className={TEXT[open.row.states[open.key]]}>
-                  {STATE_LABELS[open.row.states[open.key]]}
-                  {open.row.hints[open.key] && ` — ${open.row.hints[open.key]}`}
+                <dd>
+                  <StatePill state={open.row.states[open.key]} hint={open.row.hints[open.key]} />
                 </dd>
                 <dt className="text-muted-foreground">Contrato</dt>
                 <dd>{CONTRACT_LABEL[open.row.contractStatus] ?? open.row.contractStatus}</dd>
@@ -334,10 +321,10 @@ export function SystemsMatrix({ rows }: { rows: SystemsRow[] }) {
                 {NEXT_STEP[open.row.states[open.key]].hint}
               </p>
               {open.key === "dashboard" && open.row.states.dashboard !== "ok" && (
-                <p className="text-xs text-amber-500">
-                  O wizard do Dashboard ainda vive no app DashBoard-s (`/setup`). Trazê-lo
-                  para cá é a issue #70 — até lá, esta coluna mostra o estado mas a
-                  configuração acontece do outro lado.
+                <p className="text-xs text-amber-400">
+                  O wizard do Dashboard ainda vive no app DashBoard-s. Trazê-lo para cá é a
+                  issue #70 — até lá esta coluna mostra o estado, mas a configuração acontece
+                  do outro lado.
                 </p>
               )}
               <Link
