@@ -8,6 +8,10 @@
 // Separação com /configuracoes, que é a página vizinha e parecida:
 //   /configuracoes  → regras da plataforma (equipe, funil, IA, tarefas)
 //   /sistemas       → estado de integração da carteira
+//
+// Shell no padrão das outras páginas de topo (/helena, /acompanhamentos):
+// `main` com `p-4 space-y-6 sm:p-6`, largura `max-w-screen-2xl` porque a matriz
+// é larga, e h1 com `brand-header` — o gradiente de marca aplicado ao texto.
 import { listSystemsMatrix } from "@/lib/systems/actions";
 import { Panel } from "@/components/dashboard/panel";
 import { SystemsMatrix } from "@/components/systems/systems-matrix";
@@ -18,15 +22,14 @@ export default async function SistemasPage() {
   const res = await listSystemsMatrix();
 
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Sistemas</h1>
-        <p className="max-w-[62ch] text-sm text-muted-foreground">
-          Que sistemas cada clínica tem ligados, e onde falta. A linha responde “o que essa
-          clínica tem”; a coluna responde “quem falta”. A configuração continua na página de
-          cada sistema — aqui é onde se vê a carteira inteira de uma vez.
+    <main className="mx-auto max-w-screen-2xl space-y-6 p-4 sm:p-6">
+      <div>
+        <h1 className="brand-header text-2xl font-bold">Sistemas</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          o que cada clínica tem ligado · a linha responde “o que essa clínica tem”, a coluna
+          responde “quem falta” · a configuração continua na página de cada sistema
         </p>
-      </header>
+      </div>
 
       {res.ok ? (
         <SystemsMatrix rows={res.rows} />
@@ -35,6 +38,6 @@ export default async function SistemasPage() {
           <p className="text-sm text-destructive">{res.error}</p>
         </Panel>
       )}
-    </div>
+    </main>
   );
 }

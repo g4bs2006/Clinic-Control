@@ -9,6 +9,10 @@
 // O ADR 0007 registra a divergência entre as duas telas como a consequência mais
 // provável da decisão; duas implementações da mesma regra é como ela apareceria.
 //
+// Usa o MESMO vocabulário visual da matriz: pílula `rounded-full text-[0.62rem]`
+// na família do READINESS_STYLE de automation-overview. Dois desenhos para o
+// mesmo estado seria a divergência aparecendo por outra porta.
+//
 // Server component: sem hooks, sem "use client".
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -18,13 +22,13 @@ import {
   type SystemState, type SystemsRow,
 } from "@/lib/systems/types";
 
-const DOT: Record<SystemState, string> = {
-  pronta: "bg-primary",
-  parcial: "bg-amber-500",
-  bloqueada: "bg-destructive",
-  ok: "bg-emerald-500/70",
-  off: "bg-muted-foreground/50",
-  na: "border border-border bg-transparent",
+const PILL: Record<SystemState, string> = {
+  pronta: "bg-primary/15 text-primary",
+  parcial: "bg-amber-500/15 text-amber-400",
+  bloqueada: "bg-red-500/15 text-red-400",
+  ok: "bg-emerald-500/15 text-emerald-400",
+  off: "bg-zinc-500/15 text-zinc-400",
+  na: "bg-transparent text-muted-foreground/60",
 };
 
 export function ClinicSystemsStrip({ row }: { row: SystemsRow | null }) {
@@ -40,23 +44,24 @@ export function ClinicSystemsStrip({ row }: { row: SystemsRow | null }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
         {SYSTEM_KEYS.map((k) => {
           const st = row.states[k];
           return (
-            <span
-              key={k}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs",
-                isPending(st) ? "border-primary/40 bg-primary/5" : "border-border bg-card",
-                st === "na" && "opacity-60",
-              )}
-            >
-              <i className={cn("size-[7px] shrink-0 rounded-full", DOT[st])} />
-              <span className="font-medium">{SYSTEM_LABELS[k]}</span>
-              <span className="text-muted-foreground">{STATE_LABELS[st]}</span>
+            <span key={k} className="inline-flex items-center gap-2 text-sm">
+              <span className={cn(st === "na" && "text-muted-foreground/60")}>
+                {SYSTEM_LABELS[k]}
+              </span>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[0.62rem] font-semibold",
+                  PILL[st],
+                )}
+              >
+                {STATE_LABELS[st]}
+              </span>
               {row.hints[k] && (
-                <span className="font-mono text-[10px] text-muted-foreground">{row.hints[k]}</span>
+                <span className="text-[0.65rem] text-muted-foreground">{row.hints[k]}</span>
               )}
             </span>
           );
@@ -65,7 +70,7 @@ export function ClinicSystemsStrip({ row }: { row: SystemsRow | null }) {
 
       <Link
         href="/sistemas"
-        className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-brand"
       >
         {pendentes.length > 0
           ? `Configurar ${pendentes.length === 1 ? "o pendente" : `os ${pendentes.length} pendentes`} em Sistemas`
