@@ -3,10 +3,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { listClinics } from "@/lib/clinics/actions";
 import { listSnapshotsForMonth, ensureFrozen, freezeAllPastMonths } from "@/lib/snapshots/actions";
-import { getLiveFunnel, getHelenaAccountOverview } from "@/lib/clinics/integration-actions";
+import { getLiveFunnel, getHelenaAccountOverview, listCachedClinicOverviews } from "@/lib/clinics/integration-actions";
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status";
 import { monthKey, prevMonth } from "@/lib/snapshots/month";
 import { summarize, type PortfolioRow } from "./aggregate";
+import { mapPool } from "@/lib/utils/pool";
+
+// Rajadas de no máximo HELENA_POOL chamadas simultâneas à Helena. Sem isso, a
+// home disparava 3×N requisições de uma vez (overview) + N paginadas (funil) —
+// uma conta travada ou o rate limit do parceiro atrasava a página inteira.
+const HELENA_POOL = 6;
 
 // ---------------------------------------------------------------------------
 // loadStatusRules
@@ -54,13 +60,16 @@ export async function getPortfolioForMonth(
   const autoClinics = clinics.filter((c) => c.mode === "auto");
 
   // O overview (contatos/canais/status da conta) é estado "de agora", não
-  // histórico — só faz sentido (e só vale o custo da chamada à Helena) no mês
-  // corrente. Em meses passados tudo vem do snapshot congelado, sem tocar a Helena.
-  const overviewClinics = isCurrent ? autoClinics : [];
+  // histórico. No mês corrente vem do cache diário (tabela
+  // clinic_helena_overview, cron da 0088) — a home não pode pagar 3 chamadas à
+  // Helena por clínica a cada load. Ao vivo só para clínicas ainda sem linha no
+  // cache (primeiro dia após o deploy / cron ainda não rodou).
+  const overviewCache = isCurrent ? await listCachedClinicOverviews() : new Map<string, import("@/lib/clinics/integration-actions").CachedClinicOverview>();
+  const overviewClinics = isCurrent ? autoClinics.filter((c) => !overviewCache.has(c.id)) : [];
 
   const [liveFunnelResults, accountOverviewResults] = await Promise.all([
-    Promise.allSettled(autoClinicsWithoutSnapshot.map((c) => getLiveFunnel(c.id))),
-    Promise.allSettled(overviewClinics.map((c) => getHelenaAccountOverview(c.id))),
+    mapPool(autoClinicsWithoutSnapshot, HELENA_POOL, async (c) => getLiveFunnel(c.id)),
+    mapPool(overviewClinics, HELENA_POOL, async (c) => getHelenaAccountOverview(c.id)),
   ]);
 
   const liveFunnelByClinicId = new Map<
@@ -69,26 +78,35 @@ export async function getPortfolioForMonth(
   >();
   autoClinicsWithoutSnapshot.forEach((c, idx) => {
     const result = liveFunnelResults[idx];
-    if (result.status === "fulfilled") {
-      liveFunnelByClinicId.set(c.id, result.value);
+    if (result) {
+      liveFunnelByClinicId.set(c.id, result);
     }
   });
 
-  const overviewByClinicId = new Map<
-    string,
-    {
-      contactCount: number;
-      channels: import("@/lib/helena/types").HelenaChannel[];
-      company: import("@/lib/helena/types").HelenaCompany | null;
-    }
-  >();
+  type OverviewInfo = {
+    contactCount: number;
+    channels: import("@/lib/helena/types").HelenaChannel[];
+    status: string | null;
+    setupStatus: string | null;
+  };
+  const overviewByClinicId = new Map<string, OverviewInfo>();
+  // Cache diário primeiro (zero chamadas à Helena); o vivo cobre as sem linha.
+  for (const [clinicId, cached] of overviewCache) {
+    overviewByClinicId.set(clinicId, {
+      contactCount: cached.contactCount ?? 0,
+      channels: cached.channels ?? [],
+      status: cached.companyStatus,
+      setupStatus: cached.setupStatus,
+    });
+  }
   overviewClinics.forEach((c, idx) => {
     const result = accountOverviewResults[idx];
-    if (result.status === "fulfilled" && result.value.ok) {
+    if (result?.ok) {
       overviewByClinicId.set(c.id, {
-        contactCount: result.value.contactCount,
-        channels: result.value.channels,
-        company: result.value.company,
+        contactCount: result.contactCount,
+        channels: result.channels,
+        status: result.company?.status ?? null,
+        setupStatus: result.company?.setupStatus ?? null,
       });
     }
   });
@@ -98,8 +116,8 @@ export async function getPortfolioForMonth(
     const overview = overviewByClinicId.get(clinic.id);
     const helenaFields = overview ? {
       totalContacts: overview.contactCount,
-      helenaStatus: overview.company?.status ?? null,
-      helenaSetupStatus: overview.company?.setupStatus ?? null,
+      helenaStatus: overview.status,
+      helenaSetupStatus: overview.setupStatus,
       channels: overview.channels ?? [],
     } : {
       totalContacts: null,
@@ -307,14 +325,12 @@ export async function getComparison(months: string[]): Promise<ComparisonRow[]> 
       )
     : [];
 
-  const liveResults = await Promise.allSettled(
-    autoLiveClinics.map((c) => getLiveFunnel(c.id)),
-  );
+  const liveResults = await mapPool(autoLiveClinics, HELENA_POOL, async (c) => getLiveFunnel(c.id));
   const liveRateByClinic = new Map<string, number>();
   autoLiveClinics.forEach((c, idx) => {
     const r = liveResults[idx];
-    if (r.status === "fulfilled" && r.value.ok) {
-      liveRateByClinic.set(c.id, r.value.funnel.rate);
+    if (r?.ok) {
+      liveRateByClinic.set(c.id, r.funnel.rate);
     }
   });
 

@@ -13,6 +13,7 @@ import { verifySessionToken } from "@/lib/auth/token";
 // /api/form-credentials é um webhook externo (Google Apps Script / n8n) com auth
 // própria via header x-webhook-secret — não pode exigir cookie de sessão.
 // /api/automacao/scan é o gatilho do pg_cron semanal (header x-cron-secret).
+// /api/helena/overviews-collect é o cron diário do overview (mesmo header).
 const PUBLIC_PREFIXES = [
   "/login",
   "/api/reports/process",
@@ -20,6 +21,7 @@ const PUBLIC_PREFIXES = [
   "/api/openai-containment/process",
   "/api/automacao/process",
   "/api/automacao/scan",
+  "/api/helena/overviews-collect",
   "/api/form-credentials",
 ];
 
