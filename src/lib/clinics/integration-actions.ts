@@ -128,11 +128,13 @@ export async function saveIntegration(clinicId: string, token: string, panelId: 
   }
 }
 
-export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
+/**
+ * Núcleo de getFunnelForMonth sem o gate de sessão — usado pela própria
+ * getFunnelForMonth e pelo cron de coleta (route handler, que já autentica
+ * por `x-cron-secret` e não tem cookie de sessão pra checar).
+ */
+export async function fetchFunnelForMonth(clinicId: string, yearMonth: string) {
   try {
-    const user = await getSessionUser();
-    if (!user) return { ok: false as const, error: "Não autenticado" };
-
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("clinic_integrations")
@@ -156,6 +158,12 @@ export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao ler o funil" };
   }
+}
+
+export async function getFunnelForMonth(clinicId: string, yearMonth: string) {
+  const user = await getSessionUser();
+  if (!user) return { ok: false as const, error: "Não autenticado" };
+  return fetchFunnelForMonth(clinicId, yearMonth);
 }
 
 export async function getLiveFunnel(clinicId: string) {
@@ -541,6 +549,44 @@ export async function listCachedClinicOverviews(): Promise<Map<string, CachedCli
       companyStatus: (row.company_status as string | null) ?? null,
       setupStatus: (row.setup_status as string | null) ?? null,
       channels: (row.channels as import("@/lib/helena/types").HelenaChannel[] | null) ?? null,
+      updatedAt: row.updated_at as string,
+    });
+  }
+  return byClinic;
+}
+
+export type CachedClinicFunnel = {
+  clinicId: string;
+  leads: number;
+  scheduled: number;
+  rate: number;
+  revenue: number;
+  updatedAt: string;
+};
+
+/**
+ * Cache diário do funil por clínica (tabela clinic_helena_funnel_current,
+ * migration 0089, alimentada pelo cron via /api/helena/funnel-collect). O mês
+ * corrente nunca tem snapshot congelado — sem esse cache, a home e o
+ * comparativo repetiam a paginação de cards da Helena por clínica automática
+ * a cada load. Filtra por `yearMonth`: uma linha de mês anterior (cron ainda
+ * não rodou neste mês novo) não é usada — cai no fallback ao vivo.
+ */
+export async function listCachedClinicFunnels(yearMonth: string): Promise<Map<string, CachedClinicFunnel>> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("clinic_helena_funnel_current")
+    .select("clinic_id, leads, scheduled, rate, revenue, updated_at")
+    .eq("year_month", yearMonth);
+  if (error) throw new Error(error.message);
+  const byClinic = new Map<string, CachedClinicFunnel>();
+  for (const row of data ?? []) {
+    byClinic.set(row.clinic_id as string, {
+      clinicId: row.clinic_id as string,
+      leads: (row.leads as number | null) ?? 0,
+      scheduled: (row.scheduled as number | null) ?? 0,
+      rate: (row.rate as number | null) ?? 0,
+      revenue: (row.revenue as number | null) ?? 0,
       updatedAt: row.updated_at as string,
     });
   }
