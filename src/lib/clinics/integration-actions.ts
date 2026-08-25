@@ -511,6 +511,42 @@ export async function getHelenaAccountOverview(clinicId: string) {
   }
 }
 
+export type CachedClinicOverview = {
+  clinicId: string;
+  contactCount: number | null;
+  companyStatus: string | null;
+  setupStatus: string | null;
+  channels: import("@/lib/helena/types").HelenaChannel[] | null;
+  updatedAt: string;
+};
+
+/**
+ * Cache diário do overview por clínica (tabela clinic_helena_overview,
+ * alimentada pelo cron da migration 0088 via /api/helena/overviews-collect).
+ * A home lê daqui em vez de 3 chamadas à Helena por clínica a cada load; o
+ * vivo (getHelenaAccountOverview) fica para o perfil da clínica e para o
+ * fallback de clínicas ainda sem linha no cache.
+ */
+export async function listCachedClinicOverviews(): Promise<Map<string, CachedClinicOverview>> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("clinic_helena_overview")
+    .select("clinic_id, contact_count, company_status, setup_status, channels, updated_at");
+  if (error) throw new Error(error.message);
+  const byClinic = new Map<string, CachedClinicOverview>();
+  for (const row of data ?? []) {
+    byClinic.set(row.clinic_id as string, {
+      clinicId: row.clinic_id as string,
+      contactCount: (row.contact_count as number | null) ?? null,
+      companyStatus: (row.company_status as string | null) ?? null,
+      setupStatus: (row.setup_status as string | null) ?? null,
+      channels: (row.channels as import("@/lib/helena/types").HelenaChannel[] | null) ?? null,
+      updatedAt: row.updated_at as string,
+    });
+  }
+  return byClinic;
+}
+
 export async function getHelenaChatStatsForMonth(clinicId: string, yearMonth: string) {
   try {
     const user = await getSessionUser();

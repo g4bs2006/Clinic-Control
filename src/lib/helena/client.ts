@@ -13,8 +13,11 @@ import type {
 
 const DEFAULT_BASE = "https://api.wts.chat";
 const MAX_PAGES = 500;
+// Teto por request: uma conta Helena travada/lenta não pode segurar uma página
+// inteira (home dispara chamadas por clínica). Overridável nos testes.
+const DEFAULT_TIMEOUT_MS = 10_000;
 
-type Opts = { fetchImpl?: typeof fetch; baseUrl?: string };
+type Opts = { fetchImpl?: typeof fetch; baseUrl?: string; timeoutMs?: number };
 
 async function get(
   token: string,
@@ -33,6 +36,7 @@ async function get(
   const qs = params.toString();
   const res = await fetchImpl(`${base}${path}${qs ? `?${qs}` : ""}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Helena API ${res.status}`);
   return res.json();
@@ -45,6 +49,7 @@ async function post(token: string, path: string, body: unknown, opts?: Opts) {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -60,6 +65,7 @@ async function put(token: string, path: string, body: unknown, opts?: Opts) {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
