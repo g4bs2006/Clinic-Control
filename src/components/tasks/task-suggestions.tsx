@@ -67,7 +67,7 @@ export function TaskSuggestions({ suggestions: initialSuggestions, clinics, prof
   const [reviewing, setReviewing] = useState<TaskSuggestionRow | null>(null)
   const [category, setCategory] = useState<TaskCategory>(defaultCategory)
   const [priority, setPriority] = useState<TaskPriority>("media")
-  const [assignedTo, setAssignedTo] = useState<string | null>(null)
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [dueDate, setDueDate] = useState("")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   // Cópia local para remoção otimista (confirmar/descartar some da fila na hora).
@@ -116,7 +116,7 @@ export function TaskSuggestions({ suggestions: initialSuggestions, clinics, prof
             clinicId: s.clinic_id,
             category: defaultCategory,
             priority: PRIORITY_BY_SEVERITY[s.severity] ?? "media",
-            assignedTo: assignee,
+            assigneeIds: assignee ? [assignee] : [],
             dueDate: "",
           })
         }),
@@ -151,7 +151,8 @@ export function TaskSuggestions({ suggestions: initialSuggestions, clinics, prof
   function openReview(s: TaskSuggestionRow) {
     setCategory(defaultCategory)
     setPriority(PRIORITY_BY_SEVERITY[s.severity] ?? "media")
-    setAssignedTo(suggestedAssignee(s.clinic_id))
+    const assignee = suggestedAssignee(s.clinic_id)
+    setAssigneeIds(assignee ? [assignee] : [])
     setDueDate("")
     setReviewing(s)
   }
@@ -160,7 +161,7 @@ export function TaskSuggestions({ suggestions: initialSuggestions, clinics, prof
     if (!reviewing) return
     const id = reviewing.id
     const snapshot = suggestions
-    const payload = { clinicId: reviewing.clinic_id, category, priority, assignedTo, dueDate }
+    const payload = { clinicId: reviewing.clinic_id, category, priority, assigneeIds, dueDate }
     // Otimista: fecha o diálogo e tira da fila na hora.
     setSuggestions((prev) => prev.filter((s) => s.id !== id))
     setReviewing(null)
@@ -348,8 +349,8 @@ export function TaskSuggestions({ suggestions: initialSuggestions, clinics, prof
             onCategoryChange={setCategory}
             priority={priority}
             onPriorityChange={setPriority}
-            assignedTo={assignedTo}
-            onAssignedToChange={setAssignedTo}
+            assigneeIds={assigneeIds}
+            onAssigneeIdsChange={setAssigneeIds}
             dueDate={dueDate}
             onDueDateChange={setDueDate}
           />

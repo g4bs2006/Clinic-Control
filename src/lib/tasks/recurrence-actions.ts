@@ -226,7 +226,7 @@ export async function materializeRecurrences(): Promise<void> {
     );
     const openKeys = new Set((open ?? []).map((t) => key(t.recurrence_id as string, t.clinic_id as string | null)));
 
-    type Insert = Record<string, unknown>;
+    type Insert = { row: Record<string, unknown>; assignee: string | null };
     const inserts: Insert[] = [];
     for (const r of rules) {
       const due = dueByRule.get(r.id as string);
@@ -245,28 +245,35 @@ export async function materializeRecurrences(): Promise<void> {
         if (existingKeys.has(key(r.id as string, t.clinicId, due))) continue; // já materializada
         if (openKeys.has(key(r.id as string, t.clinicId))) continue; // anterior aberta — não empilha
         inserts.push({
-          clinic_id: t.clinicId,
-          title: r.title,
-          description: r.description,
-          category: r.category,
-          priority: r.priority,
-          status: "pendente",
-          assigned_to: t.assignee,
-          due_date: due,
-          source: "manual",
-          created_by: r.created_by,
-          recurrence_id: r.id,
-          recurrence_date: due,
+          assignee: t.assignee,
+          row: {
+            clinic_id: t.clinicId,
+            title: r.title,
+            description: r.description,
+            category: r.category,
+            priority: r.priority,
+            status: "pendente",
+            due_date: due,
+            source: "manual",
+            created_by: r.created_by,
+            recurrence_id: r.id,
+            recurrence_date: due,
+          },
         });
       }
     }
 
     // Insert por linha: corrida entre aberturas simultâneas cai no índice único
-    // (23505) e é ignorada sem derrubar o lote inteiro.
-    for (const row of inserts) {
-      const { error } = await supabase.from("tasks").insert(row);
-      if (error && error.code !== "23505") {
-        console.error("[materializeRecurrences] insert falhou:", error.message);
+    // (23505) e é ignorada sem derrubar o lote inteiro. O responsável (se
+    // houver) vira uma linha em task_assignees assim que a tarefa nasce.
+    for (const { row, assignee } of inserts) {
+      const { data: created, error } = await supabase.from("tasks").insert(row).select("id").single();
+      if (error) {
+        if (error.code !== "23505") console.error("[materializeRecurrences] insert falhou:", error.message);
+        continue;
+      }
+      if (assignee && created) {
+        await supabase.from("task_assignees").insert({ task_id: created.id as string, user_id: assignee });
       }
     }
   } catch (e) {

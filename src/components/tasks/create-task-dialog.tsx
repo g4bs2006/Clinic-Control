@@ -40,8 +40,8 @@ export function CreateTaskDialog({
 
   // Responsável sugerido = dev da clínica; fallback (sem clínica, ou clínica sem
   // dev) = quem está criando. Multi-clínica: se todas compartilham o mesmo dev
-  // usa ele, senão cai no criador (o campo é único; cada tarefa nasce com esse
-  // responsável, editável antes de salvar).
+  // usa ele, senão cai no criador. É só a SUGESTÃO inicial — o campo aceita
+  // vários e fica editável antes de salvar.
   const suggestAssignee = useCallback(
     (ids: string[]): string | null => {
       if (ids.length === 0) return currentUserId
@@ -51,6 +51,13 @@ export function CreateTaskDialog({
       return uniq.length === 1 && uniq[0] ? uniq[0] : currentUserId
     },
     [clinics, currentUserId],
+  )
+  const suggestAssignees = useCallback(
+    (ids: string[]): string[] => {
+      const suggested = suggestAssignee(ids)
+      return suggested ? [suggested] : []
+    },
+    [suggestAssignee],
   )
 
   const [open, setOpen] = useState(false)
@@ -64,7 +71,7 @@ export function CreateTaskDialog({
   const [clinicQuery, setClinicQuery] = useState("")
   const [category, setCategory] = useState<TaskCategory>(defaultCategory)
   const [priority, setPriority] = useState<TaskPriority>("media")
-  const [assignedTo, setAssignedTo] = useState<string | null>(() => suggestAssignee(initialClinicIds))
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(() => suggestAssignees(initialClinicIds))
   const [assigneeTouched, setAssigneeTouched] = useState(false)
   const [dueDate, setDueDate] = useState("")
   const [status, setStatus] = useState<TaskStatus>("pendente")
@@ -75,7 +82,7 @@ export function CreateTaskDialog({
   const [prevSuggested, setPrevSuggested] = useState(suggested)
   if (suggested !== prevSuggested) {
     setPrevSuggested(suggested)
-    if (!assigneeTouched) setAssignedTo(suggested)
+    if (!assigneeTouched) setAssigneeIds(suggested ? [suggested] : [])
   }
 
   const filteredClinics = useMemo(() => {
@@ -91,7 +98,7 @@ export function CreateTaskDialog({
     setClinicQuery("")
     setCategory(defaultCategory)
     setPriority("media")
-    setAssignedTo(suggestAssignee(initialClinicIds))
+    setAssigneeIds(suggestAssignees(initialClinicIds))
     setAssigneeTouched(false)
     setDueDate("")
     setStatus("pendente")
@@ -108,7 +115,7 @@ export function CreateTaskDialog({
         description,
         category,
         priority,
-        assignedTo,
+        assigneeIds,
         dueDate,
         status,
       })
@@ -304,9 +311,9 @@ export function CreateTaskDialog({
                 onCategoryChange={setCategory}
                 priority={priority}
                 onPriorityChange={setPriority}
-                assignedTo={assignedTo}
-                onAssignedToChange={(v) => {
-                  setAssignedTo(v)
+                assigneeIds={assigneeIds}
+                onAssigneeIdsChange={(v) => {
+                  setAssigneeIds(v)
                   setAssigneeTouched(true)
                 }}
                 dueDate={dueDate}
@@ -342,9 +349,9 @@ export function CreateTaskDialog({
             onCategoryChange={setCategory}
             priority={priority}
             onPriorityChange={setPriority}
-            assignedTo={assignedTo}
-            onAssignedToChange={(v) => {
-              setAssignedTo(v)
+            assigneeIds={assigneeIds}
+            onAssigneeIdsChange={(v) => {
+              setAssigneeIds(v)
               setAssigneeTouched(true)
             }}
             dueDate={dueDate}

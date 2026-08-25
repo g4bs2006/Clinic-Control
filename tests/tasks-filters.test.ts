@@ -23,8 +23,7 @@ function task(over: Partial<FilterableTask> = {}): FilterableTask {
     priority: "media",
     clinic_id: "clinic-1",
     clinic_name: "Salutar",
-    assigned_to: "dev-1",
-    assigned_to_name: "André",
+    assignees: [{ id: "dev-1", name: "André" }],
     due_date: "2026-07-10",
     source: "manual",
     recurrence_id: null,
@@ -86,11 +85,24 @@ describe("matchesFilters", () => {
   });
 
   it("NONE pega tarefa interna / sem responsável", () => {
-    const interna = task({ clinic_id: null, clinic_name: null, assigned_to: null, assigned_to_name: null });
+    const interna = task({ clinic_id: null, clinic_name: null, assignees: [] });
     expect(matchesFilters(interna, filters({ clinic: NONE }), today, endOfWeek)).toBe(true);
     expect(matchesFilters(interna, filters({ assignee: NONE }), today, endOfWeek)).toBe(true);
     expect(matchesFilters(task(), filters({ clinic: NONE }), today, endOfWeek)).toBe(false);
     expect(matchesFilters(task(), filters({ assignee: NONE }), today, endOfWeek)).toBe(false);
+  });
+
+  it("tarefa com vários responsáveis casa o filtro se QUALQUER um bater", () => {
+    const dupla = task({ assignees: [{ id: "dev-1", name: "André" }, { id: "dev-2", name: "Bia" }] });
+    expect(matchesFilters(dupla, filters({ assignee: "dev-1" }), today, endOfWeek)).toBe(true);
+    expect(matchesFilters(dupla, filters({ assignee: "dev-2" }), today, endOfWeek)).toBe(true);
+    expect(matchesFilters(dupla, filters({ assignee: "dev-3" }), today, endOfWeek)).toBe(false);
+    expect(matchesFilters(dupla, filters({ assignee: NONE }), today, endOfWeek)).toBe(false);
+  });
+
+  it("busca livre acha por qualquer um dos responsáveis", () => {
+    const dupla = task({ assignees: [{ id: "dev-1", name: "André" }, { id: "dev-2", name: "Bia" }] });
+    expect(matchesQuery(dupla, "bia")).toBe(true);
   });
 
   it("origem, recorrente e em foco", () => {

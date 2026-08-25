@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   Select,
   SelectContent,
@@ -8,6 +9,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import {
   TASK_PRIORITIES,
   TASK_PRIORITY_LABEL,
@@ -20,7 +23,6 @@ import {
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
 export const NO_CLINIC = "__none__"
-export const UNASSIGNED = "__unassigned__"
 
 export type ClinicOption = { id: string; name: string }
 export type ProfileOption = { id: string; name: string | null; email: string | null }
@@ -39,8 +41,9 @@ interface TaskFieldsProps {
   onCategoryChange: (v: TaskCategory) => void
   priority: TaskPriority
   onPriorityChange: (v: TaskPriority) => void
-  assignedTo: string | null
-  onAssignedToChange: (v: string | null) => void
+  /** Lista plana de responsáveis — todos igualmente responsáveis (ADR 0008). */
+  assigneeIds: string[]
+  onAssigneeIdsChange: (v: string[]) => void
   dueDate: string
   onDueDateChange: (v: string) => void
   /** Trava o select de clínica (ex.: sugestão já veio de uma clínica específica). */
@@ -61,8 +64,8 @@ export function TaskFields({
   onCategoryChange,
   priority,
   onPriorityChange,
-  assignedTo,
-  onAssignedToChange,
+  assigneeIds,
+  onAssigneeIdsChange,
   dueDate,
   onDueDateChange,
   lockClinic,
@@ -167,29 +170,7 @@ export function TaskFields({
         </Select>
       </label>
 
-      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-        Responsável
-        <Select
-          value={assignedTo ?? UNASSIGNED}
-          items={{
-            [UNASSIGNED]: "Sem responsável",
-            ...Object.fromEntries(profiles.map((p) => [p.id, profileLabel(p)])),
-          }}
-          onValueChange={(v) => onAssignedToChange(v && v !== UNASSIGNED ? v : null)}
-        >
-          <SelectTrigger className="h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={UNASSIGNED}>Sem responsável</SelectItem>
-            {profiles.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {profileLabel(p)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
+      <AssigneesField profiles={profiles} assigneeIds={assigneeIds} onAssigneeIdsChange={onAssigneeIdsChange} />
 
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Prazo
@@ -201,5 +182,76 @@ export function TaskFields({
         />
       </label>
     </div>
+  )
+}
+
+/**
+ * Seletor de responsáveis (multi) — checkbox list num popover, mesmo padrão
+ * do seletor de clínicas do CreateTaskDialog. Fica aqui (não num arquivo à
+ * parte) porque só o TaskFields usa; exportado para o caso de outro dialog
+ * de tarefa precisar do mesmo picker sem duplicar.
+ */
+export function AssigneesField({
+  profiles,
+  assigneeIds,
+  onAssigneeIdsChange,
+}: {
+  profiles: ProfileOption[]
+  assigneeIds: string[]
+  onAssigneeIdsChange: (v: string[]) => void
+}) {
+  const [query, setQuery] = useState("")
+  const selected = profiles.filter((p) => assigneeIds.includes(p.id))
+  const filtered = query.trim()
+    ? profiles.filter((p) => profileLabel(p).toLowerCase().includes(query.trim().toLowerCase()))
+    : profiles
+
+  function toggle(id: string) {
+    onAssigneeIdsChange(
+      assigneeIds.includes(id) ? assigneeIds.filter((x) => x !== id) : [...assigneeIds, id],
+    )
+  }
+
+  return (
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      Responsáveis
+      <Popover>
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              className="flex h-8 items-center justify-between rounded-md border border-input bg-transparent px-3 text-left text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <span className="truncate">
+                {selected.length === 0 ? "Sem responsável" : selected.map(profileLabel).join(", ")}
+              </span>
+            </button>
+          }
+        />
+        <PopoverContent align="start" className="w-64 p-2">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar…"
+            className="mb-2 h-8"
+          />
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">Ninguém encontrado.</p>
+            ) : (
+              filtered.map((p) => (
+                <label
+                  key={p.id}
+                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-foreground hover:bg-accent/40"
+                >
+                  <Checkbox checked={assigneeIds.includes(p.id)} onCheckedChange={() => toggle(p.id)} />
+                  {profileLabel(p)}
+                </label>
+              ))
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </label>
   )
 }

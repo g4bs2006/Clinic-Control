@@ -16,6 +16,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TaskFields, type ClinicOption, type ProfileOption } from "./task-fields"
+import { DependencySection } from "./dependency-picker"
+import { listBlockers, listBlocking, type DependencyTaskRow } from "@/lib/tasks/dependencies"
 import { createClient } from "@/lib/supabase/client"
 import { imageFilesFromClipboard } from "@/lib/paste-images"
 import {
@@ -146,6 +148,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const [loading, setLoading] = useState(false)
   const [task, setTask] = useState<TaskRow | null>(null)
   const [subtasks, setSubtasks] = useState<TaskRow[]>([])
+  const [blockers, setBlockers] = useState<DependencyTaskRow[]>([])
+  const [blocking, setBlocking] = useState<DependencyTaskRow[]>([])
   const [attachments, setAttachments] = useState<TaskAttachmentRow[]>([])
   const [activity, setActivity] = useState<TaskActivityRow[]>([])
 
@@ -182,14 +186,18 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   const profileNames = profiles.map((p) => p.name).filter((n): n is string => !!n)
 
   async function reload(id: string) {
-    const [t, subs, atts, acts] = await Promise.all([
+    const [t, subs, blks, blkg, atts, acts] = await Promise.all([
       getTask(id),
       listSubtasks(id),
+      listBlockers(id),
+      listBlocking(id),
       listTaskAttachments(id),
       listTaskActivity(id),
     ])
     setTask(t)
     setSubtasks(subs)
+    setBlockers(blks)
+    setBlocking(blkg)
     setAttachments(atts)
     setActivity(acts)
     setActivityLoadedAt(Date.now())
@@ -281,11 +289,11 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
       if (patch.description !== undefined) next.description = patch.description?.trim() || null
       if (patch.category !== undefined) next.category = patch.category
       if (patch.priority !== undefined) next.priority = patch.priority
-      if (patch.assignedTo !== undefined) {
-        next.assigned_to = patch.assignedTo
-        next.assigned_to_name = patch.assignedTo
-          ? profiles.find((p) => p.id === patch.assignedTo)?.name ?? null
-          : null
+      if (patch.assigneeIds !== undefined) {
+        next.assignees = patch.assigneeIds.map((id) => ({
+          id,
+          name: profiles.find((p) => p.id === id)?.name ?? null,
+        }))
       }
       if (patch.dueDate !== undefined) next.due_date = patch.dueDate || null
       if (patch.clinicId !== undefined) {
@@ -309,14 +317,22 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
   function changeStatus(status: TaskStatus) {
     if (!taskId) return
     // Otimista: reflete no board e no próprio dialog na hora, sem esperar o servidor.
+    // Reverte se o servidor recusar (ex.: bloqueio rígido por dependência aberta —
+    // ver ADR 0008) — sem isso o dialog ficava mostrando um status que não colou.
+    const snapshot = task
     onStatusChange?.(taskId, status)
     setTask((t) =>
       t ? { ...t, status, completed_at: status === "concluida" ? new Date().toISOString() : null } : t,
     )
     startTransition(async () => {
       const res = await updateTaskStatus(taskId, status)
-      if (res.ok) refreshAll()
-      else toast.error(res.error)
+      if (res.ok) {
+        refreshAll()
+      } else {
+        setTask(snapshot)
+        onStatusChange?.(taskId, snapshot?.status ?? status)
+        toast.error(res.error)
+      }
     })
   }
 
@@ -684,6 +700,10 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     </label>
   )
 
+  const dependencyBlock = taskId ? (
+    <DependencySection taskId={taskId} blockers={blockers} blocking={blocking} onChanged={refreshAll} />
+  ) : null
+
   const subtasksBlock = (
               <div className={secCard}>
                 <div className="flex items-center justify-between">
@@ -757,9 +777,9 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                         >
                           {s.title}
                         </Link>
-                        {s.assigned_to_name && (
+                        {s.assignees.length > 0 && (
                           <span className="hidden shrink-0 text-[0.62rem] text-muted-foreground sm:inline">
-                            {s.assigned_to_name}
+                            {s.assignees.map((a) => a.name).filter(Boolean).join(", ")}
                           </span>
                         )}
                         {s.due_date && (
@@ -1171,8 +1191,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 onCategoryChange={(v: TaskCategory) => saveField({ category: v })}
                 priority={task.priority}
                 onPriorityChange={(v: TaskPriority) => saveField({ priority: v })}
-                assignedTo={task.assigned_to}
-                onAssignedToChange={(v) => saveField({ assignedTo: v })}
+                assigneeIds={task.assignees.map((a) => a.id)}
+                onAssigneeIdsChange={(v) => saveField({ assigneeIds: v })}
                 dueDate={task.due_date ?? ""}
                 onDueDateChange={(v) => saveField({ dueDate: v })}
                 status={task.status}
@@ -1234,6 +1254,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
               Voltar
             </Link>
             {descriptionField}
+            {dependencyBlock}
             {subtasksBlock}
             {anexosBlock}
             {atividadeBlock}
@@ -1284,14 +1305,15 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
             onCategoryChange={(v: TaskCategory) => saveField({ category: v })}
             priority={task.priority}
             onPriorityChange={(v: TaskPriority) => saveField({ priority: v })}
-            assignedTo={task.assigned_to}
-            onAssignedToChange={(v) => saveField({ assignedTo: v })}
+            assigneeIds={task.assignees.map((a) => a.id)}
+            onAssigneeIdsChange={(v) => saveField({ assigneeIds: v })}
             dueDate={task.due_date ?? ""}
             onDueDateChange={(v) => saveField({ dueDate: v })}
             status={task.status}
             onStatusChange={changeStatus}
           />
           {descriptionField}
+          {dependencyBlock}
           {subtasksBlock}
           {anexosBlock}
           {atividadeBlock}

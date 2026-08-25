@@ -4,7 +4,7 @@ import { useRef, useState, useSyncExternalStore, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3, ExternalLink, Pin, PinOff, Target, Search, X, FilterX } from "lucide-react"
+import { Trash2, List, LayoutGrid, CalendarDays, CheckCircle2, Archive, RotateCcw, SlidersHorizontal, Repeat, Clock, Play, Pause, BarChart3, ExternalLink, Pin, PinOff, Target, Search, X, FilterX, Lock } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -163,6 +163,12 @@ function isOverdue(t: TaskRow): boolean {
   return t.due_date < new Date().toISOString().slice(0, 10)
 }
 
+/** Nomes dos responsáveis, prontos pra exibir ("· fulano, beltrano"). */
+function assigneeNames(t: Pick<TaskRow, "assignees">): string | null {
+  const names = t.assignees.map((a) => a.name).filter((n): n is string => !!n)
+  return names.length ? names.join(", ") : null
+}
+
 /** Linha de tarefa reutilizada nos modos Lista e Semana. */
 function TaskListItem({
   t,
@@ -236,7 +242,7 @@ function TaskListItem({
               </Link>
             </>
           )}
-          {t.assigned_to_name && <>· {t.assigned_to_name}</>}
+          {assigneeNames(t) && <>· {assigneeNames(t)}</>}
           {t.due_date && (
             <span className={isOverdue(t) ? "font-semibold text-red-400" : undefined}>
               · prazo {dateLabel(t.due_date)}
@@ -257,6 +263,15 @@ function TaskListItem({
             <span className="inline-flex items-center gap-1 rounded-full bg-brand/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-brand">
               <Repeat className="size-2.5" />
               recorrente
+            </span>
+          )}
+          {t.is_blocked && !DONE_STATUSES.has(t.status) && (
+            <span
+              title="Bloqueada por outra tarefa ainda aberta"
+              className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-red-400"
+            >
+              <Lock className="size-2.5" />
+              bloqueada
             </span>
           )}
           {isSnoozed && (
@@ -725,7 +740,10 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
 
   // ── Agenda "Minha semana": só as minhas tarefas abertas, agrupadas por prazo ──
   const myOpenTasks = tasks.filter(
-    (t) => t.assigned_to === currentUserId && !DONE_STATUSES.has(t.status) && (showSnoozed || !hiddenBySnooze(t)),
+    (t) =>
+      t.assignees.some((a) => a.id === currentUserId) &&
+      !DONE_STATUSES.has(t.status) &&
+      (showSnoozed || !hiddenBySnooze(t)),
   )
   // As fixadas também sobem para um bloco próprio aqui (mesma leitura da Lista).
   const myPinned = myOpenTasks
@@ -1177,7 +1195,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                           </Link>
                         </>
                       )}
-                      {t.assigned_to_name && <>· {t.assigned_to_name}</>}
+                      {assigneeNames(t) && <>· {assigneeNames(t)}</>}
                       {t.completed_at && (
                         <>
                           ·{" "}

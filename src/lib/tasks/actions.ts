@@ -7,8 +7,11 @@ import { getCurrentProfile, getCarteiraScope } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
 import { TASK_STATUS_LABEL, TASK_ATTACHMENTS_BUCKET, type TaskCategory, type TaskPriority, type TaskStatus } from "./categories";
 import { notifyTaskAssigned, notifyTaskComment } from "@/lib/notifications/task-events";
+import { openBlockersFor, listBlockedTaskIds } from "./dependencies";
 
 // ── Types ────────────────────────────────────────────────────────────────────
+
+export type TaskAssignee = { id: string; name: string | null };
 
 export type TaskRow = {
   id: string;
@@ -19,8 +22,10 @@ export type TaskRow = {
   category: TaskCategory;
   priority: TaskPriority;
   status: TaskStatus;
-  assigned_to: string | null;
-  assigned_to_name: string | null;
+  /** Responsáveis — lista plana, todos igualmente responsáveis (ver ADR 0008). */
+  assignees: TaskAssignee[];
+  /** Tem bloqueadora aberta (task_dependencies) — indicador visual no board/lista. */
+  is_blocked: boolean;
   due_date: string | null;
   source: "manual" | "ia";
   parent_task_id: string | null;
@@ -34,7 +39,7 @@ export type TaskRow = {
 };
 
 const TASK_SELECT =
-  "id, clinic_id, title, description, category, priority, status, assigned_to, due_date, source, parent_task_id, recurrence_id, snoozed_until, pinned_at, created_at, updated_at, completed_at, clinics(name), assignee:app_users!assigned_to(name)";
+  "id, clinic_id, title, description, category, priority, status, due_date, source, parent_task_id, recurrence_id, snoozed_until, pinned_at, created_at, updated_at, completed_at, clinics(name), assignees:task_assignees(user:app_users!user_id(id, name))";
 
 export type TaskSuggestionRow = {
   id: string;
@@ -53,6 +58,7 @@ export type TaskFilters = {
   category?: TaskCategory;
   priority?: TaskPriority;
   clinicId?: string;
+  /** Filtra tarefas em que este usuário é UM dos responsáveis. */
   assignedTo?: string;
 };
 
@@ -61,10 +67,54 @@ function unwrapName(rel: SingleOrArray<{ name: string | null }>): string | null 
   const row = Array.isArray(rel) ? rel[0] : rel;
   return row?.name ?? null;
 }
+function firstOf<T>(v: SingleOrArray<T>): T | null {
+  return (Array.isArray(v) ? v[0] : v) ?? null;
+}
 
 async function requireUser() {
   if (!(await getSessionUser())) return null;
   return createClient();
+}
+
+type DbClient = Awaited<ReturnType<typeof createClient>>;
+
+/** Ids de tasks em que `userId` é um dos responsáveis (task_assignees). */
+async function taskIdsAssignedTo(supabase: DbClient, userId: string): Promise<string[]> {
+  const { data, error } = await supabase.from("task_assignees").select("task_id").eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => r.task_id as string);
+}
+
+/**
+ * Aplica a lista de responsáveis de uma tarefa (substitui o conjunto inteiro
+ * por `nextIds`) e notifica só quem ENTROU agora — sair da lista não gera
+ * notificação (não existe "aviso de remoção" no app). Usada por toda escrita
+ * que mexe em responsáveis (criar, criar em lote, editar, aceitar sugestão).
+ */
+async function setTaskAssignees(
+  supabase: DbClient,
+  taskId: string,
+  prevIds: string[],
+  nextIds: string[],
+  actor: { id: string; name: string | null },
+  taskTitle: string,
+): Promise<void> {
+  const prev = new Set(prevIds);
+  const next = new Set(nextIds);
+  const added = nextIds.filter((id) => !prev.has(id));
+  const removed = prevIds.filter((id) => !next.has(id));
+
+  if (removed.length) {
+    await supabase.from("task_assignees").delete().eq("task_id", taskId).in("user_id", removed);
+  }
+  if (added.length) {
+    await supabase
+      .from("task_assignees")
+      .insert(added.map((userId) => ({ task_id: taskId, user_id: userId, assigned_by: actor.id })));
+  }
+  for (const assigneeId of added) {
+    await notifyTaskAssigned({ taskId, taskTitle, assigneeId, actor });
+  }
 }
 
 /**
@@ -81,6 +131,20 @@ async function carteiraScope(): Promise<{ filter: string | null; clinicIds: stri
   return { filter: scope.developerFilter, clinicIds };
 }
 
+/** Achata o embed `task_assignees(user:app_users(...))` numa lista de {id,name}. */
+function unwrapAssignees(rel: unknown): TaskAssignee[] {
+  const rows = (rel as { user: SingleOrArray<TaskAssignee> }[] | null) ?? [];
+  return rows.map((r) => firstOf(r.user)).filter((u): u is TaskAssignee => u != null);
+}
+
+/** Marca `is_blocked` numa lista de tarefas já carregada — uma query em lote. */
+async function attachBlocked(rows: TaskRow[]): Promise<TaskRow[]> {
+  if (!rows.length) return rows;
+  const blocked = await listBlockedTaskIds(rows.map((r) => r.id));
+  if (!blocked.size) return rows;
+  return rows.map((r) => (blocked.has(r.id) ? { ...r, is_blocked: true } : r));
+}
+
 function mapTaskRow(row: Record<string, unknown>): TaskRow {
   return {
     id: row.id as string,
@@ -91,8 +155,10 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     category: row.category as TaskCategory,
     priority: row.priority as TaskPriority,
     status: row.status as TaskStatus,
-    assigned_to: row.assigned_to as string | null,
-    assigned_to_name: unwrapName(row.assignee as SingleOrArray<{ name: string | null }>),
+    assignees: unwrapAssignees(row.assignees),
+    // Preenchido depois via attachBlocked() — precisa dos ids de toda a página
+    // de uma vez (uma query em lote, não uma por tarefa).
+    is_blocked: false,
     due_date: row.due_date as string | null,
     source: row.source as "manual" | "ia",
     parent_task_id: row.parent_task_id as string | null,
@@ -125,19 +191,27 @@ export async function listTasks(filters: TaskFilters = {}): Promise<TaskRow[]> {
 
   if (clinicIds !== null) {
     const devId = filter as string;
-    query = clinicIds.length
-      ? query.or(`assigned_to.eq.${devId},clinic_id.in.(${clinicIds.join(",")})`)
-      : query.eq("assigned_to", devId);
+    const mine = await taskIdsAssignedTo(supabase, devId);
+    const clauses = [
+      ...(clinicIds.length ? [`clinic_id.in.(${clinicIds.join(",")})`] : []),
+      ...(mine.length ? [`id.in.(${mine.join(",")})`] : []),
+    ];
+    // Sem clínica na carteira e sem tarefa atribuída: nada bate (mesmo efeito
+    // de antes, quando o filtro só tinha `assigned_to.eq.devId` sem resultado).
+    query = clauses.length ? query.or(clauses.join(",")) : query.eq("id", "00000000-0000-0000-0000-000000000000");
   }
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.priority) query = query.eq("priority", filters.priority);
   if (filters.clinicId) query = query.eq("clinic_id", filters.clinicId);
-  if (filters.assignedTo) query = query.eq("assigned_to", filters.assignedTo);
+  if (filters.assignedTo) {
+    const ids = await taskIdsAssignedTo(supabase, filters.assignedTo);
+    query = ids.length ? query.in("id", ids) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  }
 
   const { data, error } = await query.order("due_date", { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(mapTaskRow);
+  return attachBlocked((data ?? []).map(mapTaskRow));
 }
 
 /** Tarefas de uma clínica específica (para o painel no perfil dela). */
@@ -152,7 +226,7 @@ export async function listClinicTasks(clinicId: string): Promise<TaskRow[]> {
     .order("status")
     .order("due_date", { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(mapTaskRow);
+  return attachBlocked((data ?? []).map(mapTaskRow));
 }
 
 /** Sugestões pendentes de revisão (escopo: mesma regra de carteira). */
@@ -218,9 +292,12 @@ export async function listArchivedTasks(limit = 1000, clinicId?: string): Promis
     const { filter, clinicIds } = await carteiraScope();
     if (clinicIds !== null) {
       const devId = filter as string;
-      query = clinicIds.length
-        ? query.or(`assigned_to.eq.${devId},clinic_id.in.(${clinicIds.join(",")})`)
-        : query.eq("assigned_to", devId);
+      const mine = await taskIdsAssignedTo(supabase, devId);
+      const clauses = [
+        ...(clinicIds.length ? [`clinic_id.in.(${clinicIds.join(",")})`] : []),
+        ...(mine.length ? [`id.in.(${mine.join(",")})`] : []),
+      ];
+      query = clauses.length ? query.or(clauses.join(",")) : query.eq("id", "00000000-0000-0000-0000-000000000000");
     }
   }
 
@@ -249,10 +326,12 @@ export async function countMyPendingTasks(): Promise<number> {
   const profile = await getCurrentProfile();
   if (!profile) return 0;
   const supabase = await createClient();
+  const ids = await taskIdsAssignedTo(supabase, profile.id);
+  if (!ids.length) return 0;
   const { count, error } = await supabase
     .from("tasks")
     .select("id", { count: "exact", head: true })
-    .eq("assigned_to", profile.id)
+    .in("id", ids)
     .in("status", ["pendente", "em_andamento"]);
   if (error) throw new Error(error.message);
   return count ?? 0;
@@ -266,7 +345,8 @@ export type TaskInput = {
   description?: string | null;
   category: TaskCategory;
   priority: TaskPriority;
-  assignedTo: string | null;
+  /** Lista plana de responsáveis — todos igualmente responsáveis (ADR 0008). */
+  assigneeIds: string[];
   dueDate?: string | null; // YYYY-MM-DD
   status?: TaskStatus;
 };
@@ -290,7 +370,6 @@ export async function createTask(
       category: input.category,
       priority: input.priority,
       status: input.status || "pendente",
-      assigned_to: input.assignedTo,
       due_date: input.dueDate || null,
       source: "manual",
       created_by: user!.id,
@@ -299,12 +378,7 @@ export async function createTask(
     .single();
   if (error) return { ok: false, error: error.message };
 
-  await notifyTaskAssigned({
-    taskId: data.id as string,
-    taskTitle: title,
-    assigneeId: input.assignedTo,
-    actor: { id: user!.id, name: user!.name },
-  });
+  await setTaskAssignees(supabase, data.id as string, [], input.assigneeIds, { id: user!.id, name: user!.name }, title);
 
   revalidatePath("/tarefas");
   revalidatePath("/");
@@ -336,7 +410,6 @@ export async function createTasksForClinics(
     category: base.category,
     priority: base.priority,
     status: base.status || "pendente",
-    assigned_to: base.assignedTo,
     due_date: base.dueDate || null,
     source: "manual" as const,
     created_by: user!.id,
@@ -345,14 +418,9 @@ export async function createTasksForClinics(
   const { data: created, error } = await supabase.from("tasks").insert(rows).select("id");
   if (error) return { ok: false, error: error.message };
 
-  if (base.assignedTo) {
+  if (base.assigneeIds.length) {
     for (const row of created ?? []) {
-      await notifyTaskAssigned({
-        taskId: row.id as string,
-        taskTitle: title,
-        assigneeId: base.assignedTo,
-        actor: { id: user!.id, name: user!.name },
-      });
+      await setTaskAssignees(supabase, row.id as string, [], base.assigneeIds, { id: user!.id, name: user!.name }, title);
     }
   }
 
@@ -373,28 +441,29 @@ export async function updateTask(
   if (input.description !== undefined) payload.description = input.description?.trim() || null;
   if (input.category !== undefined) payload.category = input.category;
   if (input.priority !== undefined) payload.priority = input.priority;
-  if (input.assignedTo !== undefined) payload.assigned_to = input.assignedTo;
   if (input.dueDate !== undefined) payload.due_date = input.dueDate || null;
   if (input.clinicId !== undefined) payload.clinic_id = input.clinicId;
 
-  // Estado anterior para detectar troca de responsável (só se for editar isso).
-  let prev: { assigned_to: string | null; title: string } | null = null;
-  if (input.assignedTo !== undefined) {
-    const { data } = await supabase.from("tasks").select("assigned_to, title").eq("id", id).maybeSingle();
-    prev = (data as { assigned_to: string | null; title: string } | null) ?? null;
+  if (Object.keys(payload).length) {
+    const { error } = await supabase.from("tasks").update(payload).eq("id", id);
+    if (error) return { ok: false, error: error.message };
   }
 
-  const { error } = await supabase.from("tasks").update(payload).eq("id", id);
-  if (error) return { ok: false, error: error.message };
-
-  if (input.assignedTo && input.assignedTo !== prev?.assigned_to) {
+  if (input.assigneeIds !== undefined) {
+    const [{ data: current }, { data: taskRow }] = await Promise.all([
+      supabase.from("task_assignees").select("user_id").eq("task_id", id),
+      supabase.from("tasks").select("title").eq("id", id).maybeSingle(),
+    ]);
+    const prevIds = (current ?? []).map((r) => r.user_id as string);
     const user = await getSessionUser();
-    await notifyTaskAssigned({
-      taskId: id,
-      taskTitle: (payload.title as string | undefined) ?? prev?.title,
-      assigneeId: input.assignedTo,
-      actor: { id: user!.id, name: user!.name },
-    });
+    await setTaskAssignees(
+      supabase,
+      id,
+      prevIds,
+      input.assigneeIds,
+      { id: user!.id, name: user!.name },
+      (payload.title as string | undefined) ?? taskRow?.title ?? "uma tarefa",
+    );
   }
 
   revalidatePath("/tarefas");
@@ -409,6 +478,13 @@ export async function updateTaskStatus(
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "Não autenticado" };
   const supabase = await createClient();
+
+  // Bloqueio rígido (ADR 0008): não avança para "em andamento"/"concluída"
+  // enquanto houver bloqueadora aberta.
+  const openBlockers = await openBlockersFor(id, status);
+  if (openBlockers.length) {
+    return { ok: false, error: `Bloqueada por: ${openBlockers.map((b) => `"${b.title}"`).join(", ")}` };
+  }
 
   const { data: current } = await supabase.from("tasks").select("status").eq("id", id).maybeSingle();
 
@@ -448,6 +524,22 @@ export async function bulkUpdateTaskStatus(
   if (!user) return { ok: false, error: "Não autenticado" };
   if (!ids.length) return { ok: true, count: 0 };
   const supabase = await createClient();
+
+  // Bloqueio rígido (ADR 0008), mesma regra do updateTaskStatus — em lote,
+  // recusa o lote inteiro (o usuário reseleciona sem as bloqueadas) em vez de
+  // aplicar parcial e ter que explicar quais ficaram de fora.
+  if (status === "em_andamento" || status === "concluida") {
+    const blockedIds = await listBlockedTaskIds(ids);
+    if (blockedIds.size) {
+      return {
+        ok: false,
+        error:
+          blockedIds.size === 1
+            ? "1 tarefa está bloqueada por uma dependência ainda aberta."
+            : `${blockedIds.size} tarefas estão bloqueadas por dependências ainda abertas.`,
+      };
+    }
+  }
 
   const { data: current } = await supabase.from("tasks").select("id, status").in("id", ids);
 
@@ -549,7 +641,6 @@ export async function acceptTaskSuggestion(
       description: (suggestion.description as string | null) ?? null,
       category: input.category,
       priority: input.priority,
-      assigned_to: input.assignedTo,
       due_date: input.dueDate || null,
       source: "ia",
       created_by: user!.id,
@@ -569,12 +660,7 @@ export async function acceptTaskSuggestion(
     .eq("id", suggestionId);
   if (updateError) return { ok: false, error: updateError.message };
 
-  await notifyTaskAssigned({
-    taskId: task.id as string,
-    taskTitle: title,
-    assigneeId: input.assignedTo,
-    actor: { id: user!.id, name: user!.name },
-  });
+  await setTaskAssignees(supabase, task.id as string, [], input.assigneeIds, { id: user!.id, name: user!.name }, title);
 
   revalidatePath("/tarefas");
   revalidatePath("/");
