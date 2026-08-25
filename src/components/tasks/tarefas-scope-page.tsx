@@ -6,6 +6,7 @@ import { listClinics } from "@/lib/clinics/actions"
 import { listUserProfiles, getCurrentProfile } from "@/lib/users/actions"
 import { Panel } from "@/components/dashboard/panel"
 import { TaskBoard } from "@/components/tasks/task-board"
+import { TarefasScopeTabs } from "@/components/tasks/tarefas-scope-tabs"
 
 /**
  * Corpo compartilhado das rotas /tarefas, /tarefas/clinicas e /tarefas/internas
@@ -49,6 +50,8 @@ export async function TarefasScopePage({
         <h1 className="text-2xl font-bold brand-header">{title}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
       </div>
+
+      <TarefasScopeTabs />
 
       <Panel>
         <TaskBoard

@@ -12,7 +12,6 @@ import {
   ListTodo,
   Eye,
   KeyRound,
-  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,8 +20,6 @@ export type NavItem = {
   label: string;
   icon: LucideIcon;
   gestorOnly?: boolean;
-  /** Sub-itens exibidos quando a sidebar está aberta (e na paleta Ctrl+K). */
-  children?: NavItem[];
 };
 
 // Fonte única das páginas principais — consumida pela sidebar (app-nav) e pela
@@ -33,17 +30,7 @@ export const navItems: NavItem[] = [
   { href: "/clinicas", label: "Clínicas", icon: Building2 },
   { href: "/mensal", label: "Mensal", icon: CalendarDays },
   { href: "/comparativo", label: "Comparativo", icon: BarChart3 },
-  // Tarefas: o item pai segue para "Todas"; os filhos separam por natureza
-  // (ADR 0009). Só aparecem com a sidebar aberta (e na paleta Ctrl+K).
-  {
-    href: "/tarefas",
-    label: "Tarefas",
-    icon: ListTodo,
-    children: [
-      { href: "/tarefas/clinicas", label: "Tarefas das clínicas", icon: Building2 },
-      { href: "/tarefas/internas", label: "Tarefas internas", icon: Briefcase },
-    ],
-  },
+  { href: "/tarefas", label: "Tarefas", icon: ListTodo },
   { href: "/acompanhamentos", label: "Acompanhamentos", icon: Eye },
   { href: "/mapa", label: "Mapa", icon: MapIcon },
   { href: "/whatsapp", label: "Gerenciador de grupos", icon: MessageCircle },

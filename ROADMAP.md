@@ -51,7 +51,7 @@ Infra: **VPS Hostinger** (container atrás do nginx da stack `contactia`, auto-d
 - [x] **Tarefas recorrentes** — regras declarativas com materialização lazy, anti-empilhamento e fan-out por carteira; detector de rotinas e diagnóstico pós-onboarding.
 - [x] **Responsáveis múltiplos** — `task_assignees` substitui o `assigned_to` único; lista plana, todos igualmente responsáveis (ADR 0008).
 - [x] **Dependências entre tarefas** — "bloqueada por"; `task_dependencies` (N:N) + UI de busca/chips no detalhe + bloqueio rígido no `updateTaskStatus`/`bulkUpdateTaskStatus`. Épico: #33 (ADR 0008).
-- [ ] **Separação: tarefas internas × das clínicas** — flag `tasks.is_internal` (espelho com constraints, migrations 0086/0087), rotas `/tarefas/clinicas` e `/tarefas/internas` na sidebar, toggle no formulário (ADR 0009).
+- [x] **Separação: tarefas internas × das clínicas** — flag `tasks.is_internal` (espelho com constraints, migrations 0086/0087), rotas `/tarefas/clinicas` e `/tarefas/internas` com abas no topo da página, toggle no formulário (ADR 0009).
 - [ ] **Calendário v1 (motor interno)** — reuniões/eventos/compromissos, avaliando reaproveitar o motor de recorrência de tarefas. Épico: #37. Sync com Google Calendar é v2, na frente Integrações externas (#56, #59).
 - [ ] **Lembretes externos de prazo** — depende da frente Agente & Notificações (a "Minha semana" já cobre o aviso in-app).
 
