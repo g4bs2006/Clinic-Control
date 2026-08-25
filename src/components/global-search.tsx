@@ -199,7 +199,10 @@ export function GlobalSearch() {
     : loaded.slice(0, 5); // show top 5 when empty
   // Páginas principais (seção "Ir para"): todas quando a busca está vazia,
   // filtradas pelo rótulo ao digitar. Vêm ANTES das clínicas no índice de teclado.
-  const navPages = term ? navItems.filter((p) => p.label.toLowerCase().includes(term)) : navItems;
+  // Sub-itens de navegação (ADR 0009: tarefas por escopo) entram como entradas
+  // próprias — a paleta e a sidebar continuam lendo a mesma fonte única.
+  const allNavPages = navItems.flatMap((p) => (p.children?.length ? [p, ...p.children] : [p]));
+  const navPages = term ? allNavPages.filter((p) => p.label.toLowerCase().includes(term)) : allNavPages;
 
   // Modo tarefas: abertas + as concluídas nesta sessão (para desfazer), filtradas pela busca.
   const visibleTasks = (tasks ?? [])
@@ -328,6 +331,7 @@ export function GlobalSearch() {
             assignees: assigneeIds.map((id) => ({ id, name: null })),
             is_blocked: false,
             blocked_by: [],
+            is_internal: false,
             due_date: null,
             source: "manual",
             parent_task_id: null,

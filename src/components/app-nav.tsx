@@ -10,12 +10,13 @@ import {
   Search,
   LogOut,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/actions";
 import { CarteiraSwitcher } from "@/components/carteira-switcher";
 import { NotificationBell } from "@/components/notifications/notification-bell";
-import { navItems } from "@/lib/nav-items";
+import { navItems, type NavItem } from "@/lib/nav-items";
 
 const STORAGE_KEY = "cc-sidebar-pinned";
 const PIN_EVENT = "cc-sidebar-pin-change";
@@ -27,6 +28,93 @@ const FULL = "md:w-60";
 function subscribePinned(onChange: () => void) {
   window.addEventListener(PIN_EVENT, onChange);
   return () => window.removeEventListener(PIN_EVENT, onChange);
+}
+
+/** Entrada da sidebar — item simples ou grupo com sub-itens expansíveis (ADR 0009). */
+function NavEntry({ item, open, pathname }: { item: NavItem; open: boolean; pathname: string }) {
+  const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+  const hasChildren = !!item.children?.length;
+  // Começa aberto quando a rota atual está dentro do grupo; a escolha manual
+  // do usuário persiste enquanto o componente viver (não re-colapsa ao navegar).
+  const [expanded, setExpanded] = useState(() => pathname.startsWith(item.href));
+  const Icon = item.icon;
+
+  const linkClass = cn(
+    "group relative flex h-11 items-center gap-2.5 rounded-md text-sm font-medium md:h-9",
+    "transition-colors duration-150",
+    isActive
+      ? "bg-sidebar-accent text-sidebar-foreground"
+      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+  );
+
+  if (!hasChildren) {
+    return (
+      <Link
+        href={item.href}
+        title={!open ? item.label : undefined}
+        className={cn(linkClass, open ? "px-2.5" : "justify-center px-0")}
+      >
+        {isActive && (
+          <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-brand" />
+        )}
+        <Icon className={cn("size-4 shrink-0", isActive ? "text-primary" : "text-current")} />
+        {open && <span className="truncate">{item.label}</span>}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center">
+        <Link
+          href={item.href}
+          title={!open ? item.label : undefined}
+          className={cn(linkClass, "min-w-0 flex-1", open ? "pl-2.5" : "justify-center px-0")}
+        >
+          {isActive && (
+            <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-brand" />
+          )}
+          <Icon className={cn("size-4 shrink-0", isActive ? "text-primary" : "text-current")} />
+          {open && <span className="truncate">{item.label}</span>}
+        </Link>
+        {open && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-label={expanded ? `Recolher ${item.label}` : `Expandir ${item.label}`}
+            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+          >
+            <ChevronDown className={cn("size-4 transition-transform", expanded && "rotate-180")} />
+          </button>
+        )}
+      </div>
+      {open &&
+        expanded &&
+        item.children?.map((child) => {
+          const childActive = pathname === child.href;
+          const ChildIcon = child.icon;
+          return (
+            <Link
+              key={child.href}
+              href={child.href}
+              className={cn(
+                "relative flex h-9 items-center gap-2.5 rounded-md pl-8 pr-2.5 text-sm transition-colors duration-150",
+                childActive
+                  ? "bg-sidebar-accent text-sidebar-foreground"
+                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+              )}
+            >
+              {childActive && (
+                <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-brand" />
+              )}
+              <ChildIcon className={cn("size-3.5 shrink-0", childActive ? "text-primary" : "text-current")} />
+              <span className="truncate">{child.label}</span>
+            </Link>
+          );
+        })}
+    </div>
+  );
 }
 
 export function AppNav({
@@ -188,31 +276,9 @@ export function AppNav({
           <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
             {navItems
               .filter((item) => !item.gestorOnly || user?.role === "gestor")
-              .map((item) => {
-              const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  title={!open ? item.label : undefined}
-                  className={cn(
-                    "group relative flex h-11 items-center gap-2.5 rounded-md text-sm font-medium md:h-9",
-                    "transition-colors duration-150",
-                    open ? "px-2.5" : "justify-center px-0",
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-foreground"
-                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-                  )}
-                >
-                  {isActive && (
-                    <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-brand" />
-                  )}
-                  <Icon className={cn("size-4 shrink-0", isActive ? "text-primary" : "text-current")} />
-                  {open && <span className="truncate">{item.label}</span>}
-                </Link>
-              );
-            })}
+              .map((item) => (
+                <NavEntry key={item.href} item={item} open={open} pathname={pathname} />
+              ))}
           </div>
 
           {/* Seletor global de carteira — só gestor, visível com a sidebar aberta */}

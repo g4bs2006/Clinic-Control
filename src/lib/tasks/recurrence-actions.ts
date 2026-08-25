@@ -248,6 +248,9 @@ export async function materializeRecurrences(): Promise<void> {
           assignee: t.assignee,
           row: {
             clinic_id: t.clinicId,
+            // Ocorrência de regra sem clínica é tarefa interna (ADR 0009) —
+            // o espelho com constraints exige o par (null, true).
+            is_internal: t.clinicId === null,
             title: r.title,
             description: r.description,
             category: r.category,

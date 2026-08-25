@@ -28,6 +28,8 @@ export type TaskRow = {
   is_blocked: boolean;
   /** Bloqueadoras abertas (id + título p/ tooltip) — mesma fonte de `is_blocked`. */
   blocked_by: { id: string; title: string }[];
+  /** Tarefa interna (sem clínica) — flag explícita, espelho de clinic_id (ADR 0009). */
+  is_internal: boolean;
   due_date: string | null;
   source: "manual" | "ia";
   parent_task_id: string | null;
@@ -41,7 +43,7 @@ export type TaskRow = {
 };
 
 const TASK_SELECT =
-  "id, clinic_id, title, description, category, priority, status, due_date, source, parent_task_id, recurrence_id, snoozed_until, pinned_at, created_at, updated_at, completed_at, clinics(name), assignees:task_assignees(user:app_users!user_id(id, name))";
+  "id, clinic_id, title, description, category, priority, status, is_internal, due_date, source, parent_task_id, recurrence_id, snoozed_until, pinned_at, created_at, updated_at, completed_at, clinics(name), assignees:task_assignees(user:app_users!user_id(id, name))";
 
 export type TaskSuggestionRow = {
   id: string;
@@ -63,6 +65,9 @@ export type TaskFilters = {
   /** Filtra tarefas em que este usuário é UM dos responsáveis. */
   assignedTo?: string;
 };
+
+/** Natureza da tarefa (ADR 0009): recorte aplicado no servidor, antes do escopo de carteira. */
+export type TaskScope = "all" | "clinicas" | "internas";
 
 type SingleOrArray<T> = T | T[] | null;
 function unwrapName(rel: SingleOrArray<{ name: string | null }>): string | null {
@@ -162,6 +167,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     category: row.category as TaskCategory,
     priority: row.priority as TaskPriority,
     status: row.status as TaskStatus,
+    is_internal: (row.is_internal as boolean) ?? false,
     assignees: unwrapAssignees(row.assignees),
     // Preenchido depois via attachBlocked() — precisa dos ids de toda a página
     // de uma vez (uma query em lote, não uma por tarefa).
@@ -187,7 +193,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
  * todas. Filtros adicionais (status/categoria/prioridade/clínica/responsável)
  * se combinam com esse escopo.
  */
-export async function listTasks(filters: TaskFilters = {}): Promise<TaskRow[]> {
+export async function listTasks(filters: TaskFilters = {}, scope: TaskScope = "all"): Promise<TaskRow[]> {
   const supabase = await createClient();
   const { filter, clinicIds } = await carteiraScope();
 
@@ -196,6 +202,10 @@ export async function listTasks(filters: TaskFilters = {}): Promise<TaskRow[]> {
     .select(TASK_SELECT)
     .is("parent_task_id", null)
     .is("archived_at", null);
+
+  // Escopo de natureza (ADR 0009) — antes do OR de carteira, para que o dev em
+  // "internas" veja só internas atribuídas a ele (nunca as de clínica da carteira).
+  if (scope !== "all") query = query.eq("is_internal", scope === "internas");
 
   if (clinicIds !== null) {
     const devId = filter as string;
@@ -229,6 +239,7 @@ export async function listClinicTasks(clinicId: string): Promise<TaskRow[]> {
     .from("tasks")
     .select(TASK_SELECT)
     .eq("clinic_id", clinicId)
+    .eq("is_internal", false)
     .is("parent_task_id", null)
     .is("archived_at", null)
     .order("status")
@@ -285,7 +296,7 @@ export async function listTaskSuggestions(): Promise<TaskSuggestionRow[]> {
  * fechada), não um cache de "descartar por engano" — não pode cortar o
  * histórico como se fosse uma lixeira de poucos dias.
  */
-export async function listArchivedTasks(limit = 1000, clinicId?: string): Promise<TaskRow[]> {
+export async function listArchivedTasks(limit = 1000, clinicId?: string, scope: TaskScope = "all"): Promise<TaskRow[]> {
   const supabase = await createClient();
 
   let query = supabase
@@ -293,6 +304,9 @@ export async function listArchivedTasks(limit = 1000, clinicId?: string): Promis
     .select(TASK_SELECT)
     .is("parent_task_id", null)
     .not("archived_at", "is", null);
+
+  // Mesmo recorte de natureza das tarefas ativas (ADR 0009).
+  if (scope !== "all") query = query.eq("is_internal", scope === "internas");
 
   if (clinicId) {
     query = query.eq("clinic_id", clinicId);
@@ -355,6 +369,8 @@ export type TaskInput = {
   priority: TaskPriority;
   /** Lista plana de responsáveis — todos igualmente responsáveis (ADR 0008). */
   assigneeIds: string[];
+  /** Tarefa interna (ADR 0009): força clinic_id = null no create/update. */
+  isInternal?: boolean;
   dueDate?: string | null; // YYYY-MM-DD
   status?: TaskStatus;
 };
@@ -369,10 +385,14 @@ export async function createTask(
   if (title.length < 3) return { ok: false, error: "Título muito curto" };
 
   const user = await getSessionUser();
+  // Tarefa interna (ADR 0009): a flag manda — clínica informada é ignorada
+  // (o espelho com constraints exige clinic_id null quando is_internal).
+  const isInternal = input.isInternal === true;
   const { data, error } = await supabase
     .from("tasks")
     .insert({
-      clinic_id: input.clinicId,
+      clinic_id: isInternal ? null : input.clinicId,
+      is_internal: isInternal,
       title,
       description: input.description?.trim() || null,
       category: input.category,
@@ -390,7 +410,7 @@ export async function createTask(
 
   revalidatePath("/tarefas");
   revalidatePath("/");
-  if (input.clinicId) revalidatePath(`/clinicas/${input.clinicId}`);
+  if (!isInternal && input.clinicId) revalidatePath(`/clinicas/${input.clinicId}`);
   return { ok: true, id: data.id as string };
 }
 
@@ -410,9 +430,12 @@ export async function createTasksForClinics(
   if (title.length < 3) return { ok: false, error: "Título muito curto" };
 
   const user = await getSessionUser();
-  const targets: (string | null)[] = clinicIds.length ? clinicIds : [null];
+  // Interna (ADR 0009): uma única tarefa sem clínica, ignorando a seleção.
+  const isInternal = base.isInternal === true;
+  const targets: (string | null)[] = isInternal ? [null] : clinicIds.length ? clinicIds : [null];
   const rows = targets.map((cid) => ({
     clinic_id: cid,
+    is_internal: isInternal,
     title,
     description: base.description?.trim() || null,
     category: base.category,
@@ -451,6 +474,20 @@ export async function updateTask(
   if (input.priority !== undefined) payload.priority = input.priority;
   if (input.dueDate !== undefined) payload.due_date = input.dueDate || null;
   if (input.clinicId !== undefined) payload.clinic_id = input.clinicId;
+
+  // Natureza (ADR 0009): ligar interna zera a clínica; desligar exige uma
+  // clínica informada agora ou já existente na tarefa (espelho + constraints).
+  if (input.isInternal !== undefined) {
+    payload.is_internal = input.isInternal;
+    if (input.isInternal) {
+      payload.clinic_id = null;
+    } else if (input.clinicId === undefined) {
+      const { data: current } = await supabase.from("tasks").select("clinic_id").eq("id", id).maybeSingle();
+      if (!current?.clinic_id) {
+        return { ok: false, error: "Selecione uma clínica para tornar esta tarefa uma tarefa de clínica" };
+      }
+    }
+  }
 
   if (Object.keys(payload).length) {
     const { error } = await supabase.from("tasks").update(payload).eq("id", id);
@@ -641,10 +678,13 @@ export async function acceptTaskSuggestion(
   const user = await getSessionUser();
   const title = (input.title ?? (suggestion.text as string)).trim().slice(0, 200);
 
+  // Interna (ADR 0009): flag vence — clínica da sugestão é ignorada.
+  const isInternal = input.isInternal === true;
   const { data: task, error: taskError } = await supabase
     .from("tasks")
     .insert({
-      clinic_id: input.clinicId ?? (suggestion.clinic_id as string),
+      clinic_id: isInternal ? null : input.clinicId ?? (suggestion.clinic_id as string),
+      is_internal: isInternal,
       title,
       description: (suggestion.description as string | null) ?? null,
       category: input.category,
@@ -728,7 +768,7 @@ export async function createSubtasks(
 
   const { data: parent, error: parentError } = await supabase
     .from("tasks")
-    .select("clinic_id, category")
+    .select("clinic_id, category, is_internal")
     .eq("id", parentTaskId)
     .maybeSingle();
   if (parentError) return { ok: false, error: parentError.message };
@@ -739,6 +779,8 @@ export async function createSubtasks(
     clean.map((title) => ({
       parent_task_id: parentTaskId,
       clinic_id: parent.clinic_id,
+      // Herda a natureza da mãe (ADR 0009): subtarefa de interna é interna.
+      is_internal: (parent.is_internal as boolean) ?? false,
       category: parent.category,
       title,
       priority: "media",

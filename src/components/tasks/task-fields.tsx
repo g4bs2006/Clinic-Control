@@ -50,6 +50,9 @@ interface TaskFieldsProps {
   lockClinic?: boolean
   /** Oculta o select de clínica (ex.: quando a seleção de clínicas é múltipla, fora daqui). */
   hideClinic?: boolean
+  /** Tarefa interna (ADR 0009): o toggle desabilita o select de clínica. */
+  isInternal?: boolean
+  onIsInternalChange?: (v: boolean) => void
   status?: TaskStatus
   onStatusChange?: (v: TaskStatus) => void
 }
@@ -70,6 +73,8 @@ export function TaskFields({
   onDueDateChange,
   lockClinic,
   hideClinic,
+  isInternal,
+  onIsInternalChange,
   status,
   onStatusChange,
 }: TaskFieldsProps) {
@@ -78,9 +83,18 @@ export function TaskFields({
       {!hideClinic && (
         <label className={`${status !== undefined && onStatusChange ? "" : "sm:col-span-2"} flex flex-col gap-1 text-xs text-muted-foreground`}>
           Clínica
+          {onIsInternalChange && (
+            <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border/60 bg-transparent px-2.5 py-2 text-sm text-foreground">
+              <Checkbox
+                checked={isInternal === true}
+                onCheckedChange={(v) => onIsInternalChange(v === true)}
+              />
+              Tarefa interna (sem clínica)
+            </label>
+          )}
           <Select
             value={clinicId ?? NO_CLINIC}
-            disabled={lockClinic}
+            disabled={lockClinic || isInternal === true}
             items={{
               [NO_CLINIC]: "Sem clínica (interna)",
               ...Object.fromEntries(clinics.map((c) => [c.id, c.name])),
@@ -91,7 +105,9 @@ export function TaskFields({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NO_CLINIC}>Sem clínica (interna)</SelectItem>
+              {/* Com o toggle presente, a opção "Sem clínica" sai do select: a
+                  escolha de natureza fica explícita no checkbox (ADR 0009). */}
+              {!onIsInternalChange && <SelectItem value={NO_CLINIC}>Sem clínica (interna)</SelectItem>}
               {clinics.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
