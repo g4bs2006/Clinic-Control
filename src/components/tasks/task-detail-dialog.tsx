@@ -302,6 +302,13 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
           ? clinics.find((c) => c.id === patch.clinicId)?.name ?? null
           : null
       }
+      if (patch.isInternal !== undefined) {
+        next.is_internal = patch.isInternal
+        if (patch.isInternal) {
+          next.clinic_id = null
+          next.clinic_name = null
+        }
+      }
       return next
     })
     changedRef.current = true
@@ -1193,6 +1200,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 onPriorityChange={(v: TaskPriority) => saveField({ priority: v })}
                 assigneeIds={task.assignees.map((a) => a.id)}
                 onAssigneeIdsChange={(v) => saveField({ assigneeIds: v })}
+                isInternal={task.is_internal}
+                onIsInternalChange={(v) => saveField({ isInternal: v })}
                 dueDate={task.due_date ?? ""}
                 onDueDateChange={(v) => saveField({ dueDate: v })}
                 status={task.status}
@@ -1312,6 +1321,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
             categories={categories}
             clinicId={task.clinic_id}
             onClinicIdChange={(v) => saveField({ clinicId: v })}
+            isInternal={task.is_internal}
+            onIsInternalChange={(v) => saveField({ isInternal: v })}
             category={task.category}
             onCategoryChange={(v: TaskCategory) => saveField({ category: v })}
             priority={task.priority}

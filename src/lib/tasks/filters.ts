@@ -3,7 +3,7 @@
 // os toggles "Mostrar concluídas"/"Adiadas", então tudo aqui é comparação de
 // strings ISO e igualdade simples: dá para testar sem banco.
 
-import type { TaskRow } from "./actions";
+import type { TaskRow, TaskScope } from "./actions";
 import type { TaskStatus } from "./categories";
 
 export const ALL = "__all__";
@@ -142,6 +142,18 @@ export function matchesFilters(
 const DUE_VALUES: DueFilter[] = ["all", "overdue", "today", "week", "none"];
 const SOURCE_VALUES: SourceFilter[] = ["all", "ia", "manual"];
 const MARKER_VALUES: MarkerFilter[] = ["all", "recorrente", "foco"];
+
+/**
+ * Ajusta filtros herdados do localStorage para o escopo da rota (ADR 0009).
+ * Em "internas" o recorte de clínica é fixo (só existe o NONE); em "clínicas"
+ * um valor salvo de NONE (de uma visita anterior a /tarefas/internas) deixaria
+ * a lista vazia sem explicação, então volta para ALL. Pura, com teste.
+ */
+export function sanitizeFiltersForScope(f: ListFilters, scope: TaskScope): ListFilters {
+  if (scope === "internas") return f.clinic === NONE ? f : { ...f, clinic: NONE };
+  if (scope === "clinicas" && f.clinic === NONE) return { ...f, clinic: ALL };
+  return f;
+}
 
 /**
  * Lê os filtros guardados no localStorage, ignorando lixo (JSON inválido, chave

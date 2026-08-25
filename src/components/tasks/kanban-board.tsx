@@ -125,6 +125,9 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
                     </div>
                     <div className="flex flex-wrap items-center gap-1 text-[0.65rem] text-muted-foreground">
                       <span className="rounded bg-accent/60 px-1 py-0.5">{categoryLabel[t.category] ?? t.category}</span>
+                      {t.is_internal && (
+                        <span className="rounded bg-sky-500/15 px-1 py-0.5 text-sky-400">interna</span>
+                      )}
                       {t.clinic_name && (
                         <Link
                           href={`/clinicas/${t.clinic_id}`}

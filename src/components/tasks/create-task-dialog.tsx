@@ -75,6 +75,9 @@ export function CreateTaskDialog({
   const [assigneeTouched, setAssigneeTouched] = useState(false)
   const [dueDate, setDueDate] = useState("")
   const [status, setStatus] = useState<TaskStatus>("pendente")
+  // Tarefa interna (ADR 0009): ligada, a seleção de clínicas sai de cena e a
+  // criação vira uma única tarefa sem clínica.
+  const [isInternal, setIsInternal] = useState(false)
 
   // Sincroniza o responsável sugerido conforme a seleção de clínicas muda,
   // enquanto o usuário não escolher manualmente (padrão render-time, sem efeito).
@@ -102,10 +105,16 @@ export function CreateTaskDialog({
     setAssigneeTouched(false)
     setDueDate("")
     setStatus("pendente")
+    setIsInternal(false)
   }
 
   function toggleClinic(id: string) {
     setClinicIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  function toggleInternal(v: boolean) {
+    setIsInternal(v)
+    if (v) setClinicIds([])
   }
 
   function submit() {
@@ -116,6 +125,7 @@ export function CreateTaskDialog({
         category,
         priority,
         assigneeIds,
+        isInternal,
         dueDate,
         status,
       })
@@ -233,6 +243,26 @@ export function CreateTaskDialog({
     )
   }
 
+  /* Toggle + aviso de tarefa interna (ADR 0009) — acima do seletor de clínicas. */
+  function internalToggle() {
+    return (
+      <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border/60 px-3 py-2.5 text-sm text-foreground">
+        <Checkbox checked={isInternal} onCheckedChange={(v) => toggleInternal(v === true)} />
+        <span className="flex-1">
+          Tarefa interna <span className="text-xs text-muted-foreground">(sem clínica — trabalho da operação)</span>
+        </span>
+      </label>
+    )
+  }
+
+  function internalHint() {
+    return (
+      <div className="rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2.5 text-xs text-muted-foreground">
+        Tarefa interna — sem clínica vinculada. Desmarque a opção acima para escolher clínicas.
+      </div>
+    )
+  }
+
   return (
     <Dialog
       open={open}
@@ -274,7 +304,8 @@ export function CreateTaskDialog({
 
           {step === 2 && (
             <>
-              {clinicPicker(true)}
+              {internalToggle()}
+              {isInternal ? internalHint() : clinicPicker(true)}
               <div className="mt-1 flex justify-between gap-2">
                 <Button type="button" variant="ghost" className="h-10" onClick={() => setStep(1)}>
                   <ArrowLeft className="size-4" />
@@ -337,7 +368,8 @@ export function CreateTaskDialog({
         {/* ── Desktop: formulário único ── */}
         <div className="hidden flex-col gap-3 sm:flex">
           {titleFields(true)}
-          {clinicPicker()}
+          {internalToggle()}
+          {isInternal ? internalHint() : clinicPicker()}
           <TaskFields
             clinics={clinics}
             profiles={profiles}

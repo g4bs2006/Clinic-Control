@@ -36,6 +36,7 @@ import {
   activeFilterCount,
   matchesFilters,
   parseStoredFilters,
+  sanitizeFiltersForScope,
   type DueFilter,
   type ListFilters,
   type MarkerFilter,
@@ -51,6 +52,7 @@ import {
   unarchiveTask,
   type TaskRow,
   type TaskSuggestionRow,
+  type TaskScope,
 } from "@/lib/tasks/actions"
 import {
   TASK_PRIORITIES,
@@ -254,6 +256,11 @@ function TaskListItem({
               em andamento
             </span>
           )}
+          {t.is_internal && (
+            <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-sky-400">
+              interna
+            </span>
+          )}
           {t.source === "ia" && (
             <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-amber-400">
               IA
@@ -406,9 +413,11 @@ interface TaskBoardProps {
   isGestor?: boolean
   /** Pré-seleciona a clínica no formulário de nova tarefa (painel embutido no perfil da clínica). */
   defaultClinicId?: string | null
+  /** Natureza da rota (ADR 0009): recorta filtros, histórico e select de clínica. */
+  scope?: TaskScope
 }
 
-export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [], clinics, profiles, categories, currentUserId = null, isGestor = false, defaultClinicId = null }: TaskBoardProps) {
+export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [], clinics, profiles, categories, currentUserId = null, isGestor = false, defaultClinicId = null, scope = "all" }: TaskBoardProps) {
   const router = useRouter()
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
@@ -441,7 +450,9 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
   // cliente aplica na hidratação — mesmo trade-off já aceito no "esconder adiadas".
   const storedFilters = useSyncExternalStore(subscribeFilters, readStoredFilters, () => DEFAULT_LIST_FILTERS)
   const [query, setQuery] = useState("")
-  const filters: ListFilters = { ...storedFilters, query }
+  // Saneamento por escopo (ADR 0009): o filtro de clínica herdado do localStorage
+  // não pode contradizer a rota (ex.: "Sem clínica" salvo entrando em /tarefas/clinicas).
+  const filters: ListFilters = { ...sanitizeFiltersForScope(storedFilters, scope), query }
 
   function setFilter<K extends keyof ListFilters>(key: K, value: ListFilters[K]) {
     if (key === "query") {
@@ -480,7 +491,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         // Painel embutido na página de uma clínica (defaultClinicId setado):
         // histórico recorta pra ela só, senão viraria o histórico de todas
         // as clínicas da carteira e pareceria ter ido parar em /tarefas.
-        setArchived(await listArchivedTasks(1000, defaultClinicId ?? undefined))
+        setArchived(await listArchivedTasks(1000, defaultClinicId ?? undefined, scope))
       } catch {
         archivedLoadedRef.current = false
         toast.error("Falha ao carregar histórico.")
@@ -1026,29 +1037,31 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
             </Select>,
           )}
 
-          {filterField(
-            "Clínica",
-            <Select
-              value={filters.clinic}
-              items={{
-                [ALL]: "Todas",
-                [NONE]: "Sem clínica (interna)",
-                ...Object.fromEntries(clinics.map((c) => [c.id, c.name])),
-              }}
-              onValueChange={(v) => setFilter("clinic", v ?? ALL)}
-            >
-              {filterTrigger}
-              <SelectContent>
-                <SelectItem value={ALL}>Todas</SelectItem>
-                <SelectItem value={NONE}>Sem clínica (interna)</SelectItem>
-                {clinics.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>,
-          )}
+          {/* Em /tarefas/internas não há clínica a escolher: o recorte é fixo (ADR 0009). */}
+          {scope !== "internas" &&
+            filterField(
+              "Clínica",
+              <Select
+                value={filters.clinic}
+                items={{
+                  [ALL]: "Todas",
+                  ...(scope === "all" ? { [NONE]: "Sem clínica (interna)" } : {}),
+                  ...Object.fromEntries(clinics.map((c) => [c.id, c.name])),
+                }}
+                onValueChange={(v) => setFilter("clinic", v ?? ALL)}
+              >
+                {filterTrigger}
+                <SelectContent>
+                  <SelectItem value={ALL}>Todas</SelectItem>
+                  {scope === "all" && <SelectItem value={NONE}>Sem clínica (interna)</SelectItem>}
+                  {clinics.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>,
+            )}
 
           {filterField(
             "Responsável",
