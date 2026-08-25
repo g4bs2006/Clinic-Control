@@ -71,24 +71,37 @@ export async function openBlockersFor(taskId: string, status: TaskStatus): Promi
 }
 
 /**
- * Ids (dentre os informados) que têm ao menos uma bloqueadora aberta — usada
- * pelo board/lista para o indicador visual e pelo bulkUpdateTaskStatus para
- * decidir em lote sem uma query por tarefa.
+ * Bloqueadoras ainda abertas de cada tarefa informada (uma query em lote, com
+ * título — alimenta o tooltip do indicador visual no board/lista/dashboard e o
+ * `is_blocked` do TaskRow). Tarefas sem bloqueadora aberta não aparecem no map.
  */
-export async function listBlockedTaskIds(taskIds: string[]): Promise<Set<string>> {
-  if (!taskIds.length) return new Set();
+export async function listBlockedBy(taskIds: string[]): Promise<Map<string, DependencyTaskRow[]>> {
+  const byTask = new Map<string, DependencyTaskRow[]>();
+  if (!taskIds.length) return byTask;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("task_dependencies")
-    .select("task_id, blocker:tasks!task_dependencies_depends_on_task_id_fkey(status)")
+    .select("task_id, blocker:tasks!task_dependencies_depends_on_task_id_fkey(id, title, status)")
     .in("task_id", taskIds);
   if (error) throw new Error(error.message);
-  const blocked = new Set<string>();
   for (const row of data ?? []) {
-    const blocker = firstOf(row.blocker as SingleOrArray<{ status: TaskStatus }>);
-    if (blocker && !DONE_STATUSES.has(blocker.status)) blocked.add(row.task_id as string);
+    const blocker = firstOf(row.blocker as SingleOrArray<DependencyTaskRow>);
+    if (!blocker || DONE_STATUSES.has(blocker.status)) continue;
+    const tid = row.task_id as string;
+    const list = byTask.get(tid);
+    if (list) list.push(blocker);
+    else byTask.set(tid, [blocker]);
   }
-  return blocked;
+  return byTask;
+}
+
+/**
+ * Ids (dentre os informados) que têm ao menos uma bloqueadora aberta — usada
+ * pelo bulkUpdateTaskStatus para decidir em lote sem uma query por tarefa.
+ * Mesma fonte de `listBlockedBy` (que também traz os títulos para a UI).
+ */
+export async function listBlockedTaskIds(taskIds: string[]): Promise<Set<string>> {
+  return new Set((await listBlockedBy(taskIds)).keys());
 }
 
 /**

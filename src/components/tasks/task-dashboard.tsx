@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ListChecks,
+  Lock,
   Repeat,
   Users,
   Building2,
@@ -333,6 +334,18 @@ export function TaskDashboard({
                     className="flex w-full items-center gap-2 py-2 text-left hover:opacity-80"
                   >
                     <span className={cn("size-1.5 shrink-0 rounded-full", PRIORITY_DOT[t.priority])} />
+                    {t.is_blocked && (
+                      <span
+                        title={
+                          t.blocked_by.length
+                            ? `Bloqueada por: ${t.blocked_by.map((b) => b.title).join(", ")}`
+                            : "Bloqueada por outra tarefa ainda aberta"
+                        }
+                        className="shrink-0 text-red-400"
+                      >
+                        <Lock className="size-3" />
+                      </span>
+                    )}
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-foreground">{t.title}</span>
                       <span className="block truncate text-[0.68rem] text-muted-foreground">

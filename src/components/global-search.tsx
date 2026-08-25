@@ -327,6 +327,7 @@ export function GlobalSearch() {
             status: "pendente",
             assignees: assigneeIds.map((id) => ({ id, name: null })),
             is_blocked: false,
+            blocked_by: [],
             due_date: null,
             source: "manual",
             parent_task_id: null,

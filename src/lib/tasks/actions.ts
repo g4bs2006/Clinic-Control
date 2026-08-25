@@ -7,7 +7,7 @@ import { getCurrentProfile, getCarteiraScope } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
 import { TASK_STATUS_LABEL, TASK_ATTACHMENTS_BUCKET, type TaskCategory, type TaskPriority, type TaskStatus } from "./categories";
 import { notifyTaskAssigned, notifyTaskComment } from "@/lib/notifications/task-events";
-import { openBlockersFor, listBlockedTaskIds } from "./dependencies";
+import { openBlockersFor, listBlockedTaskIds, listBlockedBy } from "./dependencies";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ export type TaskRow = {
   assignees: TaskAssignee[];
   /** Tem bloqueadora aberta (task_dependencies) — indicador visual no board/lista. */
   is_blocked: boolean;
+  /** Bloqueadoras abertas (id + título p/ tooltip) — mesma fonte de `is_blocked`. */
+  blocked_by: { id: string; title: string }[];
   due_date: string | null;
   source: "manual" | "ia";
   parent_task_id: string | null;
@@ -137,12 +139,17 @@ function unwrapAssignees(rel: unknown): TaskAssignee[] {
   return rows.map((r) => firstOf(r.user)).filter((u): u is TaskAssignee => u != null);
 }
 
-/** Marca `is_blocked` numa lista de tarefas já carregada — uma query em lote. */
+/** Marca `is_blocked` + `blocked_by` numa lista de tarefas já carregada — uma query em lote. */
 async function attachBlocked(rows: TaskRow[]): Promise<TaskRow[]> {
   if (!rows.length) return rows;
-  const blocked = await listBlockedTaskIds(rows.map((r) => r.id));
-  if (!blocked.size) return rows;
-  return rows.map((r) => (blocked.has(r.id) ? { ...r, is_blocked: true } : r));
+  const blockedBy = await listBlockedBy(rows.map((r) => r.id));
+  if (!blockedBy.size) return rows;
+  return rows.map((r) => {
+    const blockers = blockedBy.get(r.id);
+    return blockers?.length
+      ? { ...r, is_blocked: true, blocked_by: blockers.map((b) => ({ id: b.id, title: b.title })) }
+      : r;
+  });
 }
 
 function mapTaskRow(row: Record<string, unknown>): TaskRow {
@@ -159,6 +166,7 @@ function mapTaskRow(row: Record<string, unknown>): TaskRow {
     // Preenchido depois via attachBlocked() — precisa dos ids de toda a página
     // de uma vez (uma query em lote, não uma por tarefa).
     is_blocked: false,
+    blocked_by: [],
     due_date: row.due_date as string | null,
     source: row.source as "manual" | "ia",
     parent_task_id: row.parent_task_id as string | null,

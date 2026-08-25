@@ -111,7 +111,14 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
                         </span>
                       )}
                       {t.is_blocked && t.status !== "concluida" && t.status !== "cancelada" && (
-                        <span title="Bloqueada por outra tarefa ainda aberta" className="mt-0.5 shrink-0 text-red-400">
+                        <span
+                          title={
+                            t.blocked_by.length
+                              ? `Bloqueada por: ${t.blocked_by.map((b) => b.title).join(", ")}`
+                              : "Bloqueada por outra tarefa ainda aberta"
+                          }
+                          className="mt-0.5 shrink-0 text-red-400"
+                        >
                           <Lock className="size-3" />
                         </span>
                       )}
