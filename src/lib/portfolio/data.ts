@@ -3,7 +3,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { listClinics } from "@/lib/clinics/actions";
 import { listSnapshotsForMonth, ensureFrozen, freezeAllPastMonths } from "@/lib/snapshots/actions";
-import { getLiveFunnel, getHelenaAccountOverview, listCachedClinicOverviews } from "@/lib/clinics/integration-actions";
+import {
+  getLiveFunnel,
+  getHelenaAccountOverview,
+  listCachedClinicOverviews,
+  listCachedClinicFunnels,
+  type CachedClinicFunnel,
+} from "@/lib/clinics/integration-actions";
 import { resolveStatus, type StatusRule } from "@/lib/snapshots/status";
 import { monthKey, prevMonth } from "@/lib/snapshots/month";
 import { summarize, type PortfolioRow } from "./aggregate";
@@ -59,6 +65,14 @@ export async function getPortfolioForMonth(
 
   const autoClinics = clinics.filter((c) => c.mode === "auto");
 
+  // O funil do mês corrente nunca tem snapshot (ensureFrozen só congela meses
+  // passados) — sem cache, TODA clínica automática pagava a paginação de
+  // cards da Helena a cada load da home, mesmo depois do teto/timeout da 0088.
+  // Cache diário (tabela clinic_helena_funnel_current, cron da 0089); ao vivo
+  // só para clínicas ainda sem linha no cache deste mês.
+  const funnelCache = isCurrent ? await listCachedClinicFunnels(month) : new Map<string, CachedClinicFunnel>();
+  const liveFunnelClinics = autoClinicsWithoutSnapshot.filter((c) => !funnelCache.has(c.id));
+
   // O overview (contatos/canais/status da conta) é estado "de agora", não
   // histórico. No mês corrente vem do cache diário (tabela
   // clinic_helena_overview, cron da 0088) — a home não pode pagar 3 chamadas à
@@ -68,7 +82,7 @@ export async function getPortfolioForMonth(
   const overviewClinics = isCurrent ? autoClinics.filter((c) => !overviewCache.has(c.id)) : [];
 
   const [liveFunnelResults, accountOverviewResults] = await Promise.all([
-    mapPool(autoClinicsWithoutSnapshot, HELENA_POOL, async (c) => getLiveFunnel(c.id)),
+    mapPool(liveFunnelClinics, HELENA_POOL, async (c) => getLiveFunnel(c.id)),
     mapPool(overviewClinics, HELENA_POOL, async (c) => getHelenaAccountOverview(c.id)),
   ]);
 
@@ -76,7 +90,14 @@ export async function getPortfolioForMonth(
     string,
     { ok: true; funnel: { leads: number; scheduled: number; rate: number; revenue: number } } | { ok: false; error: string }
   >();
-  autoClinicsWithoutSnapshot.forEach((c, idx) => {
+  // Cache diário primeiro (zero chamadas à Helena); o vivo cobre as sem linha.
+  for (const [clinicId, cached] of funnelCache) {
+    liveFunnelByClinicId.set(clinicId, {
+      ok: true,
+      funnel: { leads: cached.leads, scheduled: cached.scheduled, rate: cached.rate, revenue: cached.revenue },
+    });
+  }
+  liveFunnelClinics.forEach((c, idx) => {
     const result = liveFunnelResults[idx];
     if (result) {
       liveFunnelByClinicId.set(c.id, result);
@@ -318,15 +339,23 @@ export async function getComparison(months: string[]): Promise<ComparisonRow[]> 
   const currentMonth = monthKey(new Date());
   const wantsCurrent = months.includes(currentMonth);
 
-  // Auto sem snapshot no mês corrente → leitura ao vivo.
+  // Mesmo cache diário do funil usado na home (clinic_helena_funnel_current,
+  // cron da 0089) — sem ele, toda clínica automática sem snapshot do mês
+  // corrente pagava a paginação de cards da Helena a cada carga do comparativo.
+  const funnelCache = wantsCurrent ? await listCachedClinicFunnels(currentMonth) : new Map<string, CachedClinicFunnel>();
+
+  // Auto sem snapshot no mês corrente e sem linha no cache → leitura ao vivo.
   const autoLiveClinics = wantsCurrent
     ? clinics.filter(
-        (c) => c.mode === "auto" && !snapByClinicMonth.get(c.id)?.has(currentMonth),
+        (c) => c.mode === "auto" && !snapByClinicMonth.get(c.id)?.has(currentMonth) && !funnelCache.has(c.id),
       )
     : [];
 
   const liveResults = await mapPool(autoLiveClinics, HELENA_POOL, async (c) => getLiveFunnel(c.id));
   const liveRateByClinic = new Map<string, number>();
+  for (const [clinicId, cached] of funnelCache) {
+    liveRateByClinic.set(clinicId, cached.rate);
+  }
   autoLiveClinics.forEach((c, idx) => {
     const r = liveResults[idx];
     if (r?.ok) {
