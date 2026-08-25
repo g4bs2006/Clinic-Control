@@ -13,16 +13,20 @@ function excerpt(text: string, max = 140): string {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
-async function taskContext(taskId: string): Promise<
-  { title: string; assigned_to: string | null; created_by: string | null } | null
-> {
+async function taskContext(
+  taskId: string,
+): Promise<{ title: string; assignee_ids: string[]; created_by: string | null } | null> {
   const sb = createServiceClient();
-  const { data } = await sb
-    .from("tasks")
-    .select("title, assigned_to, created_by")
-    .eq("id", taskId)
-    .maybeSingle();
-  return (data as { title: string; assigned_to: string | null; created_by: string | null } | null) ?? null;
+  const [{ data: task }, { data: assignees }] = await Promise.all([
+    sb.from("tasks").select("title, created_by").eq("id", taskId).maybeSingle(),
+    sb.from("task_assignees").select("user_id").eq("task_id", taskId),
+  ]);
+  if (!task) return null;
+  return {
+    title: task.title as string,
+    created_by: task.created_by as string | null,
+    assignee_ids: (assignees ?? []).map((a) => a.user_id as string),
+  };
 }
 
 /** Alguém virou responsável por uma tarefa. */
@@ -78,8 +82,7 @@ export async function notifyTaskComment(opts: {
     });
   }
 
-  const stakeholders = new Set<string>();
-  if (ctx.assigned_to) stakeholders.add(ctx.assigned_to);
+  const stakeholders = new Set<string>(ctx.assignee_ids);
   if (ctx.created_by) stakeholders.add(ctx.created_by);
   for (const uid of stakeholders) {
     if (uid === opts.actor.id || mentioned.has(uid)) continue;

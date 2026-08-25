@@ -100,16 +100,37 @@ Deno.serve(async (req) => {
     const dev = (clinicId ? clinics.get(clinicId)?.developer_id : null) ?? assignedTo ?? null;
     return dev ? (devName.get(dev) ?? "Sem carteira") : "Sem carteira / interna";
   };
+  // Tarefas (tasks) têm vários responsáveis (task_assignees) desde a migration
+  // 0084 — o dev da clínica ainda tem prioridade; sem ele, a tarefa conta na
+  // carteira de CADA responsável (cada um vê a própria pendência no resumo).
+  // acompanhamentos mantém um responsável só (carteiraOf acima), sem mudança.
+  const carteirasOf = (clinicId: string | null, assigneeIds: string[]): string[] => {
+    const clinicDev = clinicId ? clinics.get(clinicId)?.developer_id : null;
+    if (clinicDev) return [devName.get(clinicDev) ?? "Sem carteira"];
+    if (assigneeIds.length) return assigneeIds.map((id) => devName.get(id) ?? "Sem carteira");
+    return ["Sem carteira / interna"];
+  };
 
   let text = "";
 
   if (type === "manha") {
     const { data: tasks } = await supabase
       .from("tasks")
-      .select("title, status, priority, due_date, clinic_id, assigned_to")
+      .select("id, title, status, priority, due_date, clinic_id")
       .is("parent_task_id", null)
       .is("archived_at", null)
       .in("status", ["pendente", "em_andamento"]);
+
+    const taskIds = (tasks ?? []).map((t) => t.id as string);
+    const { data: assigneeRows } = taskIds.length
+      ? await supabase.from("task_assignees").select("task_id, user_id").in("task_id", taskIds)
+      : { data: [] as { task_id: string; user_id: string }[] };
+    const assigneesByTask = new Map<string, string[]>();
+    for (const row of assigneeRows ?? []) {
+      const list = assigneesByTask.get(row.task_id as string);
+      if (list) list.push(row.user_id as string);
+      else assigneesByTask.set(row.task_id as string, [row.user_id as string]);
+    }
 
     const { data: acomps } = await supabase
       .from("acompanhamentos")
@@ -130,13 +151,15 @@ Deno.serve(async (req) => {
       return b;
     };
     for (const t of tasks ?? []) {
-      const b = bucket(carteiraOf(t.clinic_id as string | null, t.assigned_to as string | null));
-      b.total++;
       const clinicName = t.clinic_id ? clinics.get(t.clinic_id as string)?.name : null;
       const label = clinicName ? `${t.title} — ${clinicName}` : (t.title as string);
       const overdue = t.due_date && (t.due_date as string) < today;
-      if (overdue) b.overdue.push(label);
-      else if (t.priority === "urgente") b.urgent.push(label);
+      for (const dev of carteirasOf(t.clinic_id as string | null, assigneesByTask.get(t.id as string) ?? [])) {
+        const b = bucket(dev);
+        b.total++;
+        if (overdue) b.overdue.push(label);
+        else if (t.priority === "urgente") b.urgent.push(label);
+      }
     }
     for (const a of acomps ?? []) {
       bucket(carteiraOf(a.clinic_id as string | null, a.assigned_to as string | null)).acomp++;

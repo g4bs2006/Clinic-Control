@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Pin } from "lucide-react"
+import { Pin, Lock } from "lucide-react"
 import type { TaskRow } from "@/lib/tasks/actions"
 import {
   TASK_STATUSES,
@@ -110,6 +110,11 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
                           <Pin className="size-3" />
                         </span>
                       )}
+                      {t.is_blocked && t.status !== "concluida" && t.status !== "cancelada" && (
+                        <span title="Bloqueada por outra tarefa ainda aberta" className="mt-0.5 shrink-0 text-red-400">
+                          <Lock className="size-3" />
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-1 text-[0.65rem] text-muted-foreground">
                       <span className="rounded bg-accent/60 px-1 py-0.5">{categoryLabel[t.category] ?? t.category}</span>
@@ -124,7 +129,9 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
                       )}
                     </div>
                     <div className="flex items-center justify-between text-[0.65rem] text-muted-foreground">
-                      <span className="truncate">{t.assigned_to_name ?? "—"}</span>
+                      <span className="truncate">
+                        {t.assignees.map((a) => a.name).filter(Boolean).join(", ") || "—"}
+                      </span>
                       {t.due_date && (
                         <span className={isOverdue(t) ? "font-semibold text-red-400" : undefined}>
                           {dateLabel(t.due_date)}

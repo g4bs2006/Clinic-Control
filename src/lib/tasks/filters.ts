@@ -70,8 +70,7 @@ export type FilterableTask = Pick<
   | "priority"
   | "clinic_id"
   | "clinic_name"
-  | "assigned_to"
-  | "assigned_to_name"
+  | "assignees"
   | "due_date"
   | "source"
   | "recurrence_id"
@@ -87,11 +86,11 @@ export function activeFilterCount(f: ListFilters): number {
   ).length;
 }
 
-/** Busca livre, sem acento-insensibilidade: título + clínica + responsável. */
+/** Busca livre, sem acento-insensibilidade: título + clínica + responsáveis. */
 export function matchesQuery(t: FilterableTask, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  return [t.title, t.clinic_name, t.assigned_to_name]
+  return [t.title, t.clinic_name, ...t.assignees.map((a) => a.name)]
     .filter((v): v is string => !!v)
     .some((v) => v.toLowerCase().includes(q));
 }
@@ -130,7 +129,8 @@ export function matchesFilters(
     if (f.clinic === NONE ? t.clinic_id != null : t.clinic_id !== f.clinic) return false;
   }
   if (f.assignee !== ALL) {
-    if (f.assignee === NONE ? t.assigned_to != null : t.assigned_to !== f.assignee) return false;
+    const has = t.assignees.some((a) => a.id === f.assignee);
+    if (f.assignee === NONE ? t.assignees.length > 0 : !has) return false;
   }
   if (!matchesDue(t, f.due, today, endOfWeek)) return false;
   if (f.source !== "all" && t.source !== f.source) return false;

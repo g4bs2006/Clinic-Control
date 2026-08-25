@@ -300,13 +300,14 @@ export function GlobalSearch() {
     if (!taskClinic || !canCreate || saving) return;
     const title = query.trim();
     setSaving(true);
+    // Responsável padrão = dev da clínica (mesma regra das sugestões da IA).
+    const assigneeIds = taskClinic.developer_id ? [taskClinic.developer_id] : [];
     createTask({
       clinicId: taskClinic.id,
       title,
       category: defaultCategory,
       priority: "media",
-      // Responsável padrão = dev da clínica (mesma regra das sugestões da IA).
-      assignedTo: taskClinic.developer_id ?? null,
+      assigneeIds,
     })
       .then((res) => {
         if (!res.ok) {
@@ -324,8 +325,8 @@ export function GlobalSearch() {
             category: defaultCategory as TaskRow["category"],
             priority: "media",
             status: "pendente",
-            assigned_to: taskClinic.developer_id ?? null,
-            assigned_to_name: null,
+            assignees: assigneeIds.map((id) => ({ id, name: null })),
+            is_blocked: false,
             due_date: null,
             source: "manual",
             parent_task_id: null,

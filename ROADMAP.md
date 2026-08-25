@@ -49,7 +49,8 @@ Infra: **VPS Hostinger** (container atrás do nginx da stack `contactia`, auto-d
 - [x] Agenda "Minha semana" (visão pessoal por prazo)
 - [x] Seleção múltipla e ação em lote (lista + sugestões)
 - [x] **Tarefas recorrentes** — regras declarativas com materialização lazy, anti-empilhamento e fan-out por carteira; detector de rotinas e diagnóstico pós-onboarding.
-- [ ] **Dependências entre tarefas** — "bloqueada por"; envolve migration (`task_dependencies`) + UI + lógica de bloqueio. Épico: #33.
+- [x] **Responsáveis múltiplos** — `task_assignees` substitui o `assigned_to` único; lista plana, todos igualmente responsáveis (ADR 0008).
+- [x] **Dependências entre tarefas** — "bloqueada por"; `task_dependencies` (N:N) + UI de busca/chips no detalhe + bloqueio rígido no `updateTaskStatus`/`bulkUpdateTaskStatus`. Épico: #33 (ADR 0008).
 - [ ] **Calendário v1 (motor interno)** — reuniões/eventos/compromissos, avaliando reaproveitar o motor de recorrência de tarefas. Épico: #37. Sync com Google Calendar é v2, na frente Integrações externas (#56, #59).
 - [ ] **Lembretes externos de prazo** — depende da frente Agente & Notificações (a "Minha semana" já cobre o aviso in-app).
 
@@ -59,7 +60,6 @@ Infra: **VPS Hostinger** (container atrás do nginx da stack `contactia`, auto-d
 
 | Item | Observação |
 |---|---|
-| Dependências entre tarefas | Frente "núcleo operacional". Épico #33. |
 | Rollup semanal por IA | Consolidado semanal; volume de dados já suficiente para executar. |
 | Pendências operacionais (`CRON_SECRET` do collect-groups, `DEEPSEEK_API_KEY` na VPS, rotação da service key) | Sem dependência técnica, só execução. |
 | Dívida técnica: `max_tokens` fixo em 600 nas subtarefas por IA | Mesmo risco do bug corrigido na migration 0077 (resposta vazia em modelo de raciocínio) se um dia trocarem de modelo. |

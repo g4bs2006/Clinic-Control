@@ -163,15 +163,18 @@ export function TaskDashboard({
       byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + 1)
     }
 
-    // Carga por responsável (abertas + atrasadas).
+    // Carga por responsável (abertas + atrasadas). Tarefa com vários
+    // responsáveis conta pra cada um — é workload de cada pessoa, não da tarefa.
     const overdueIds = new Set(overdue.map((t) => t.id))
     const byAssignee = new Map<string, { open: number; overdue: number }>()
     for (const t of open) {
-      const key = t.assigned_to ?? "__none__"
-      const cur = byAssignee.get(key) ?? { open: 0, overdue: 0 }
-      cur.open++
-      if (overdueIds.has(t.id)) cur.overdue++
-      byAssignee.set(key, cur)
+      const keys = t.assignees.length ? t.assignees.map((a) => a.id) : ["__none__"]
+      for (const key of keys) {
+        const cur = byAssignee.get(key) ?? { open: 0, overdue: 0 }
+        cur.open++
+        if (overdueIds.has(t.id)) cur.overdue++
+        byAssignee.set(key, cur)
+      }
     }
 
     // Por clínica.
@@ -334,7 +337,8 @@ export function TaskDashboard({
                       <span className="block truncate text-sm text-foreground">{t.title}</span>
                       <span className="block truncate text-[0.68rem] text-muted-foreground">
                         {t.clinic_name ?? "Sem clínica"}
-                        {t.assigned_to && ` · ${profileName.get(t.assigned_to) ?? "—"}`}
+                        {t.assignees.length > 0 &&
+                          ` · ${t.assignees.map((a) => a.name).filter(Boolean).join(", ")}`}
                       </span>
                     </span>
                     <span className="shrink-0 text-right text-[0.68rem] font-medium tabular-nums text-red-400">
@@ -529,7 +533,8 @@ export function TaskDashboard({
                       <span className="block truncate text-sm text-foreground">{t.title}</span>
                       <span className="block truncate text-[0.68rem] text-muted-foreground">
                         {t.clinic_name ?? "Sem clínica"}
-                        {t.assigned_to_name && ` · ${t.assigned_to_name}`}
+                        {t.assignees.length > 0 &&
+                          ` · ${t.assignees.map((a) => a.name).filter(Boolean).join(", ")}`}
                         {t.completed_at && ` · ${fmtDate(t.completed_at)}`}
                       </span>
                     </span>
