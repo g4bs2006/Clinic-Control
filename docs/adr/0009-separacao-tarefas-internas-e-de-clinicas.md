@@ -70,6 +70,16 @@ que o justifique. Fica registrada como a evolução natural se o pedido vier.
   clínica — a escolha vira explícita em vez de efeito colateral de não escolher
   clínica.
 
+## Emenda (2026-08-25)
+
+A decisão 4 (sub-itens na sidebar) foi substituída por **abas na própria
+página**: "Todas" · "Das clínicas" · "Internas", no topo de `/tarefas`
+(`TarefasScopeTabs`), com o mesmo visual segmentado do switcher de views do
+TaskBoard. Motivo: no desenho de submenu, a linha do item ganhava um segundo
+alvo (chevron) e os ícones ficavam comprimidos na sidebar. As rotas próprias
+continuam valendo (deep-link, Ctrl+K e o recorte no servidor não mudam) —
+muda só onde a troca de escopo é clicada.
+
 ## Ver também
 
 - [0008](0008-responsaveis-multiplos-e-dependencias-entre-tarefas.md) — mesma
