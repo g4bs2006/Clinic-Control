@@ -1208,10 +1208,21 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                   Reabrir tarefa
                 </Button>
               ) : (
+                /* Bloqueio rígido (ADR 0008): sem concluir enquanto houver
+                   bloqueadora aberta — o aviso âmbar da seção de dependências
+                   explica o porquê. */
                 <Button
                   type="button"
                   className="w-full bg-emerald-600 text-white hover:bg-emerald-600/90"
-                  disabled={pending}
+                  disabled={pending || blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")}
+                  title={
+                    blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")
+                      ? `Bloqueada por: ${blockers
+                          .filter((b) => b.status !== "concluida" && b.status !== "cancelada")
+                          .map((b) => b.title)
+                          .join(", ")}`
+                      : undefined
+                  }
                   onClick={() => changeStatus("concluida")}
                 >
                   <CheckCircle2 className="size-4" />
@@ -1326,9 +1337,18 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
               Reabrir tarefa
             </Button>
           ) : (
+            /* Mesma regra do rail do modal: bloqueada não conclui (ADR 0008). */
             <Button
               type="button"
-              disabled={pending}
+              disabled={pending || blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")}
+              title={
+                blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")
+                  ? `Bloqueada por: ${blockers
+                      .filter((b) => b.status !== "concluida" && b.status !== "cancelada")
+                      .map((b) => b.title)
+                      .join(", ")}`
+                  : undefined
+              }
               onClick={() => changeStatus("concluida")}
               className="bg-emerald-600 text-white hover:bg-emerald-600/90"
             >

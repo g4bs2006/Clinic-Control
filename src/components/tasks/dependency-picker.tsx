@@ -6,7 +6,7 @@
 // de quem espera esta tarefa terminar.
 
 import { useState, useTransition } from "react"
-import { Link2, Search, X } from "lucide-react"
+import { Link2, Lock, Search, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -106,9 +106,15 @@ export function DependencySection({
                     type="button"
                     disabled={pending}
                     onClick={() => add(t.id)}
+                    title={t.is_blocked ? "Esta tarefa está bloqueada por dependência aberta" : undefined}
                     className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm text-foreground hover:bg-accent/40"
                   >
-                    <span className="truncate">{t.title}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      {t.is_blocked && (
+                        <Lock className="size-3 shrink-0 text-red-400" aria-label="bloqueada" />
+                      )}
+                      <span className="truncate">{t.title}</span>
+                    </span>
                     <span className="shrink-0 text-[0.65rem] text-muted-foreground">
                       {TASK_STATUS_LABEL[t.status]}
                     </span>

@@ -267,7 +267,11 @@ function TaskListItem({
           )}
           {t.is_blocked && !DONE_STATUSES.has(t.status) && (
             <span
-              title="Bloqueada por outra tarefa ainda aberta"
+              title={
+                t.blocked_by.length
+                  ? `Bloqueada por: ${t.blocked_by.map((b) => b.title).join(", ")}`
+                  : "Bloqueada por outra tarefa ainda aberta"
+              }
               className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[0.62rem] font-semibold text-red-400"
             >
               <Lock className="size-2.5" />
@@ -1297,7 +1301,21 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                   {selected.size} selecionada{selected.size !== 1 ? "s" : ""}
                 </span>
                 <div className="flex-1" />
-                <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => bulkStatus("concluida")}>
+                {/* Bloqueio rígido (ADR 0008): o servidor recusa o lote inteiro se
+                    alguma selecionada tiver bloqueadora aberta — o botão já avisa
+                    antes do clique, em vez de deixar o erro aparecer só no toast. */}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={pending || [...selected].some((id) => tasks.find((t) => t.id === id)?.is_blocked)}
+                  title={
+                    [...selected].some((id) => tasks.find((t) => t.id === id)?.is_blocked)
+                      ? "Há tarefa(s) bloqueada(s) por dependência na seleção — desmarque para concluir"
+                      : undefined
+                  }
+                  onClick={() => bulkStatus("concluida")}
+                >
                   Concluir ({selected.size})
                 </Button>
                 <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => bulkStatus("cancelada")}>
