@@ -16,12 +16,15 @@ export function TaskPageClient({
   profiles,
   categories,
   currentUserId,
+  isGestor = false,
 }: {
   taskId: string
   clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
   categories: TaskCategoryRow[]
   currentUserId: string | null
+  /** Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna. */
+  isGestor?: boolean
 }) {
   const router = useRouter()
   return (
@@ -32,6 +35,7 @@ export function TaskPageClient({
       profiles={profiles}
       categories={categories}
       currentUserId={currentUserId}
+      isGestor={isGestor}
       backHref="/tarefas"
       onClose={() => router.push("/tarefas")}
       onDeleted={() => router.push("/tarefas")}

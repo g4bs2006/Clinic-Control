@@ -34,6 +34,8 @@ type TaskPanelCtx = {
   profiles: ProfileOption[];
   categories: TaskCategoryRow[];
   currentUserId: string | null;
+  /** Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna. */
+  isGestor: boolean;
   openTask: (id: string) => void;
   close: () => void;
   minimize: () => void;
@@ -135,6 +137,7 @@ export function TaskPanelProvider({ children }: { children: React.ReactNode }) {
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [categories, setCategories] = useState<TaskCategoryRow[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isGestor, setIsGestor] = useState(false);
   const dirtyRef = useRef(false);
 
   // Dados de apoio, uma vez por sessão, no primeiro open — mesmo conjunto que
@@ -154,6 +157,7 @@ export function TaskPanelProvider({ children }: { children: React.ReactNode }) {
         setProfiles(us.map((u) => ({ id: u.id, name: u.name, email: u.email })));
         setCategories(cats);
         setCurrentUserId(me?.id ?? null);
+        setIsGestor(me?.role === "gestor");
         setSupportLoaded(true);
       })
       .catch(() => {
@@ -212,6 +216,7 @@ export function TaskPanelProvider({ children }: { children: React.ReactNode }) {
     profiles,
     categories,
     currentUserId,
+    isGestor,
     openTask,
     close,
     minimize,

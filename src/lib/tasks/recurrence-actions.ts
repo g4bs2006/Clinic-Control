@@ -216,7 +216,9 @@ export async function materializeRecurrences(): Promise<void> {
         .from("tasks")
         .select("recurrence_id, clinic_id")
         .in("recurrence_id", ruleIds)
-        .in("status", ["pendente", "em_andamento"]),
+        // Etapa de aprovação (ADR 0010): ocorrência interna em revisão ainda
+        // conta como aberta — não empilha uma nova enquanto ela não é aprovada.
+        .in("status", ["pendente", "em_andamento", "em_aprovacao"]),
     ]);
 
     const key = (rid: string, cid: string | null, date?: string) =>

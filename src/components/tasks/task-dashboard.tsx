@@ -25,7 +25,8 @@ import { listRecurrences, type TaskRecurrenceRow } from "@/lib/tasks/recurrence-
 import { getTaskCounts, type TaskCounts } from "@/lib/tasks/dashboard-actions"
 import { useTaskPanel } from "./task-panel-context"
 
-const OPEN = new Set<string>(["pendente", "em_andamento"])
+// Etapa de aprovação (ADR 0010): tarefa interna em revisão ainda conta como aberta.
+const OPEN = new Set<string>(["pendente", "em_andamento", "em_aprovacao"])
 
 const PRIORITY_DOT: Record<TaskPriority, string> = {
   urgente: "bg-red-500",

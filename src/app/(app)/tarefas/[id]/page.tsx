@@ -34,6 +34,7 @@ export default async function TarefaPage({ params }: { params: Promise<{ id: str
         profiles={profileOptions}
         categories={categories}
         currentUserId={currentProfile?.id ?? null}
+        isGestor={currentProfile?.role === "gestor"}
       />
     </main>
   )

@@ -17,12 +17,15 @@ export function PopupTaskClient({
   profiles,
   categories,
   currentUserId,
+  isGestor = false,
 }: {
   taskId: string
   clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
   categories: TaskCategoryRow[]
   currentUserId: string | null
+  /** Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna. */
+  isGestor?: boolean
 }) {
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
@@ -48,6 +51,7 @@ export function PopupTaskClient({
           profiles={profiles}
           categories={categories}
           currentUserId={currentUserId}
+          isGestor={isGestor}
           onClose={() => window.close()}
           onChanged={() => {}}
         />

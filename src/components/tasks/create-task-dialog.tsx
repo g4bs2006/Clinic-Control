@@ -27,6 +27,7 @@ export function CreateTaskDialog({
   defaultClinicId = null,
   currentUserId = null,
   onCreated,
+  isGestor = false,
 }: {
   clinics: (ClinicOption & { developerId: string | null })[]
   profiles: ProfileOption[]
@@ -34,6 +35,8 @@ export function CreateTaskDialog({
   defaultClinicId?: string | null
   currentUserId?: string | null
   onCreated: () => void
+  /** Etapa de aprovação (ADR 0010): só gestor cria tarefa interna já concluída. */
+  isGestor?: boolean
 }) {
   const defaultCategory = categories[0]?.slug ?? "outro"
   const initialClinicIds = useMemo(() => (defaultClinicId ? [defaultClinicId] : []), [defaultClinicId])
@@ -351,6 +354,8 @@ export function CreateTaskDialog({
                 onDueDateChange={setDueDate}
                 status={status}
                 onStatusChange={setStatus}
+                isInternal={isInternal}
+                isGestor={isGestor}
               />
               <div className="mt-1 flex justify-between gap-2">
                 <Button type="button" variant="ghost" className="h-10" onClick={() => setStep(2)}>

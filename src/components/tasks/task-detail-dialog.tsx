@@ -59,6 +59,7 @@ import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 const STATUS_PILL: Record<TaskStatus, string> = {
   pendente: "border-amber-500/25 bg-amber-500/10 text-amber-400",
   em_andamento: "border-sky-500/25 bg-sky-500/10 text-sky-300",
+  em_aprovacao: "border-violet-500/25 bg-violet-500/10 text-violet-400",
   concluida: "border-emerald-500/25 bg-emerald-500/10 text-emerald-400",
   cancelada: "border-border bg-muted/40 text-muted-foreground",
 }
@@ -140,9 +141,11 @@ interface TaskDetailDialogProps {
   backHref?: string
   /** Contêiner do detalhe: modal (padrão) ou painel ancorado (mini-player). */
   variant?: "modal" | "panel"
+  /** Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna. */
+  isGestor?: boolean
 }
 
-export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onPinned, onChanged, currentUserId = null, asPage = false, backHref = "/tarefas", variant = "modal" }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClose, onStatusChange, onDeleted, onPinned, onChanged, currentUserId = null, asPage = false, backHref = "/tarefas", variant = "modal", isGestor = false }: TaskDetailDialogProps) {
   const confirm = useConfirm()
   const [pending, startTransition] = useTransition()
   const [loading, setLoading] = useState(false)
@@ -775,7 +778,17 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                         <span className="flex-1">{p.title}</span>
                       </li>
                     ))}
-                    {subtasks.map((s) => (
+                    {subtasks.map((s) => {
+                      // Etapa de aprovação (ADR 0010): subtarefa é uma linha
+                      // de tasks — segue a mesma regra da tarefa (herda de
+                      // s.is_internal), o gate real é no servidor.
+                      const subtaskNeedsApproval = s.is_internal && !isGestor
+                      const subtaskStatusOptions = TASK_STATUSES.filter((st) => {
+                        if (st === "em_aprovacao" && !s.is_internal) return false
+                        if (st === "concluida" && subtaskNeedsApproval) return false
+                        return true
+                      })
+                      return (
                       <li key={s.id} className={`flex items-center gap-2 ${asPage ? "py-2.5" : "py-1.5"} ${rowText}`}>
                         <Link
                           href={`/tarefas/${s.id}`}
@@ -796,14 +809,14 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                         )}
                         <Select
                           value={s.status}
-                          items={Object.fromEntries(TASK_STATUSES.map((st) => [st, TASK_STATUS_LABEL[st]]))}
+                          items={Object.fromEntries(subtaskStatusOptions.map((st) => [st, TASK_STATUS_LABEL[st]]))}
                           onValueChange={(v) => v && changeSubtaskStatus(s.id, v as TaskStatus)}
                         >
                           <SelectTrigger className="h-8 min-w-[8rem] text-xs sm:h-6 sm:text-[0.7rem]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {TASK_STATUSES.map((st) => (
+                            {subtaskStatusOptions.map((st) => (
                               <SelectItem key={st} value={st}>
                                 {TASK_STATUS_LABEL[st]}
                               </SelectItem>
@@ -811,7 +824,8 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                           </SelectContent>
                         </Select>
                       </li>
-                    ))}
+                      )
+                    })}
                   </ul>
                 )}
 
@@ -1135,6 +1149,13 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     )
   }
 
+  // Etapa de aprovação (ADR 0010): tarefa de clínica sempre conclui direto;
+  // tarefa interna precisa de gestor — quem não é gestor manda pra aprovação
+  // em vez de concluir; já em aprovação, só o gestor tem o que fazer aqui.
+  const needsApproval = task.is_internal && !isGestor
+  const awaitingApproval = needsApproval && task.status === "em_aprovacao"
+  const isApproving = isGestor && task.status === "em_aprovacao"
+
   // ── Página (direção 1b): rail de detalhes à esquerda + fluxo central ──────────
   if (asPage) {
     return (
@@ -1206,10 +1227,14 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 onDueDateChange={(v) => saveField({ dueDate: v })}
                 status={task.status}
                 onStatusChange={changeStatus}
+                isGestor={isGestor}
               />
             </div>
 
-            {/* Ações principais fixadas no rodapé do rail */}
+            {/* Ações principais fixadas no rodapé do rail. Etapa de aprovação
+                (ADR 0010): tarefa interna sem gestor manda pra "Em aprovação"
+                em vez de concluir; o gestor concluindo a partir de "Em
+                aprovação" é a aprovação em si. */}
             <div className="flex shrink-0 flex-col gap-2 border-t border-border p-4">
               {task.status === "concluida" ? (
                 <Button type="button" variant="outline" className="w-full" disabled={pending} onClick={() => changeStatus("pendente")}>
@@ -1223,19 +1248,25 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                 <Button
                   type="button"
                   className="w-full bg-emerald-600 text-white hover:bg-emerald-600/90"
-                  disabled={pending || blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")}
+                  disabled={
+                    pending ||
+                    awaitingApproval ||
+                    blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")
+                  }
                   title={
                     blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")
                       ? `Bloqueada por: ${blockers
                           .filter((b) => b.status !== "concluida" && b.status !== "cancelada")
                           .map((b) => b.title)
                           .join(", ")}`
-                      : undefined
+                      : awaitingApproval
+                        ? "Aguardando aprovação do gestor"
+                        : undefined
                   }
-                  onClick={() => changeStatus("concluida")}
+                  onClick={() => changeStatus(needsApproval ? "em_aprovacao" : "concluida")}
                 >
                   <CheckCircle2 className="size-4" />
-                  Concluir tarefa
+                  {awaitingApproval ? "Em aprovação" : needsApproval ? "Enviar p/ aprovação" : isApproving ? "Aprovar tarefa" : "Concluir tarefa"}
                 </Button>
               )}
               <Button
@@ -1333,6 +1364,7 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
             onDueDateChange={(v) => saveField({ dueDate: v })}
             status={task.status}
             onStatusChange={changeStatus}
+            isGestor={isGestor}
           />
           {descriptionField}
           {dependencyBlock}
@@ -1348,23 +1380,30 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
               Reabrir tarefa
             </Button>
           ) : (
-            /* Mesma regra do rail do modal: bloqueada não conclui (ADR 0008). */
+            /* Mesma regra do rail do modal: bloqueada não conclui (ADR 0008),
+               e etapa de aprovação (ADR 0010) pra tarefa interna. */
             <Button
               type="button"
-              disabled={pending || blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")}
+              disabled={
+                pending ||
+                awaitingApproval ||
+                blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")
+              }
               title={
                 blockers.some((b) => b.status !== "concluida" && b.status !== "cancelada")
                   ? `Bloqueada por: ${blockers
                       .filter((b) => b.status !== "concluida" && b.status !== "cancelada")
                       .map((b) => b.title)
                       .join(", ")}`
-                  : undefined
+                  : awaitingApproval
+                    ? "Aguardando aprovação do gestor"
+                    : undefined
               }
-              onClick={() => changeStatus("concluida")}
+              onClick={() => changeStatus(needsApproval ? "em_aprovacao" : "concluida")}
               className="bg-emerald-600 text-white hover:bg-emerald-600/90"
             >
               <CheckCircle2 className="size-4" />
-              Concluir tarefa
+              {awaitingApproval ? "Em aprovação" : needsApproval ? "Enviar p/ aprovação" : isApproving ? "Aprovar tarefa" : "Concluir tarefa"}
             </Button>
           )}
           <div className="mt-2 flex gap-2 sm:mt-0">

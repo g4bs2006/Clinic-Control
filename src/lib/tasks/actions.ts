@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/auth/session";
+import { requireGestor } from "@/lib/auth/require-gestor";
 import { getCurrentProfile, getCarteiraScope } from "@/lib/users/actions";
 import { listClinics } from "@/lib/clinics/actions";
 import { TASK_STATUS_LABEL, TASK_ATTACHMENTS_BUCKET, type TaskCategory, type TaskPriority, type TaskStatus } from "./categories";
@@ -388,6 +389,14 @@ export async function createTask(
   // Tarefa interna (ADR 0009): a flag manda — clínica informada é ignorada
   // (o espelho com constraints exige clinic_id null quando is_internal).
   const isInternal = input.isInternal === true;
+
+  // Etapa de aprovação (ADR 0010): não dá pra nascer "concluída" pulando a
+  // aprovação — mesmo gate de updateTaskStatus, aplicado na criação.
+  if (isInternal && input.status === "concluida") {
+    const gestor = await requireGestor();
+    if (!gestor.ok) return { ok: false, error: "Apenas gestores podem criar tarefas internas já concluídas" };
+  }
+
   const { data, error } = await supabase
     .from("tasks")
     .insert({
@@ -432,6 +441,13 @@ export async function createTasksForClinics(
   const user = await getSessionUser();
   // Interna (ADR 0009): uma única tarefa sem clínica, ignorando a seleção.
   const isInternal = base.isInternal === true;
+
+  // Etapa de aprovação (ADR 0010): mesmo gate de createTask.
+  if (isInternal && base.status === "concluida") {
+    const gestor = await requireGestor();
+    if (!gestor.ok) return { ok: false, error: "Apenas gestores podem criar tarefas internas já concluídas" };
+  }
+
   const targets: (string | null)[] = isInternal ? [null] : clinicIds.length ? clinicIds : [null];
   const rows = targets.map((cid) => ({
     clinic_id: cid,
@@ -524,14 +540,21 @@ export async function updateTaskStatus(
   if (!user) return { ok: false, error: "Não autenticado" };
   const supabase = await createClient();
 
-  // Bloqueio rígido (ADR 0008): não avança para "em andamento"/"concluída"
-  // enquanto houver bloqueadora aberta.
+  // Bloqueio rígido (ADR 0008): não avança para "em andamento"/"em
+  // aprovação"/"concluída" enquanto houver bloqueadora aberta.
   const openBlockers = await openBlockersFor(id, status);
   if (openBlockers.length) {
     return { ok: false, error: `Bloqueada por: ${openBlockers.map((b) => `"${b.title}"`).join(", ")}` };
   }
 
-  const { data: current } = await supabase.from("tasks").select("status").eq("id", id).maybeSingle();
+  const { data: current } = await supabase.from("tasks").select("status, is_internal").eq("id", id).maybeSingle();
+
+  // Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna — de
+  // qualquer tela. Tarefa de clínica não passa por esse gate.
+  if (status === "concluida" && current?.is_internal) {
+    const gestor = await requireGestor();
+    if (!gestor.ok) return { ok: false, error: "Apenas gestores podem concluir tarefas internas" };
+  }
 
   const { error } = await supabase
     .from("tasks")
@@ -573,7 +596,7 @@ export async function bulkUpdateTaskStatus(
   // Bloqueio rígido (ADR 0008), mesma regra do updateTaskStatus — em lote,
   // recusa o lote inteiro (o usuário reseleciona sem as bloqueadas) em vez de
   // aplicar parcial e ter que explicar quais ficaram de fora.
-  if (status === "em_andamento" || status === "concluida") {
+  if (status === "em_andamento" || status === "em_aprovacao" || status === "concluida") {
     const blockedIds = await listBlockedTaskIds(ids);
     if (blockedIds.size) {
       return {
@@ -586,7 +609,24 @@ export async function bulkUpdateTaskStatus(
     }
   }
 
-  const { data: current } = await supabase.from("tasks").select("id, status").in("id", ids);
+  const { data: current } = await supabase.from("tasks").select("id, status, is_internal").in("id", ids);
+
+  // Etapa de aprovação (ADR 0010): recusa o lote inteiro se alguma
+  // selecionada for interna e quem pediu não for gestor — mesmo espírito do
+  // bloqueio por dependência acima (sem aplicar parcial).
+  if (status === "concluida" && (current ?? []).some((c) => c.is_internal)) {
+    const gestor = await requireGestor();
+    if (!gestor.ok) {
+      const internalCount = (current ?? []).filter((c) => c.is_internal).length;
+      return {
+        ok: false,
+        error:
+          internalCount === 1
+            ? "1 tarefa é interna — apenas gestores podem concluí-la."
+            : `${internalCount} tarefas são internas — apenas gestores podem concluí-las.`,
+      };
+    }
+  }
 
   const { error } = await supabase
     .from("tasks")

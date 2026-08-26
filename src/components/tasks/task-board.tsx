@@ -147,6 +147,7 @@ const DONE_STATUSES = new Set<TaskStatus>(["concluida", "cancelada"])
 const STATUS_TOAST: Record<TaskStatus, string> = {
   pendente: "Marcada como pendente",
   em_andamento: "Marcada como em andamento",
+  em_aprovacao: "Enviada para aprovação",
   concluida: "Tarefa concluída",
   cancelada: "Tarefa descartada",
 }
@@ -185,6 +186,7 @@ function TaskListItem({
   selectable = false,
   selected = false,
   onToggleSelect,
+  isGestor = false,
 }: {
   t: TaskRow
   categoryLabel: Record<string, string>
@@ -198,11 +200,22 @@ function TaskListItem({
   selectable?: boolean
   selected?: boolean
   onToggleSelect?: (id: string, shiftKey: boolean) => void
+  /** Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna. */
+  isGestor?: boolean
 }) {
   const isDone = t.status === "concluida"
   const isSnoozed = t.snoozed_until != null && t.snoozed_until > today
   const isInProgress = t.status === "em_andamento"
   const isPinned = t.pinned_at != null
+  // Etapa de aprovação (ADR 0010): tarefa de clínica sempre conclui direto;
+  // tarefa interna precisa de gestor — quem não é gestor manda pra aprovação.
+  const needsApproval = t.is_internal && !isGestor
+  const awaitingApproval = needsApproval && t.status === "em_aprovacao"
+  const statusOptions = TASK_STATUSES.filter((s) => {
+    if (s === "em_aprovacao" && !t.is_internal) return false
+    if (s === "concluida" && needsApproval) return false
+    return true
+  })
   return (
     // Mobile: card com borda (edição de status via detalhe/sheet); desktop: linha densa.
     // Em andamento é sinalizado só pelo selo "em andamento" (sem faixa lateral).
@@ -315,23 +328,26 @@ function TaskListItem({
 
       {/* Concluir/Reabrir — no desktop só aparece no hover/foco da linha; no
           mobile fica sempre visível (não há hover). Ocupa o espaço mesmo
-          invisível para não haver salto de layout ao passar o mouse. */}
+          invisível para não haver salto de layout ao passar o mouse.
+          Etapa de aprovação (ADR 0010): tarefa interna sem gestor manda pra
+          "Em aprovação" em vez de concluir direto; já em aprovação, só o
+          gestor tem o que fazer aqui. */}
       <Button
         type="button"
         size="sm"
         variant={isDone ? "ghost" : "outline"}
-        disabled={pending}
-        onClick={() => onChangeStatus(t.id, isDone ? "pendente" : "concluida")}
-        title={isDone ? "Reabrir tarefa" : "Concluir tarefa"}
+        disabled={pending || awaitingApproval}
+        onClick={() => onChangeStatus(t.id, isDone ? "pendente" : needsApproval ? "em_aprovacao" : "concluida")}
+        title={isDone ? "Reabrir tarefa" : awaitingApproval ? "Aguardando aprovação do gestor" : needsApproval ? "Enviar para aprovação" : "Concluir tarefa"}
         className={`gap-1 transition-opacity focus-visible:opacity-100 focus-visible:pointer-events-auto sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto sm:group-focus-within:opacity-100 sm:group-focus-within:pointer-events-auto ${isDone ? "text-muted-foreground hover:text-foreground" : "border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-500"}`}
       >
         {isDone ? <RotateCcw className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
-        {isDone ? "Reabrir" : "Concluir"}
+        {isDone ? "Reabrir" : awaitingApproval ? "Em aprovação" : needsApproval ? "Enviar p/ aprovação" : "Concluir"}
       </Button>
 
       <Select
         value={t.status}
-        items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
+        items={Object.fromEntries(statusOptions.map((s) => [s, TASK_STATUS_LABEL[s]]))}
         onValueChange={(v) => v && onChangeStatus(t.id, v as TaskStatus)}
       >
         {/* Select inline só no desktop — no mobile o status muda pelo detalhe (sheet) */}
@@ -339,7 +355,7 @@ function TaskListItem({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {TASK_STATUSES.map((s) => (
+          {statusOptions.map((s) => (
             <SelectItem key={s} value={s}>
               {TASK_STATUS_LABEL[s]}
             </SelectItem>
@@ -676,10 +692,10 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     setAnchorId(id)
   }
 
-  function bulkStatus(status: TaskStatus) {
-    const ids = [...selected]
+  function bulkStatus(status: TaskStatus, idsOverride?: string[]) {
+    const ids = idsOverride ?? [...selected]
     if (!ids.length) return
-    const idSet = selected
+    const idSet = new Set(ids)
     const snapshot = tasks
     // Otimista: aplica o novo status nas selecionadas na hora.
     setTasks((ts) =>
@@ -689,22 +705,49 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           : t,
       ),
     )
-    setSelected(new Set())
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) next.delete(id)
+      return next
+    })
     startTransition(async () => {
       const res = await bulkUpdateTaskStatus(ids, status)
       if (res.ok) {
         toast.success(
           status === "concluida"
             ? `${res.count} tarefa(s) concluída(s).`
-            : `${res.count} tarefa(s) descartada(s).`,
+            : status === "em_aprovacao"
+              ? `${res.count} tarefa(s) enviada(s) para aprovação.`
+              : `${res.count} tarefa(s) descartada(s).`,
         )
       } else {
         setTasks(snapshot)
-        setSelected(idSet)
+        setSelected((prev) => new Set([...prev, ...ids]))
         toast.error(res.error)
       }
     })
   }
+
+  // Etapa de aprovação (ADR 0010): a seleção em lote pode misturar tarefas
+  // internas e de clínica. Quem não é gestor não conclui interna direto — só
+  // manda pra aprovação (e só quem ainda não está lá) — enquanto a de clínica
+  // segue concluindo direto, como sempre. bulkUpdateTaskStatus recebe um
+  // status único por chamada, então a seleção mista dispara duas chamadas.
+  const selectedTasksList = [...selected].map((id) => tasks.find((t) => t.id === id)).filter((t): t is TaskRow => !!t)
+  const selectedInternalToApprove = isGestor ? [] : selectedTasksList.filter((t) => t.is_internal && t.status !== "em_aprovacao").map((t) => t.id)
+  const selectedClinicToConclude = isGestor
+    ? selectedTasksList.map((t) => t.id)
+    : selectedTasksList.filter((t) => !t.is_internal).map((t) => t.id)
+  function concludeSelected() {
+    if (selectedClinicToConclude.length) bulkStatus("concluida", selectedClinicToConclude)
+    if (selectedInternalToApprove.length) bulkStatus("em_aprovacao", selectedInternalToApprove)
+  }
+  const concludeSelectedLabel =
+    isGestor || !selectedInternalToApprove.length
+      ? "Concluir"
+      : selectedClinicToConclude.length
+        ? "Concluir/Enviar p/ aprovação"
+        : "Enviar p/ aprovação"
 
   // Na Lista, esconde concluídas/canceladas por padrão (a menos que o usuário
   // ligue "Mostrar concluídas" ou filtre explicitamente por um status). No Board
@@ -821,6 +864,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
               selectable={selectable}
               selected={selected.has(t.id)}
               onToggleSelect={toggleSelect}
+              isGestor={isGestor}
             />
           ))}
         </ul>
@@ -973,6 +1017,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           defaultClinicId={defaultClinicId}
           currentUserId={currentUserId}
           onCreated={refresh}
+          isGestor={isGestor}
         />
       </div>
 
@@ -1269,6 +1314,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                         onRemove={remove}
                         onSnooze={snooze}
                         onPin={pin}
+                        isGestor={isGestor}
                       />
                     ))}
                   </ul>
@@ -1292,7 +1338,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           )}
         </div>
       ) : view === "board" ? (
-        <KanbanBoard tasks={filtered} categoryLabel={categoryLabel} onOpen={setOpenTaskId} onStatusChange={changeStatus} />
+        <KanbanBoard tasks={filtered} categoryLabel={categoryLabel} onOpen={setOpenTaskId} onStatusChange={changeStatus} scope={scope} isGestor={isGestor} />
       ) : (
         <div className="flex flex-col gap-3">
           {focusBlock(pinnedTasks, true)}
@@ -1327,9 +1373,9 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                       ? "Há tarefa(s) bloqueada(s) por dependência na seleção — desmarque para concluir"
                       : undefined
                   }
-                  onClick={() => bulkStatus("concluida")}
+                  onClick={concludeSelected}
                 >
-                  Concluir ({selected.size})
+                  {concludeSelectedLabel} ({selected.size})
                 </Button>
                 <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => bulkStatus("cancelada")}>
                   Descartar ({selected.size})
@@ -1356,6 +1402,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
                 selectable
                 selected={selected.has(t.id)}
                 onToggleSelect={toggleSelect}
+                isGestor={isGestor}
               />
             ))}
           </ul>
@@ -1384,6 +1431,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
         onPinned={(id, pinnedAt) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, pinned_at: pinnedAt } : t)))}
         onChanged={refresh}
         currentUserId={currentUserId}
+        isGestor={isGestor}
       />
     </div>
   )

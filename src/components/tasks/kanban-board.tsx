@@ -2,14 +2,20 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Pin, Lock } from "lucide-react"
-import type { TaskRow } from "@/lib/tasks/actions"
+import { Pin, Lock, CheckCircle2, CheckCheck } from "lucide-react"
+import type { TaskRow, TaskScope } from "@/lib/tasks/actions"
 import {
   TASK_STATUSES,
   TASK_STATUS_LABEL,
   type TaskPriority,
   type TaskStatus,
 } from "@/lib/tasks/categories"
+
+// Etapa de aprovação (ADR 0010): só existe pra tarefas internas — o Kanban da
+// aba "Internas" troca a coluna final por "Em aprovação" e não mostra
+// Concluída/Cancelada (concluir vira uma ação explícita, não uma coluna pra
+// arrastar). As abas "Todas" e "Clínicas" mantêm o board de sempre.
+const KANBAN_STATUSES_INTERNAS = ["pendente", "em_andamento", "em_aprovacao"] as const satisfies readonly TaskStatus[]
 
 const PRIORITY_DOT: Record<TaskPriority, string> = {
   urgente: "bg-red-400",
@@ -37,11 +43,18 @@ interface KanbanBoardProps {
   categoryLabel: Record<string, string>
   onOpen: (id: string) => void
   onStatusChange: (id: string, status: TaskStatus) => void
+  /** Natureza da rota (ADR 0009) — decide se o board simplificado (ADR 0010) se aplica. */
+  scope?: TaskScope
+  /** Só gestor aprova (em_aprovacao → concluida) — ADR 0010. */
+  isGestor?: boolean
 }
 
-export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange, scope = "all", isGestor = false }: KanbanBoardProps) {
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+
+  const isInternasScope = scope === "internas"
+  const columns = isInternasScope ? KANBAN_STATUSES_INTERNAS : TASK_STATUSES
 
   const byStatus = new Map<TaskStatus, TaskRow[]>(TASK_STATUSES.map((s) => [s, []]))
   for (const t of tasks) byStatus.get(t.status)?.push(t)
@@ -52,8 +65,8 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {TASK_STATUSES.map((status) => {
+    <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${isInternasScope ? "lg:grid-cols-3" : "lg:grid-cols-5"}`}>
+      {columns.map((status) => {
         const items = byStatus.get(status) ?? []
         const isOver = dragOverStatus === status
         return (
@@ -148,6 +161,37 @@ export function KanbanBoard({ tasks, categoryLabel, onOpen, onStatusChange }: Ka
                         </span>
                       )}
                     </div>
+
+                    {/* Etapa de aprovação (ADR 0010): sem coluna "Concluída" pra
+                        arrastar — concluir é uma ação explícita. Quem não é
+                        gestor manda pra "Em aprovação"; o gestor aprova a
+                        partir dali. */}
+                    {isInternasScope && t.status !== "em_aprovacao" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onStatusChange(t.id, "em_aprovacao")
+                        }}
+                        className="flex items-center justify-center gap-1 rounded-md border border-emerald-500/30 py-1 text-[0.65rem] font-medium text-emerald-600 transition-colors hover:bg-emerald-500/10 dark:text-emerald-500"
+                      >
+                        <CheckCircle2 className="size-3" />
+                        Concluir
+                      </button>
+                    )}
+                    {isInternasScope && isGestor && t.status === "em_aprovacao" && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onStatusChange(t.id, "concluida")
+                        }}
+                        className="flex items-center justify-center gap-1 rounded-md border border-brand/30 py-1 text-[0.65rem] font-medium text-brand transition-colors hover:bg-brand/10"
+                      >
+                        <CheckCheck className="size-3" />
+                        Aprovar
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
