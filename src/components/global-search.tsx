@@ -34,7 +34,8 @@ const PRIORITY_DOT: Record<TaskPriority, string> = {
   baixa: "bg-zinc-400",
 };
 
-const OPEN_STATUSES = new Set(["pendente", "em_andamento"]);
+// Etapa de aprovação (ADR 0010): tarefa interna em revisão ainda conta como aberta.
+const OPEN_STATUSES = new Set(["pendente", "em_andamento", "em_aprovacao"]);
 
 function dueLabel(d: string): string {
   const [, m, day] = d.split("-");
@@ -57,6 +58,8 @@ export function GlobalSearch() {
   const [categories, setCategories] = useState<TaskCategoryRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna.
+  const [isGestor, setIsGestor] = useState(false);
   const [saving, setSaving] = useState(false);
   // Detalhe aberto a partir da paleta — a paleta se esconde enquanto o modal
   // está na tela e volta (com a lista recarregada) quando ele fecha.
@@ -171,6 +174,7 @@ export function GlobalSearch() {
         setCategories(cats);
         setProfiles(users.map((u) => ({ id: u.id, name: u.name, email: u.email })));
         setCurrentUserId(me?.id ?? null);
+        setIsGestor(me?.role === "gestor");
       })
       .catch((err) => {
         console.error("Erro ao carregar tarefas da clínica:", err);
@@ -430,6 +434,7 @@ export function GlobalSearch() {
         dirtyRef.current = true;
       }}
       currentUserId={currentUserId}
+      isGestor={isGestor}
     />
     {detailTaskId === null && (
     <div

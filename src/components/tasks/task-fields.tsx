@@ -55,6 +55,8 @@ interface TaskFieldsProps {
   onIsInternalChange?: (v: boolean) => void
   status?: TaskStatus
   onStatusChange?: (v: TaskStatus) => void
+  /** Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna. */
+  isGestor?: boolean
 }
 
 export function TaskFields({
@@ -77,7 +79,16 @@ export function TaskFields({
   onIsInternalChange,
   status,
   onStatusChange,
+  isGestor = false,
 }: TaskFieldsProps) {
+  // Etapa de aprovação (ADR 0010): "em aprovação" só existe pra tarefa
+  // interna; "concluída" fica fora do select pra quem não é gestor numa
+  // tarefa interna — evita uma escolha que o servidor recusaria.
+  const statusOptions = TASK_STATUSES.filter((s) => {
+    if (s === "em_aprovacao" && !isInternal) return false
+    if (s === "concluida" && isInternal && !isGestor) return false
+    return true
+  })
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {!hideClinic && (
@@ -123,14 +134,14 @@ export function TaskFields({
           Status
           <Select
             value={status}
-            items={Object.fromEntries(TASK_STATUSES.map((s) => [s, TASK_STATUS_LABEL[s]]))}
+            items={Object.fromEntries(statusOptions.map((s) => [s, TASK_STATUS_LABEL[s]]))}
             onValueChange={(v) => v && onStatusChange(v as TaskStatus)}
           >
             <SelectTrigger className="h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {TASK_STATUSES.map((s) => (
+              {statusOptions.map((s) => (
                 <SelectItem key={s} value={s}>
                   {TASK_STATUS_LABEL[s]}
                 </SelectItem>

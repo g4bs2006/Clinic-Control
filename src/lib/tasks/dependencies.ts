@@ -20,7 +20,7 @@ import type { TaskStatus } from "./categories";
 
 const DONE_STATUSES = new Set<TaskStatus>(["concluida", "cancelada"]);
 /** Status que exigem a tarefa desbloqueada para serem alcançados. */
-const GATED_STATUSES = new Set<TaskStatus>(["em_andamento", "concluida"]);
+const GATED_STATUSES = new Set<TaskStatus>(["em_andamento", "em_aprovacao", "concluida"]);
 
 export type DependencyTaskRow = {
   id: string;

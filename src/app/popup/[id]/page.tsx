@@ -40,6 +40,7 @@ export default async function PopupTaskPage({ params }: { params: Promise<{ id: 
         profiles={profileOptions}
         categories={categories}
         currentUserId={currentProfile?.id ?? null}
+        isGestor={currentProfile?.role === "gestor"}
       />
     </ConfirmProvider>
   )

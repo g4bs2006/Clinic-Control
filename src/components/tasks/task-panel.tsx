@@ -19,6 +19,7 @@ export function TaskPanel() {
     profiles,
     categories,
     currentUserId,
+    isGestor,
     close,
     minimize,
     expand,
@@ -116,6 +117,7 @@ export function TaskPanel() {
             profiles={profiles}
             categories={categories}
             currentUserId={currentUserId}
+            isGestor={isGestor}
             onClose={close}
             onChanged={markDirty}
             onDeleted={markDirty}
