@@ -23,6 +23,10 @@ import { buildReportXlsx } from "./xlsx";
 // limite de tempo da function; o restante fica para o próximo tick.
 const BATCH_SIZE = 40;
 const FETCH_CONCURRENCY = 6;
+// Tamanho de página nas leituras do staging. Toda leitura de report_raw_sessions
+// precisa paginar: sem `.range()` o PostgREST corta em 1000 linhas e o job entra
+// em laço infinito (`collected` empaca no teto e a análise nunca começa).
+const PAGE_SIZE = 500;
 
 export type TickResult =
   | { done: false; status: string; progressDone: number; progressTotal: number }
@@ -34,6 +38,7 @@ type JobRow = {
   date_start: string;
   date_end: string;
   status: string;
+  progress_done: number;
 };
 
 type StagedPayload = {
@@ -97,7 +102,7 @@ export async function processReportJob(jobId: string): Promise<TickResult> {
 
   const { data: jobData, error: jobError } = await supabase
     .from("report_jobs")
-    .select("id, clinic_id, date_start, date_end, status")
+    .select("id, clinic_id, date_start, date_end, status, progress_done")
     .eq("id", jobId)
     .maybeSingle();
   if (jobError) return failJob(jobId, jobError.message);
@@ -126,14 +131,22 @@ export async function processReportJob(jobId: string): Promise<TickResult> {
     // ── Lista de sessões do período (fonte da verdade do progresso) ──────
     const sessions = (await listSessionsRaw(token, { after, before })) as unknown as RawSession[];
 
-    // Sessões já em staging para esta clínica+período
-    const { data: stagedData } = await supabase
-      .from("report_raw_sessions")
-      .select("session_id")
-      .eq("clinic_id", job.clinic_id)
-      .gte("session_created_at", after)
-      .lte("session_created_at", before);
-    const stagedIds = new Set(((stagedData ?? []) as { session_id: string }[]).map((r) => r.session_id));
+    // Sessões já em staging para esta clínica+período (paginado — ver PAGE_SIZE)
+    const stagedIds = new Set<string>();
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("report_raw_sessions")
+        .select("session_id")
+        .eq("clinic_id", job.clinic_id)
+        .gte("session_created_at", after)
+        .lte("session_created_at", before)
+        .order("session_id")
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw new Error(`staging (leitura): ${error.message}`);
+      const rows = (data ?? []) as { session_id: string }[];
+      for (const r of rows) stagedIds.add(r.session_id);
+      if (rows.length < PAGE_SIZE) break;
+    }
 
     const missing = sessions.filter((s) => !stagedIds.has(s.id));
     const collected = sessions.length - missing.length;
@@ -182,6 +195,20 @@ export async function processReportJob(jobId: string): Promise<TickResult> {
       });
 
       const progressDone = collected + batch.length;
+
+      // Guarda contra tick estéril: um tick que coletou um lote e ainda assim
+      // não passou do progresso do tick anterior significa que a coleta não
+      // avança — o job erra em vez de virar laço infinito ressuscitado pelo
+      // auto-kick, queimando quota da Helena em silêncio.
+      if (progressDone <= job.progress_done) {
+        return failJob(
+          jobId,
+          `Coleta travada: ${batch.length} sessões coletadas sem avançar o progresso ` +
+            `(${progressDone}/${sessions.length}, igual ao tick anterior). ` +
+            `Provável leitura truncada do staging.`,
+        );
+      }
+
       await supabase
         .from("report_jobs")
         .update({ progress_done: progressDone, updated_at: new Date().toISOString() })
@@ -200,7 +227,7 @@ export async function processReportJob(jobId: string): Promise<TickResult> {
 
     // Staging completo do período (paginado)
     const staged: StagedPayload[] = [];
-    for (let from = 0; ; from += 500) {
+    for (let from = 0; ; from += PAGE_SIZE) {
       const { data, error } = await supabase
         .from("report_raw_sessions")
         .select("payload")
@@ -208,11 +235,11 @@ export async function processReportJob(jobId: string): Promise<TickResult> {
         .gte("session_created_at", after)
         .lte("session_created_at", before)
         .order("session_created_at")
-        .range(from, from + 499);
+        .range(from, from + PAGE_SIZE - 1);
       if (error) throw new Error(error.message);
       const rows = (data ?? []) as { payload: StagedPayload }[];
       staged.push(...rows.map((r) => r.payload));
-      if (rows.length < 500) break;
+      if (rows.length < PAGE_SIZE) break;
     }
 
     const { kw, custom } = await loadKeywords();
