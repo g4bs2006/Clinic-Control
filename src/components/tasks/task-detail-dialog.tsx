@@ -44,7 +44,6 @@ import {
   type TaskActivityRow,
 } from "@/lib/tasks/actions"
 import {
-  TASK_STATUSES,
   TASK_STATUS_LABEL,
   TASK_PRIORITY_LABEL,
   TASK_ATTACHMENTS_BUCKET,
@@ -52,6 +51,7 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from "@/lib/tasks/categories"
+import { concludeTarget, needsApproval, statusOptions } from "@/lib/tasks/approval"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
 // Pílulas de resumo (glance) do rail no modo página — os controles editáveis
@@ -779,15 +779,10 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                       </li>
                     ))}
                     {subtasks.map((s) => {
-                      // Etapa de aprovação (ADR 0010): subtarefa é uma linha
-                      // de tasks — segue a mesma regra da tarefa (herda de
-                      // s.is_internal), o gate real é no servidor.
-                      const subtaskNeedsApproval = s.is_internal && !isGestor
-                      const subtaskStatusOptions = TASK_STATUSES.filter((st) => {
-                        if (st === "em_aprovacao" && !s.is_internal) return false
-                        if (st === "concluida" && subtaskNeedsApproval) return false
-                        return true
-                      })
+                      // Etapa de aprovação (ADR 0011): subtarefa é uma linha
+                      // de tasks — segue a mesma regra da tarefa, sem exceção
+                      // por natureza; o gate real é no servidor.
+                      const subtaskStatusOptions = statusOptions(isGestor)
                       return (
                       <li key={s.id} className={`flex items-center gap-2 ${asPage ? "py-2.5" : "py-1.5"} ${rowText}`}>
                         <Link
@@ -1149,11 +1144,11 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
     )
   }
 
-  // Etapa de aprovação (ADR 0010): tarefa de clínica sempre conclui direto;
-  // tarefa interna precisa de gestor — quem não é gestor manda pra aprovação
-  // em vez de concluir; já em aprovação, só o gestor tem o que fazer aqui.
-  const needsApproval = task.is_internal && !isGestor
-  const awaitingApproval = needsApproval && task.status === "em_aprovacao"
+  // Etapa de aprovação (ADR 0011): toda tarefa precisa de gestor pra encerrar
+  // — quem não é gestor manda pra aprovação em vez de concluir; já em
+  // aprovação, só o gestor tem o que fazer aqui.
+  const mustApprove = needsApproval(isGestor)
+  const awaitingApproval = mustApprove && task.status === "em_aprovacao"
   const isApproving = isGestor && task.status === "em_aprovacao"
 
   // ── Página (direção 1b): rail de detalhes à esquerda + fluxo central ──────────
@@ -1263,10 +1258,10 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                         ? "Aguardando aprovação do gestor"
                         : undefined
                   }
-                  onClick={() => changeStatus(needsApproval ? "em_aprovacao" : "concluida")}
+                  onClick={() => changeStatus(concludeTarget(isGestor))}
                 >
                   <CheckCircle2 className="size-4" />
-                  {awaitingApproval ? "Em aprovação" : needsApproval ? "Enviar p/ aprovação" : isApproving ? "Aprovar tarefa" : "Concluir tarefa"}
+                  {awaitingApproval ? "Em aprovação" : mustApprove ? "Enviar p/ aprovação" : isApproving ? "Aprovar tarefa" : "Concluir tarefa"}
                 </Button>
               )}
               <Button
@@ -1399,11 +1394,11 @@ export function TaskDetailDialog({ taskId, clinics, profiles, categories, onClos
                     ? "Aguardando aprovação do gestor"
                     : undefined
               }
-              onClick={() => changeStatus(needsApproval ? "em_aprovacao" : "concluida")}
+              onClick={() => changeStatus(concludeTarget(isGestor))}
               className="bg-emerald-600 text-white hover:bg-emerald-600/90"
             >
               <CheckCircle2 className="size-4" />
-              {awaitingApproval ? "Em aprovação" : needsApproval ? "Enviar p/ aprovação" : isApproving ? "Aprovar tarefa" : "Concluir tarefa"}
+              {awaitingApproval ? "Em aprovação" : mustApprove ? "Enviar p/ aprovação" : isApproving ? "Aprovar tarefa" : "Concluir tarefa"}
             </Button>
           )}
           <div className="mt-2 flex gap-2 sm:mt-0">

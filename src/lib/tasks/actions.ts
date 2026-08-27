@@ -344,7 +344,11 @@ export async function unarchiveTask(
   return { ok: true };
 }
 
-/** Total de tarefas pendentes atribuídas ao usuário logado (widget da home). */
+/**
+ * Total de tarefas pendentes atribuídas ao usuário logado (widget da home).
+ * "Em aprovação" conta como pendência (ADR 0011): a tarefa só sai da conta
+ * quando o gestor aprova — enquanto espera revisão, ainda é trabalho aberto.
+ */
 export async function countMyPendingTasks(): Promise<number> {
   const profile = await getCurrentProfile();
   if (!profile) return 0;
@@ -355,7 +359,7 @@ export async function countMyPendingTasks(): Promise<number> {
     .from("tasks")
     .select("id", { count: "exact", head: true })
     .in("id", ids)
-    .in("status", ["pendente", "em_andamento"]);
+    .in("status", ["pendente", "em_andamento", "em_aprovacao"]);
   if (error) throw new Error(error.message);
   return count ?? 0;
 }
@@ -390,11 +394,12 @@ export async function createTask(
   // (o espelho com constraints exige clinic_id null quando is_internal).
   const isInternal = input.isInternal === true;
 
-  // Etapa de aprovação (ADR 0010): não dá pra nascer "concluída" pulando a
-  // aprovação — mesmo gate de updateTaskStatus, aplicado na criação.
-  if (isInternal && input.status === "concluida") {
+  // Etapa de aprovação (ADR 0010, universal desde o ADR 0011): não dá pra
+  // nascer "concluída" pulando a aprovação — mesmo gate de updateTaskStatus,
+  // aplicado na criação, para tarefa interna e de clínica.
+  if (input.status === "concluida") {
     const gestor = await requireGestor();
-    if (!gestor.ok) return { ok: false, error: "Apenas gestores podem criar tarefas internas já concluídas" };
+    if (!gestor.ok) return { ok: false, error: "Apenas gestores podem criar tarefas já concluídas" };
   }
 
   const { data, error } = await supabase
@@ -442,10 +447,11 @@ export async function createTasksForClinics(
   // Interna (ADR 0009): uma única tarefa sem clínica, ignorando a seleção.
   const isInternal = base.isInternal === true;
 
-  // Etapa de aprovação (ADR 0010): mesmo gate de createTask.
-  if (isInternal && base.status === "concluida") {
+  // Etapa de aprovação (ADR 0011): mesmo gate de createTask, sem exceção por
+  // natureza — vale para o lote de clínicas também.
+  if (base.status === "concluida") {
     const gestor = await requireGestor();
-    if (!gestor.ok) return { ok: false, error: "Apenas gestores podem criar tarefas internas já concluídas" };
+    if (!gestor.ok) return { ok: false, error: "Apenas gestores podem criar tarefas já concluídas" };
   }
 
   const targets: (string | null)[] = isInternal ? [null] : clinicIds.length ? clinicIds : [null];
@@ -547,13 +553,14 @@ export async function updateTaskStatus(
     return { ok: false, error: `Bloqueada por: ${openBlockers.map((b) => `"${b.title}"`).join(", ")}` };
   }
 
-  const { data: current } = await supabase.from("tasks").select("status, is_internal").eq("id", id).maybeSingle();
+  const { data: current } = await supabase.from("tasks").select("status").eq("id", id).maybeSingle();
 
-  // Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna — de
-  // qualquer tela. Tarefa de clínica não passa por esse gate.
-  if (status === "concluida" && current?.is_internal) {
+  // Etapa de aprovação (ADR 0011): só gestor conclui — de qualquer tela e
+  // para qualquer natureza de tarefa. Quem não é gestor manda para
+  // "em aprovação"; a conclusão é o ato de aprovar.
+  if (status === "concluida") {
     const gestor = await requireGestor();
-    if (!gestor.ok) return { ok: false, error: "Apenas gestores podem concluir tarefas internas" };
+    if (!gestor.ok) return { ok: false, error: "Apenas gestores podem concluir tarefas" };
   }
 
   const { error } = await supabase
@@ -609,21 +616,20 @@ export async function bulkUpdateTaskStatus(
     }
   }
 
-  const { data: current } = await supabase.from("tasks").select("id, status, is_internal").in("id", ids);
+  const { data: current } = await supabase.from("tasks").select("id, status").in("id", ids);
 
-  // Etapa de aprovação (ADR 0010): recusa o lote inteiro se alguma
-  // selecionada for interna e quem pediu não for gestor — mesmo espírito do
+  // Etapa de aprovação (ADR 0011): concluir em lote é privilégio de gestor,
+  // sem exceção por natureza. Recusa o lote inteiro — mesmo espírito do
   // bloqueio por dependência acima (sem aplicar parcial).
-  if (status === "concluida" && (current ?? []).some((c) => c.is_internal)) {
+  if (status === "concluida") {
     const gestor = await requireGestor();
     if (!gestor.ok) {
-      const internalCount = (current ?? []).filter((c) => c.is_internal).length;
       return {
         ok: false,
         error:
-          internalCount === 1
-            ? "1 tarefa é interna — apenas gestores podem concluí-la."
-            : `${internalCount} tarefas são internas — apenas gestores podem concluí-las.`,
+          ids.length === 1
+            ? "Apenas gestores podem concluir tarefas — envie para aprovação."
+            : "Apenas gestores podem concluir tarefas — envie as selecionadas para aprovação.",
       };
     }
   }

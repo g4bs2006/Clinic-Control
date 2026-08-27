@@ -34,3 +34,5 @@ Numeração sequencial, nunca reaproveitada. Arquivo: `00XX-titulo-em-kebab.md`.
 | [0007](0007-sistemas-como-matriz-clinica-x-sistema.md) | `/sistemas` como matriz clínica × sistema | Aceito |
 | [0008](0008-responsaveis-multiplos-e-dependencias-entre-tarefas.md) | Responsáveis múltiplos e dependências entre tarefas | Aceito |
 | [0009](0009-separacao-tarefas-internas-e-de-clinicas.md) | Separação de tarefas internas e tarefas das clínicas | Aceito |
+| [0010](0010-etapa-de-aprovacao-para-tarefas-internas.md) | Etapa de aprovação para tarefas internas | Substituído em parte por 0011 |
+| [0011](0011-etapa-de-aprovacao-para-todas-as-tarefas.md) | Etapa de aprovação para todas as tarefas, board único | Aceito |

@@ -1,6 +1,6 @@
 # 0010 — Etapa de aprovação para tarefas internas
 
-- **Status:** Aceito
+- **Status:** Substituído em parte por [0011](0011-etapa-de-aprovacao-para-todas-as-tarefas.md)
 - **Registrado em:** 2026-08-26
 
 ## Contexto
@@ -69,8 +69,25 @@ verdade.
   a evolução natural é qualificar `em_aprovacao` com quem aprovou, não criar
   um status novo por nível.
 
+## Emenda (2026-08-27)
+
+As decisões 1, 2 e 3 foram substituídas pelo
+[0011](0011-etapa-de-aprovacao-para-todas-as-tarefas.md): a etapa "Em aprovação"
+passa a valer para **todas** as tarefas (a constraint
+`tasks_em_aprovacao_requires_internal` cai na `0091`), o gate de gestor perde a
+condição `is_internal`, e o Kanban de 3 colunas vira o board único das três
+abas. Ou seja: a alternativa recusada aqui — "Etapa de aprovação para todas as
+tarefas" — foi adotada. O motivo da recusa (fricção para quem atende as
+clínicas) não foi refutado; passou a ser um custo aceito, e está registrado nas
+Consequências do 0011 junto com o sinal que indicaria voltar atrás.
+
+As decisões 4 (bloqueio por dependência cobrindo `em_aprovacao`) e 5 ("em
+aprovação" conta como aberta) continuam valendo sem mudança.
+
 ## Ver também
 
+- [0011](0011-etapa-de-aprovacao-para-todas-as-tarefas.md) — estende esta
+  decisão a todas as tarefas e unifica o board.
 - [0009](0009-separacao-tarefas-internas-e-de-clinicas.md) — a flag
   `is_internal` que esta decisão usa para restringir `em_aprovacao`.
 - [0008](0008-responsaveis-multiplos-e-dependencias-entre-tarefas.md) —

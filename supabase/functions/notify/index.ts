@@ -119,7 +119,9 @@ Deno.serve(async (req) => {
       .select("id, title, status, priority, due_date, clinic_id")
       .is("parent_task_id", null)
       .is("archived_at", null)
-      .in("status", ["pendente", "em_andamento"]);
+      // "Em aprovação" ainda é trabalho aberto (ADR 0011) — entra no resumo da
+      // manhã até o gestor aprovar.
+      .in("status", ["pendente", "em_andamento", "em_aprovacao"]);
 
     const taskIds = (tasks ?? []).map((t) => t.id as string);
     const { data: assigneeRows } = taskIds.length
