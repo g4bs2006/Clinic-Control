@@ -14,12 +14,12 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import {
   TASK_PRIORITIES,
   TASK_PRIORITY_LABEL,
-  TASK_STATUSES,
   TASK_STATUS_LABEL,
   type TaskCategory,
   type TaskPriority,
   type TaskStatus,
 } from "@/lib/tasks/categories"
+import { statusOptions } from "@/lib/tasks/approval"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 
 export const NO_CLINIC = "__none__"
@@ -81,14 +81,9 @@ export function TaskFields({
   onStatusChange,
   isGestor = false,
 }: TaskFieldsProps) {
-  // Etapa de aprovação (ADR 0010): "em aprovação" só existe pra tarefa
-  // interna; "concluída" fica fora do select pra quem não é gestor numa
-  // tarefa interna — evita uma escolha que o servidor recusaria.
-  const statusOptions = TASK_STATUSES.filter((s) => {
-    if (s === "em_aprovacao" && !isInternal) return false
-    if (s === "concluida" && isInternal && !isGestor) return false
-    return true
-  })
+  // Etapa de aprovação (ADR 0011): "em aprovação" vale para qualquer tarefa;
+  // "concluída" fica fora do select pra quem não é gestor.
+  const statusItems = statusOptions(isGestor)
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {!hideClinic && (
@@ -134,14 +129,14 @@ export function TaskFields({
           Status
           <Select
             value={status}
-            items={Object.fromEntries(statusOptions.map((s) => [s, TASK_STATUS_LABEL[s]]))}
+            items={Object.fromEntries(statusItems.map((s) => [s, TASK_STATUS_LABEL[s]]))}
             onValueChange={(v) => v && onStatusChange(v as TaskStatus)}
           >
             <SelectTrigger className="h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {statusOptions.map((s) => (
+              {statusItems.map((s) => (
                 <SelectItem key={s} value={s}>
                   {TASK_STATUS_LABEL[s]}
                 </SelectItem>

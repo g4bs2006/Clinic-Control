@@ -63,6 +63,7 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from "@/lib/tasks/categories"
+import { concludeTarget, needsApproval, statusOptions } from "@/lib/tasks/approval"
 import type { TaskCategoryRow } from "@/lib/tasks/category-actions"
 import type { SuggestionJobRow } from "@/lib/tasks/generate-actions"
 import { agendaBucket, spDateParts, AGENDA_ORDER, AGENDA_LABEL, type AgendaBucket } from "@/lib/tasks/agenda"
@@ -200,22 +201,18 @@ function TaskListItem({
   selectable?: boolean
   selected?: boolean
   onToggleSelect?: (id: string, shiftKey: boolean) => void
-  /** Etapa de aprovação (ADR 0010): só gestor conclui tarefa interna. */
+  /** Etapa de aprovação (ADR 0011): só gestor conclui — qualquer natureza. */
   isGestor?: boolean
 }) {
   const isDone = t.status === "concluida"
   const isSnoozed = t.snoozed_until != null && t.snoozed_until > today
   const isInProgress = t.status === "em_andamento"
   const isPinned = t.pinned_at != null
-  // Etapa de aprovação (ADR 0010): tarefa de clínica sempre conclui direto;
-  // tarefa interna precisa de gestor — quem não é gestor manda pra aprovação.
-  const needsApproval = t.is_internal && !isGestor
-  const awaitingApproval = needsApproval && t.status === "em_aprovacao"
-  const statusOptions = TASK_STATUSES.filter((s) => {
-    if (s === "em_aprovacao" && !t.is_internal) return false
-    if (s === "concluida" && needsApproval) return false
-    return true
-  })
+  // Etapa de aprovação (ADR 0011): toda tarefa passa por revisão — quem não é
+  // gestor manda pra aprovação em vez de concluir, interna ou de clínica.
+  const mustApprove = needsApproval(isGestor)
+  const awaitingApproval = mustApprove && t.status === "em_aprovacao"
+  const statusItems = statusOptions(isGestor)
   return (
     // Mobile: card com borda (edição de status via detalhe/sheet); desktop: linha densa.
     // Em andamento é sinalizado só pelo selo "em andamento" (sem faixa lateral).
@@ -329,7 +326,7 @@ function TaskListItem({
       {/* Concluir/Reabrir — no desktop só aparece no hover/foco da linha; no
           mobile fica sempre visível (não há hover). Ocupa o espaço mesmo
           invisível para não haver salto de layout ao passar o mouse.
-          Etapa de aprovação (ADR 0010): tarefa interna sem gestor manda pra
+          Etapa de aprovação (ADR 0011): quem não é gestor manda pra
           "Em aprovação" em vez de concluir direto; já em aprovação, só o
           gestor tem o que fazer aqui. */}
       <Button
@@ -337,17 +334,17 @@ function TaskListItem({
         size="sm"
         variant={isDone ? "ghost" : "outline"}
         disabled={pending || awaitingApproval}
-        onClick={() => onChangeStatus(t.id, isDone ? "pendente" : needsApproval ? "em_aprovacao" : "concluida")}
-        title={isDone ? "Reabrir tarefa" : awaitingApproval ? "Aguardando aprovação do gestor" : needsApproval ? "Enviar para aprovação" : "Concluir tarefa"}
+        onClick={() => onChangeStatus(t.id, isDone ? "pendente" : concludeTarget(isGestor))}
+        title={isDone ? "Reabrir tarefa" : awaitingApproval ? "Aguardando aprovação do gestor" : mustApprove ? "Enviar para aprovação" : "Concluir tarefa"}
         className={`gap-1 transition-opacity focus-visible:opacity-100 focus-visible:pointer-events-auto sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto sm:group-focus-within:opacity-100 sm:group-focus-within:pointer-events-auto ${isDone ? "text-muted-foreground hover:text-foreground" : "border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-500"}`}
       >
         {isDone ? <RotateCcw className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
-        {isDone ? "Reabrir" : awaitingApproval ? "Em aprovação" : needsApproval ? "Enviar p/ aprovação" : "Concluir"}
+        {isDone ? "Reabrir" : awaitingApproval ? "Em aprovação" : mustApprove ? "Enviar p/ aprovação" : "Concluir"}
       </Button>
 
       <Select
         value={t.status}
-        items={Object.fromEntries(statusOptions.map((s) => [s, TASK_STATUS_LABEL[s]]))}
+        items={Object.fromEntries(statusItems.map((s) => [s, TASK_STATUS_LABEL[s]]))}
         onValueChange={(v) => v && onChangeStatus(t.id, v as TaskStatus)}
       >
         {/* Select inline só no desktop — no mobile o status muda pelo detalhe (sheet) */}
@@ -355,7 +352,7 @@ function TaskListItem({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {statusOptions.map((s) => (
+          {statusItems.map((s) => (
             <SelectItem key={s} value={s}>
               {TASK_STATUS_LABEL[s]}
             </SelectItem>
@@ -728,30 +725,24 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
     })
   }
 
-  // Etapa de aprovação (ADR 0010): a seleção em lote pode misturar tarefas
-  // internas e de clínica. Quem não é gestor não conclui interna direto — só
-  // manda pra aprovação (e só quem ainda não está lá) — enquanto a de clínica
-  // segue concluindo direto, como sempre. bulkUpdateTaskStatus recebe um
-  // status único por chamada, então a seleção mista dispara duas chamadas.
+  // Etapa de aprovação (ADR 0011): a natureza da tarefa não muda mais o
+  // caminho — o papel de quem age muda. Gestor conclui o lote; quem não é
+  // gestor manda pra aprovação (só as que ainda não estão lá, senão a chamada
+  // não teria efeito e o toast mentiria).
   const selectedTasksList = [...selected].map((id) => tasks.find((t) => t.id === id)).filter((t): t is TaskRow => !!t)
-  const selectedInternalToApprove = isGestor ? [] : selectedTasksList.filter((t) => t.is_internal && t.status !== "em_aprovacao").map((t) => t.id)
-  const selectedClinicToConclude = isGestor
-    ? selectedTasksList.map((t) => t.id)
-    : selectedTasksList.filter((t) => !t.is_internal).map((t) => t.id)
+  const selectedToApprove = isGestor ? [] : selectedTasksList.filter((t) => t.status !== "em_aprovacao").map((t) => t.id)
+  const selectedToConclude = isGestor ? selectedTasksList.map((t) => t.id) : []
   function concludeSelected() {
-    if (selectedClinicToConclude.length) bulkStatus("concluida", selectedClinicToConclude)
-    if (selectedInternalToApprove.length) bulkStatus("em_aprovacao", selectedInternalToApprove)
+    if (selectedToConclude.length) bulkStatus("concluida", selectedToConclude)
+    if (selectedToApprove.length) bulkStatus("em_aprovacao", selectedToApprove)
   }
-  const concludeSelectedLabel =
-    isGestor || !selectedInternalToApprove.length
-      ? "Concluir"
-      : selectedClinicToConclude.length
-        ? "Concluir/Enviar p/ aprovação"
-        : "Enviar p/ aprovação"
+  const concludeSelectedLabel = isGestor ? "Concluir" : "Enviar p/ aprovação"
 
   // Na Lista, esconde concluídas/canceladas por padrão (a menos que o usuário
-  // ligue "Mostrar concluídas" ou filtre explicitamente por um status). No Board
-  // as colunas Concluída/Cancelada continuam visíveis.
+  // ligue "Mostrar concluídas" ou filtre explicitamente por um status). No
+  // Board o recorte é irrelevante desde o ADR 0011: as colunas Concluída e
+  // Cancelada não existem mais, então o que está encerrado não tem onde
+  // aparecer — quem quer ver fechado usa o Histórico.
   const { today, endOfWeek } = spDateParts(new Date())
   const isSnoozedActive = (t: TaskRow) => t.snoozed_until != null && t.snoozed_until > today
   const snoozedCount = tasks.filter(isSnoozedActive).length
@@ -1338,7 +1329,7 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
           )}
         </div>
       ) : view === "board" ? (
-        <KanbanBoard tasks={filtered} categoryLabel={categoryLabel} onOpen={setOpenTaskId} onStatusChange={changeStatus} scope={scope} isGestor={isGestor} />
+        <KanbanBoard tasks={filtered} categoryLabel={categoryLabel} onOpen={setOpenTaskId} onStatusChange={changeStatus} isGestor={isGestor} />
       ) : (
         <div className="flex flex-col gap-3">
           {focusBlock(pinnedTasks, true)}
