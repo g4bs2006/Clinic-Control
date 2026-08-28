@@ -764,12 +764,10 @@ export function TaskBoard({ tasks: initialTasks, suggestions, suggestionJobs = [
       const doneRank = (s: TaskStatus) => (DONE_STATUSES.has(s) ? 1 : 0)
       const doneDiff = doneRank(a.status) - doneRank(b.status)
       if (doneDiff !== 0) return doneDiff
-      const prDiff = TASK_PRIORITY_RANK[b.priority] - TASK_PRIORITY_RANK[a.priority]
-      if (prDiff !== 0) return prDiff
-      if (!a.due_date && !b.due_date) return 0
-      if (!a.due_date) return 1
-      if (!b.due_date) return -1
-      return a.due_date < b.due_date ? -1 : 1
+      // Sem reordenar por prioridade nem por prazo: tarefa nova sempre entra
+      // pelo fim da lista (e da coluna do Kanban, que usa esse mesmo array),
+      // na ordem de criação. Prazo continua visível no card, só não pula fila.
+      return a.created_at < b.created_at ? -1 : 1
     })
   // Histórico: mesma busca/filtros da Lista, aplicados sobre o arquivo em vez
   // das tarefas ativas — é a mesma barra, só que aponta pra outra fonte.
