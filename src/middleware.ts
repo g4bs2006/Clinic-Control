@@ -15,6 +15,11 @@ import { verifySessionToken } from "@/lib/auth/token";
 // /api/automacao/scan é o gatilho do pg_cron semanal (header x-cron-secret).
 // /api/helena/overviews-collect e /api/helena/funnel-collect são os crons
 // diários do overview e do funil (mesmo header).
+// /api/integrations/agents-planner/* é o app desktop pessoal Agents Planner —
+// autentica com token próprio (header x-agents-planner-secret, ver
+// src/lib/tokens/verify.ts), nunca com cookie de sessão. Sem esta exceção o
+// gate abaixo redireciona toda chamada pra /login antes da rota rodar — a
+// integração inteira ficava 307 sempre, independente do token.
 const PUBLIC_PREFIXES = [
   "/login",
   "/api/reports/process",
@@ -25,6 +30,7 @@ const PUBLIC_PREFIXES = [
   "/api/helena/overviews-collect",
   "/api/helena/funnel-collect",
   "/api/form-credentials",
+  "/api/integrations/agents-planner",
 ];
 
 export async function middleware(request: NextRequest) {
