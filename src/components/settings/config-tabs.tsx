@@ -10,6 +10,7 @@ const TABS = [
   { path: "/funil", label: "Funil & Status", gestorOnly: false },
   { path: "/automacao", label: "Automação", gestorOnly: false },
   { path: "/whatsapp", label: "WhatsApp", gestorOnly: false },
+  { path: "/integracoes", label: "Integrações", gestorOnly: false },
 ]
 
 /** Navegação por abas de /configuracoes — cada aba é uma sub-rota real
