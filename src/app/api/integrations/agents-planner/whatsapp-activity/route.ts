@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { clinicIdsOwnedBy, verifyApiToken } from "@/lib/tokens/verify";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 /**
  * Raw WhatsApp group activity for the Agents Planner integration (see
- * `../tasks/route.ts` for the auth model). Reads what `collect-groups` has
- * already collected instead of talking to the Evolution API directly — that
- * collection is capacity-constrained (~3.4s/group, 200s Edge Function ceiling,
- * see `supabase/functions/collect-groups/README.md`) and duplicating it here
- * would only add load against the same bottleneck.
+ * `../tasks/route.ts` for the auth model — per-user token, scoped strictly to
+ * the token owner's own carteira via `clinicIdsOwnedBy`). Reads what
+ * `collect-groups` has already collected instead of talking to the Evolution
+ * API directly — that collection is capacity-constrained (~3.4s/group, 200s
+ * Edge Function ceiling, see `supabase/functions/collect-groups/README.md`)
+ * and duplicating it here would only add load against the same bottleneck.
  *
  * `?refresh=1` triggers the same fast, best-effort group *discovery* that
  * `syncWhatsappGroups()` (`src/lib/whatsapp/actions.ts`) uses — never the full
@@ -63,12 +65,19 @@ type MessageRow = {
 };
 
 export async function GET(request: NextRequest) {
-  const secret = process.env.AGENTS_PLANNER_API_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: "AGENTS_PLANNER_API_SECRET não configurado" }, { status: 500 });
-  }
-  if (request.headers.get("x-agents-planner-secret") !== secret) {
+  const auth = await verifyApiToken(request.headers.get("x-agents-planner-secret"));
+  if (!auth) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+  const clinicIds = await clinicIdsOwnedBy(auth.userId);
+  if (clinicIds.length === 0) {
+    return NextResponse.json({
+      generatedAt: new Date().toISOString(),
+      refreshed: false,
+      refreshError: null,
+      lookbackHours: DEFAULT_LOOKBACK_HOURS,
+      groups: [],
+    });
   }
 
   const params = request.nextUrl.searchParams;
@@ -92,7 +101,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase
     .from("whatsapp_group_messages")
     .select("group_jid, event_ts, push_name, from_me, text, whatsapp_groups!inner(clinic_id, name, clinics(name))")
-    .not("whatsapp_groups.clinic_id", "is", null)
+    .in("whatsapp_groups.clinic_id", clinicIds)
     .gte("event_ts", sinceIso)
     .order("event_ts", { ascending: false })
     .limit(MESSAGE_ROW_CEILING);
