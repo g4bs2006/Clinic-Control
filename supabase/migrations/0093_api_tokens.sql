@@ -17,3 +17,8 @@ create table if not exists api_tokens (
 );
 
 create index if not exists api_tokens_user_idx on api_tokens (user_id);
+
+-- Mesmo padrão de toda tabela do schema (ver 0002_rls.sql): RLS ligado, sem
+-- policy nenhuma — só service_role (que ignora RLS) enxerga a tabela. Defesa
+-- extra caso a chave anon/publishable algum dia seja usada client-side aqui.
+alter table api_tokens enable row level security;
